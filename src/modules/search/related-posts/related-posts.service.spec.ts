@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { RelatedPostsService } from './related-posts.service';
-import { PrismaService } from '../../database/prisma.service';
+import { PrismaService } from '../../../database/prisma.service';
 import { NotFoundException } from '@nestjs/common';
 
 describe('RelatedPostsService', () => {

@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service';
-import { SearchPostDto } from './dto/search-post.dto';
-import { Search } from './types/Search';
+import { PrismaService } from '../../../database/prisma.service';
+import { SearchPostDto } from '../dto/search-post.dto';
+import { Search } from '../types/Search';
 
 @Injectable()
 export class SearchPostService {

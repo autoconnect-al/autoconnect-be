@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service';
-import { MostWantedDto } from './dto/most-wanted.dto';
-import { Search } from './types/Search';
-import { mapSearchToListDto, SearchListDto } from './dto/search-list.dto';
+import { PrismaService } from '../../../database/prisma.service';
+import { MostWantedDto } from '../dto/most-wanted.dto';
+import { Search } from '../types/Search';
+import { mapSearchToListDto, SearchListDto } from '../dto/search-list.dto';
 
 @Injectable()
 export class MostWantedService {

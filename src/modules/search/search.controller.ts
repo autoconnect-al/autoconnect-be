@@ -1,7 +1,7 @@
 import { Controller, Get, Query, Req } from '@nestjs/common';
 import { SearchService } from './search.service';
 import { SearchDto } from './dto/search.dto';
-import { MostWantedService } from './most-wanted.service';
+import { MostWantedService } from './most-wanted/most-wanted.service';
 import { MostWantedDto } from './dto/most-wanted.dto';
 
 @Controller({

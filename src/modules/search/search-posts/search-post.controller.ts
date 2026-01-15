@@ -1,6 +1,6 @@
 import { Controller, Get, Param } from '@nestjs/common';
 import { SearchPostService } from './search-post.service';
-import { SearchPostDto } from './dto/search-post.dto';
+import { SearchPostDto } from '../dto/search-post.dto';
 
 @Controller({
   path: 'post',

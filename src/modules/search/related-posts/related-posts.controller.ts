@@ -1,8 +1,8 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { RelatedPostsService } from './related-posts.service';
-import { SearchListDto, mapSearchToListDto } from './dto/search-list.dto';
-import { Search } from './types/Search';
-import { SearchDto } from './dto/search.dto';
+import { SearchListDto, mapSearchToListDto } from '../dto/search-list.dto';
+import { Search } from '../types/Search';
+import { SearchDto } from '../dto/search.dto';
 
 @Controller({
   path: 'related-posts',

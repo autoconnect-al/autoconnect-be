@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service';
-import { Search } from './types/Search';
-import { SearchDto } from './dto/search.dto';
+import { PrismaService } from '../../../database/prisma.service';
+import { Search } from '../types/Search';
+import { SearchDto } from '../dto/search.dto';
 
 interface RelatedPostsOptions {
   limit: number;
