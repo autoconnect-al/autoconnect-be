@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { SearchDto } from './dto/search.dto';
-import { normalizeGeneralSearch } from '../../common/search/search-normalizer';
+import {
+  buildAdditionalFilters,
+  normalizeGeneralSearch,
+} from '../../common/search/search-normalizer';
 import { buildKeywordSQL } from '../../common/search/keyword-filter';
 import { Search } from './types/Search';
 import { mapSearchToListDto, SearchListDto } from './dto/search-list.dto';
@@ -61,7 +64,7 @@ export class SearchService {
     /* -----------------------------
        FETCH PROMOTED POST
     -------------------------------- */
-    let promoted: Search | null = null;
+    let promoted: Search | null;
     const excludePromotedIds: bigint[] = [];
 
     if (userIdOrSessionId) {
@@ -113,25 +116,27 @@ export class SearchService {
       if (promoted) excludePromotedIds.push(promoted.id);
     }
 
+    const additionalFilters = buildAdditionalFilters(query);
+
     /* -----------------------------
        BASE QUERY
     -------------------------------- */
+
     const sql = `
       FROM search
       WHERE deleted = '0'
       ${fullTextSQL}
       ${keywordFilter.sql}
-      ${
-        excludePromotedIds.length
-          ? `AND id NOT IN (${excludePromotedIds.map(() => '?').join(',')})`
-          : ''
-      }
+      ${additionalFilters.sql}
+      ${excludePromotedIds.length ? `AND id NOT IN (${excludePromotedIds.map(() => '?').join(',')})` : ''}
     `;
 
     const params = [
       ...(fullTextParam ? [fullTextParam] : []),
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       ...keywordFilter.params,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      ...additionalFilters.params,
       ...excludePromotedIds,
     ];
 
