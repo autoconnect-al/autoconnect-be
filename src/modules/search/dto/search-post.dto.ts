@@ -1,5 +1,5 @@
-export interface Search {
-  id: bigint;
+export interface SearchPostDto {
+  id: string;
   dateCreated: string;
   dateUpdated?: string | null;
   deleted: string;
@@ -12,7 +12,7 @@ export interface Search {
   vendorContact?: any;
   biography?: string;
   accountName?: string;
-  vendorId: bigint;
+  vendorId: string;
   profilePicture?: string;
   make?: string;
   model?: string;
