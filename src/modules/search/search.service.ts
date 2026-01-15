@@ -6,11 +6,26 @@ import { buildKeywordSQL } from '../../common/search/keyword-filter';
 import { Search } from './types/Search';
 import { mapSearchToListDto, SearchListDto } from './dto/search-list.dto';
 
+interface PromotedCacheItem {
+  lastPromotedId: bigint | null;
+  actionCount: number;
+  lastRotatedAt?: number;
+}
+
 @Injectable()
 export class SearchService {
+  // userId/sessionId → rotation info
+  private promotedCache = new Map<string, PromotedCacheItem>();
+
+  // rotation window for anonymous users (in seconds)
+  private readonly ANON_ROTATION_INTERVAL = 120; // e.g., rotate every 2 minutes
+
   constructor(private readonly prisma: PrismaService) {}
 
-  async search(query: SearchDto): Promise<{
+  async search(
+    query: SearchDto,
+    userIdOrSessionId?: string, // can be userId or anonymous sessionId
+  ): Promise<{
     page: number;
     limit: number;
     total: number;
@@ -24,8 +39,6 @@ export class SearchService {
       page = 1,
       limit = 20,
     } = query;
-
-    console.log(sortBy);
 
     const offset = (page - 1) * limit;
 
@@ -46,6 +59,61 @@ export class SearchService {
     const keywordFilter = buildKeywordSQL(keyword);
 
     /* -----------------------------
+       FETCH PROMOTED POST
+    -------------------------------- */
+    let promoted: Search | null = null;
+    const excludePromotedIds: bigint[] = [];
+
+    if (userIdOrSessionId) {
+      const cache = this.promotedCache.get(userIdOrSessionId) || {
+        lastPromotedId: null,
+        actionCount: 0,
+        lastRotatedAt: undefined,
+      };
+
+      cache.actionCount++;
+
+      // rotate conditions:
+      // 1) logged-in user: every 2 actions
+      // 2) anonymous user: every ANON_ROTATION_INTERVAL seconds
+      const now = Math.floor(Date.now() / 1000);
+      const rotate =
+        cache.lastRotatedAt === undefined ||
+        cache.actionCount % 2 === 0 ||
+        (cache.lastRotatedAt &&
+          now - cache.lastRotatedAt > this.ANON_ROTATION_INTERVAL);
+
+      promoted = await this.fetchPromotedPost(
+        keyword,
+        fullTextSQL,
+        fullTextParam,
+        rotate ? cache.lastPromotedId : null,
+      );
+
+      if (promoted) {
+        excludePromotedIds.push(promoted.id);
+        if (rotate) {
+          this.promotedCache.set(userIdOrSessionId, {
+            lastPromotedId: promoted.id,
+            actionCount: cache.actionCount,
+            lastRotatedAt: now,
+          });
+        } else {
+          this.promotedCache.set(userIdOrSessionId, cache);
+        }
+      }
+    } else {
+      // fallback: anonymous user without sessionId → completely random promoted
+      promoted = await this.fetchPromotedPost(
+        keyword,
+        fullTextSQL,
+        fullTextParam,
+        null,
+      );
+      if (promoted) excludePromotedIds.push(promoted.id);
+    }
+
+    /* -----------------------------
        BASE QUERY
     -------------------------------- */
     const sql = `
@@ -53,19 +121,25 @@ export class SearchService {
       WHERE deleted = '0'
       ${fullTextSQL}
       ${keywordFilter.sql}
+      ${
+        excludePromotedIds.length
+          ? `AND id NOT IN (${excludePromotedIds.map(() => '?').join(',')})`
+          : ''
+      }
     `;
 
     const params = [
       ...(fullTextParam ? [fullTextParam] : []),
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       ...keywordFilter.params,
+      ...excludePromotedIds,
     ];
 
     /* -----------------------------
        DATA QUERY
     -------------------------------- */
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-    const items = (await this.prisma.$queryRawUnsafe(
+    const items: Search[] = (await this.prisma.$queryRawUnsafe(
       `
       SELECT *
       ${sql}
@@ -88,15 +162,59 @@ export class SearchService {
       `,
       ...params,
     );
-
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    const count = Number(countResult?.[0]?.total ?? 0);
+    const total = Number(countResult?.[0]?.total ?? 0);
+
+    /* -----------------------------
+       MAP TO DTO
+    -------------------------------- */
+    const mappedResults: SearchListDto[] = [
+      ...(promoted ? [mapSearchToListDto(promoted)] : []),
+      ...items.map(mapSearchToListDto),
+    ];
 
     return {
       page,
       limit,
-      total: Number(count || 0),
-      items: items.map(mapSearchToListDto),
+      total,
+      items: mappedResults,
     };
+  }
+
+  /* -----------------------------
+     FETCH PROMOTED POST HELPER
+  -------------------------------- */
+  private async fetchPromotedPost(
+    keyword: string | undefined,
+    fullTextSQL: string,
+    fullTextParam: string | null,
+    excludeId: bigint | null,
+  ): Promise<Search | null> {
+    const excludeSql = excludeId ? `AND id != ?` : '';
+    const keywordSql = keyword ? buildKeywordSQL(keyword).sql : '';
+
+    const sql = `
+        SELECT *
+        FROM search
+        WHERE deleted = '0'
+          AND promotionTo >= UNIX_TIMESTAMP()
+            ${fullTextSQL}
+            ${keywordSql}
+            ${excludeSql}
+        ORDER BY RAND()
+            LIMIT 1
+    `;
+
+    const params = [
+      ...(fullTextParam ? [fullTextParam] : []),
+      ...(excludeId ? [excludeId] : []),
+    ];
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+    const result = (await this.prisma.$queryRawUnsafe(
+      sql,
+      ...params,
+    )) as Search[];
+    return result[0] || null;
   }
 }

@@ -12,7 +12,7 @@ export interface SearchListDto {
   mileage?: string | null;
   customsPaid?: boolean | null;
   canExchange?: boolean;
-  sidecarMedias?: string | null; // JSON string for frontend
+  sidecarMedias?: string | null;
   contact?: string | null;
   minPrice?: string | null;
   maxPrice?: string | null;
@@ -27,18 +27,14 @@ export interface SearchListDto {
   type?: string | null;
 }
 
-/* =========================================================
-   Helper function: map from full Search to SearchListDto
-========================================================= */
 export function mapSearchToListDto(
   result: Search,
   maxSidecarItems: number = 4,
 ): SearchListDto {
-  // Parse sidecar medias
   let sidecarMedias: string | null = null;
   if (result.sidecarMedias) {
     try {
-      const medias = JSON.parse(result.sidecarMedias as unknown as string) as {
+      const medias = JSON.parse(result.sidecarMedias) as {
         imageThumbnailUrl: string;
       }[];
       const sliced = medias.slice(0, maxSidecarItems);
@@ -50,7 +46,7 @@ export function mapSearchToListDto(
     }
   }
 
-  const promoted = !!(result.promotionTo || result.highlightedTo); // example logic
+  const promoted = !!result.promotionTo;
 
   return {
     id: result.id.toString(),
@@ -70,7 +66,6 @@ export function mapSearchToListDto(
     maxPrice: promoted ? null : result.maxPrice?.toString() || null,
     promoted,
     highlighted: !!result.highlightedTo,
-
     vendorContact: result.vendorContact
       ? JSON.stringify(result.vendorContact)
       : null,
