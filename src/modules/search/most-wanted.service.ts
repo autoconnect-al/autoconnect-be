@@ -2,12 +2,13 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { MostWantedDto } from './dto/most-wanted.dto';
 import { Search } from './types/Search';
+import { mapSearchToListDto, SearchListDto } from './dto/search-list.dto';
 
 @Injectable()
 export class MostWantedService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getMostWanted(query: MostWantedDto): Promise<Search[]> {
+  async getMostWanted(query: MostWantedDto): Promise<SearchListDto[]> {
     const { type = 'car', limit = 4, excludeIds = [] } = query;
 
     const results: Search[] = [];
@@ -43,7 +44,7 @@ export class MostWantedService {
       results.push(...tier2);
     }
 
-    return results;
+    return results.map(mapSearchToListDto);
   }
 
   /* =========================================================

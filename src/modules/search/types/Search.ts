@@ -6,10 +6,10 @@ export interface Search {
   caption?: string | null;
   cleanedCaption: string;
   createdTime?: bigint | null;
-  sidecarMedias?: any | null; // JSON column
+  sidecarMedias?: string | null; // JSON column
   likesCount?: number | null;
   viewsCount?: number | null;
-  vendorContact?: any | null; // JSON column
+  vendorContact?: string | null; // JSON column
   biography?: string | null;
   accountName?: string | null;
   vendorId: bigint;
@@ -28,9 +28,9 @@ export interface Search {
   numberOfDoors?: number | null;
   bodyType?: string | null;
   emissionGroup?: string | null;
-  contact?: any | null; // JSON column
+  contact?: string | null; // JSON column
   customsPaid?: boolean | null;
-  options?: any | null; // JSON column
+  options?: string | null; // JSON column
   sold?: boolean | null;
   type?: string | null;
   promotionTo?: number | null;

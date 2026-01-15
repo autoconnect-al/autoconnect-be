@@ -4,14 +4,18 @@ import { SearchDto } from './dto/search.dto';
 import { normalizeGeneralSearch } from '../../common/search/search-normalizer';
 import { buildKeywordSQL } from '../../common/search/keyword-filter';
 import { Search } from './types/Search';
+import { mapSearchToListDto, SearchListDto } from './dto/search-list.dto';
 
 @Injectable()
 export class SearchService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async search(
-    query: SearchDto,
-  ): Promise<{ page: number; limit: number; total: number; items: Search[] }> {
+  async search(query: SearchDto): Promise<{
+    page: number;
+    limit: number;
+    total: number;
+    items: SearchListDto[];
+  }> {
     const {
       generalSearch,
       keyword,
@@ -92,7 +96,7 @@ export class SearchService {
       page,
       limit,
       total: Number(count || 0),
-      items,
+      items: items.map(mapSearchToListDto),
     };
   }
 }
