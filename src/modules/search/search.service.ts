@@ -8,6 +8,7 @@ import {
 import { buildKeywordSQL } from '../../common/search/keyword-filter';
 import { Search } from './types/Search';
 import { mapSearchToListDto, SearchListDto } from './dto/search-list.dto';
+import { SearchHelper } from './common/search-helper';
 
 interface PromotedCacheItem {
   lastPromotedId: bigint | null;
@@ -23,11 +24,14 @@ export class SearchService {
   // rotation window for anonymous users (in seconds)
   private readonly ANON_ROTATION_INTERVAL = 120; // e.g., rotate every 2 minutes
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly searchHelper: SearchHelper,
+  ) {}
 
   async search(
     query: SearchDto,
-    userIdOrSessionId?: string, // can be userId or anonymous sessionId
+    userIdOrSessionId?: string,
   ): Promise<{
     page: number;
     limit: number;
@@ -44,6 +48,42 @@ export class SearchService {
     } = query;
 
     const offset = (page - 1) * limit;
+
+    /* -----------------------------
+       CORRECT MAKE / MODEL / VARIANT
+    -------------------------------- */
+    const makeModelPairs: Array<{
+      makeKey: keyof SearchDto;
+      modelKey: keyof SearchDto;
+      variantKey: keyof SearchDto;
+    }> = [
+      { makeKey: 'make1', modelKey: 'model1', variantKey: 'variant1' },
+      { makeKey: 'make2', modelKey: 'model2', variantKey: 'variant2' },
+      { makeKey: 'make3', modelKey: 'model3', variantKey: 'variant3' },
+    ];
+
+    for (const pair of makeModelPairs) {
+      const make = query[pair.makeKey];
+      const model = query[pair.modelKey];
+
+      if (make) {
+        // Correct the make using the helper
+        query[pair.makeKey as string] =
+          (await this.searchHelper.getCorrectMake(make as string)) ?? make;
+      }
+
+      if (query[pair.makeKey] && model) {
+        // Correct the model using the helper
+        const preparedModel = await this.searchHelper.prepareMakeModel(
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+          query[pair.makeKey as string],
+          model as string,
+        );
+        if (preparedModel) {
+          query[pair.modelKey as string] = preparedModel.model;
+        }
+      }
+    }
 
     /* -----------------------------
        FULLTEXT SEARCH
@@ -75,10 +115,6 @@ export class SearchService {
       };
 
       cache.actionCount++;
-
-      // rotate conditions:
-      // 1) logged-in user: every 2 actions
-      // 2) anonymous user: every ANON_ROTATION_INTERVAL seconds
       const now = Math.floor(Date.now() / 1000);
       const rotate =
         cache.lastRotatedAt === undefined ||
@@ -95,18 +131,16 @@ export class SearchService {
 
       if (promoted) {
         excludePromotedIds.push(promoted.id);
-        if (rotate) {
-          this.promotedCache.set(userIdOrSessionId, {
-            lastPromotedId: promoted.id,
-            actionCount: cache.actionCount,
-            lastRotatedAt: now,
-          });
-        } else {
-          this.promotedCache.set(userIdOrSessionId, cache);
-        }
+        this.promotedCache.set(userIdOrSessionId, {
+          lastPromotedId: rotate ? promoted.id : cache.lastPromotedId,
+          actionCount: cache.actionCount,
+          lastRotatedAt: rotate ? now : cache.lastRotatedAt,
+        });
+      } else {
+        this.promotedCache.set(userIdOrSessionId, cache);
       }
     } else {
-      // fallback: anonymous user without sessionId → completely random promoted
+      // anonymous fallback
       promoted = await this.fetchPromotedPost(
         keyword,
         fullTextSQL,
@@ -121,15 +155,18 @@ export class SearchService {
     /* -----------------------------
        BASE QUERY
     -------------------------------- */
-
     const sql = `
-      FROM search
-      WHERE deleted = '0'
-      ${fullTextSQL}
-      ${keywordFilter.sql}
-      ${additionalFilters.sql}
-      ${excludePromotedIds.length ? `AND id NOT IN (${excludePromotedIds.map(() => '?').join(',')})` : ''}
-    `;
+    FROM search
+    WHERE deleted = '0'
+    ${fullTextSQL}
+    ${keywordFilter.sql}
+    ${additionalFilters.sql}
+    ${
+      excludePromotedIds.length
+        ? `AND id NOT IN (${excludePromotedIds.map(() => '?').join(',')})`
+        : ''
+    }
+  `;
 
     const params = [
       ...(fullTextParam ? [fullTextParam] : []),
@@ -146,11 +183,11 @@ export class SearchService {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     const items: Search[] = (await this.prisma.$queryRawUnsafe(
       `
-      SELECT *
-      ${sql}
-      ORDER BY ${sortBy} ${sortOrder}
-      LIMIT ? OFFSET ?
-      `,
+    SELECT *
+    ${sql}
+    ORDER BY ${sortBy} ${sortOrder}
+    LIMIT ? OFFSET ?
+    `,
       ...params,
       limit,
       offset,
@@ -162,9 +199,9 @@ export class SearchService {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment,@typescript-eslint/no-unsafe-call
     const countResult: any = await this.prisma.$queryRawUnsafe(
       `
-      SELECT COUNT(*) as total
-      ${sql}
-      `,
+    SELECT COUNT(*) as total
+    ${sql}
+    `,
       ...params,
     );
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access

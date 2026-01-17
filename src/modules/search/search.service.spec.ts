@@ -2,9 +2,12 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { SearchService } from './search.service';
 import { PrismaService } from '../../database/prisma.service';
 import { normalizeGeneralSearch } from '../../common/search/search-normalizer';
+import { SearchHelper } from './common/search-helper';
+import { SearchDto } from './dto/search.dto';
 
 describe('SearchService', () => {
   let service: SearchService;
+  let searchHelper: SearchHelper;
 
   const prismaMock = {
     $queryRawUnsafe: jest.fn(),
@@ -35,10 +38,52 @@ describe('SearchService', () => {
       providers: [
         SearchService,
         { provide: PrismaService, useValue: prismaMock },
+        {
+          provide: SearchHelper,
+          useValue: {
+            getCorrectMake: jest.fn(),
+            prepareMakeModel: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
     service = module.get<SearchService>(SearchService);
+    searchHelper = module.get<SearchHelper>(SearchHelper);
+  });
+
+  it('should normalize make and model correctly', async () => {
+    // Arrange
+    const dto: SearchDto = {
+      make1: 'BMW',
+      model1: 'X5 (all)',
+    };
+
+    // Mock normalized return values
+    (searchHelper.getCorrectMake as jest.Mock).mockResolvedValue('BMW');
+    (searchHelper.prepareMakeModel as jest.Mock).mockResolvedValue({
+      model: 'X5',
+      isVariant: false,
+    });
+
+    // Mock Prisma to return empty results
+    (service['prisma'].$queryRawUnsafe as jest.Mock).mockResolvedValue([]);
+
+    // Act
+    await service.search(dto);
+
+    // Assert
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(searchHelper.getCorrectMake).toHaveBeenCalledWith('BMW');
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(searchHelper.prepareMakeModel).toHaveBeenCalledWith(
+      'BMW',
+      'X5 (all)',
+    );
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(dto.make1).toBe('BMW');
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(dto.model1).toBe('X5');
   });
 
   it('returns paginated results', async () => {
@@ -150,5 +195,4 @@ describe('SearchService', () => {
     const call = prismaMock.$queryRawUnsafe.mock.calls[1][0]; // main search is 2nd call now
     expect(call).toContain('ORDER BY price asc');
   });
-
 });
