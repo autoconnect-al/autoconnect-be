@@ -8,8 +8,7 @@ export class SearchPostService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getPostById(id: string): Promise<SearchPostDto> {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-    const post = (await this.prisma.$queryRawUnsafe(
+    const post = await this.prisma.$queryRawUnsafe(
       `
       SELECT *
       FROM search
@@ -17,12 +16,13 @@ export class SearchPostService {
       LIMIT 1
       `,
       BigInt(id),
-    )) as Search[];
+    );
 
     if (!post || !post[0]) {
       throw new NotFoundException(`Post with id ${id} not found`);
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     return this.mapToDto(post[0]);
   }
 

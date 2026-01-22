@@ -3,6 +3,7 @@ import { AppModule } from './app.module';
 import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Request, Response, json, urlencoded } from 'express';
+import { BigIntInterceptor } from './common/big-int.interceptor';
 
 async function bootstrap() {
   // Critical: disable Nest’s built-in bodyParser
@@ -38,6 +39,8 @@ async function bootstrap() {
       transform: true,
     }),
   );
+  // main.ts
+  app.useGlobalInterceptors(new BigIntInterceptor());
 
   const config = new DocumentBuilder()
     .setTitle('AutoConnect API')
