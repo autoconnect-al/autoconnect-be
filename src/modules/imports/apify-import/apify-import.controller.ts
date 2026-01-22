@@ -3,7 +3,10 @@ import { Controller, Post, Res, HttpStatus } from '@nestjs/common';
 import type { Response } from 'express';
 import { ApifyDatasetImportService } from './apify-dataset-import.service';
 
-@Controller('apify')
+@Controller({
+  path: 'apify',
+  version: '1',
+})
 export class ApifyController {
   constructor(private readonly apifyImport: ApifyDatasetImportService) {}
 
