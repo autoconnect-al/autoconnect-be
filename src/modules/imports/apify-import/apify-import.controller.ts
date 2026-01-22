@@ -1,37 +1,22 @@
-import { Controller, Post, Req, Res, HttpStatus } from '@nestjs/common';
-import type { Request, Response } from 'express';
-import { createWriteStream } from 'fs';
-import { mkdir } from 'fs/promises';
-import { pipeline } from 'stream/promises';
-import * as path from 'path';
-import { randomUUID } from 'crypto';
-import { ApifyImportService } from './apify-import.service';
+// apify.controller.ts
+import { Controller, Post, Res, HttpStatus } from '@nestjs/common';
+import type { Response } from 'express';
+import { ApifyDatasetImportService } from './apify-dataset-import.service';
 
 @Controller('apify')
-export class ApifyImportController {
-  constructor(private readonly apifyImportService: ApifyImportService) {}
+export class ApifyController {
+  constructor(private readonly apifyImport: ApifyDatasetImportService) {}
 
   @Post('import')
-  async import(@Req() req: Request, @Res() res: Response) {
-    const tempDir = path.join(process.cwd(), 'tmp', 'apify');
-    await mkdir(tempDir, { recursive: true });
-
-    const importId = randomUUID();
-    const filePath = path.join(tempDir, `apify-${importId}.json`);
-
-    // Save raw request body to disk (no JSON parsing)
-    await pipeline(req, createWriteStream(filePath, { flags: 'wx' }));
-
+  importFromApifyNotification(@Res() res: Response) {
     // Return immediately
-    res.status(HttpStatus.ACCEPTED).json({ ok: true, importId });
+    res.status(HttpStatus.ACCEPTED).json({ ok: true, status: 'queued' });
 
-    // Async processing
+    // Kick async job
     setImmediate(() => {
-      this.apifyImportService
-        .processApifyFile(filePath, { importId })
-        .catch((err) => {
-          console.error(`[ApifyImport] failed importId=${importId}`, err);
-        });
+      this.apifyImport.importLatestDataset().catch((err) => {
+        console.error('[ApifyImport] failed:', err);
+      });
     });
   }
 }

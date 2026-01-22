@@ -10,6 +10,8 @@ import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt.guard';
 import { Throttle } from '@nestjs/throttler';
+import { ConfirmPasswordResetDto } from './dto/confirm-reset.dto';
+import { RequestPasswordResetDto } from './dto/request-reset.dto';
 
 @Controller({
   path: 'auth',
@@ -19,7 +21,12 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('login')
-  @Throttle(5, 60)
+  @Throttle({
+    options: {
+      limit: 5,
+      ttl: 60,
+    },
+  })
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto.identifier, dto.password);
   }

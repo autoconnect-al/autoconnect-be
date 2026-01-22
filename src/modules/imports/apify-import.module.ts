@@ -1,12 +1,11 @@
+// ingest.module.ts
 import { Module } from '@nestjs/common';
-import { ApifyImportController } from './apify-import/apify-import.controller';
-import { ApifyImportService } from './apify-import/apify-import.service';
-import { EncarController } from './encar-import/encar.controller';
-import { EncarScrapeService } from './encar-import/encar-scrape.service';
+import { ApifyController } from './apify-import/apify-import.controller';
+import { ApifyDatasetImportService } from './apify-import/apify-dataset-import.service';
 import { RemotePostSaverService } from './remote-post-saver.service';
 
 @Module({
-  controllers: [ApifyImportController, EncarController],
-  providers: [ApifyImportService, EncarScrapeService, RemotePostSaverService],
+  controllers: [ApifyController],
+  providers: [ApifyDatasetImportService, RemotePostSaverService],
 })
 export class IngestModule {}

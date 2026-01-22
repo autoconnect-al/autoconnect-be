@@ -1,17 +1,28 @@
-import { Injectable, UnauthorizedException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../database/prisma.service';
 
 import * as bcrypt from 'bcrypt';
-import * as phpCrypt from 'php-crypt';
+
+import { randomBytes } from 'crypto';
+import { MailService } from '../mail/mail.service';
 
 const MAX_LOGIN_ATTEMPTS = 5;
+
+function addMinutes(date: Date, minutes: number): Date {
+  return new Date(date.getTime() + minutes * 60_000);
+}
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly mailService: MailService,
   ) {}
 
   async login(identifier: string, password: string) {
@@ -20,10 +31,7 @@ export class AuthService {
     const user = await this.prisma.user.findFirst({
       where: {
         deleted: false,
-        OR: [
-          { username: normalized },
-          { email: normalized },
-        ],
+        OR: [{ username: normalized }, { email: normalized }],
       },
     });
 
@@ -175,13 +183,10 @@ export class AuthService {
     return { success: true };
   }
 
-/**
+  /**
    * Handles failed login attempt and blocks account if threshold reached
    */
-  private async handleFailedLogin(
-    userId: bigint,
-    currentAttempts: number,
-  ) {
+  private async handleFailedLogin(userId: bigint, currentAttempts: number) {
     const newAttempts = currentAttempts + 1;
 
     if (newAttempts >= MAX_LOGIN_ATTEMPTS) {
@@ -217,22 +222,22 @@ export class AuthService {
       return bcrypt.compare(plain, hash);
     }
 
-    // legacy PHP crypt SHA512
-    const legacyValid = phpCrypt.verify(plain, hash);
-
-    if (!legacyValid) {
+    // PHP crypt() legacy formats supported by unixcrypt:
+    // $6$... => SHA-512 crypt
+    // $5$... => SHA-256 crypt
+    if (!hash.startsWith('$6$') && !hash.startsWith('$5$')) {
       return false;
     }
 
-    // upgrade password hash
-    const newHash = await bcrypt.hash(plain, 12);
+    // ESM-only unixcrypt v2+: load via dynamic import
+    const { verify } = await import('unixcrypt');
+    const legacyValid = verify(plain, hash);
+    if (!legacyValid) return false;
 
+    const newHash = await bcrypt.hash(plain, 12);
     await this.prisma.user.update({
       where: { id: userId },
-      data: {
-        password: newHash,
-        attemptedLogin: 0,
-      },
+      data: { password: newHash, attemptedLogin: 0 },
     });
 
     return true;

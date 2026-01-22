@@ -4,10 +4,10 @@ import { AppService } from './app.service';
 import { HealthController } from './health/health.controller';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { AuthController } from './modules/auth/auth.controller';
-import { SearchController } from './modules/search/search.controller';
 import { AuthModule } from './modules/auth/auth.module';
 import { SearchModule } from './modules/search/search.module';
+import { IngestModule } from './modules/imports/apify-import.module';
+import { DatabaseModule } from './database/database.module';
 
 void ConfigModule.forRoot({
   isGlobal: true,
@@ -25,6 +25,8 @@ void ConfigModule.forRoot({
     }),
     AuthModule,
     SearchModule,
+    IngestModule,
+    DatabaseModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],

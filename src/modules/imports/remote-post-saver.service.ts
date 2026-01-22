@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 type Post = {
   pk?: number;
-  caption?: any;
+  caption?: string;
   like_count?: number;
   comment_count?: number;
   carousel_media?: Array<{
@@ -21,16 +21,21 @@ type Post = {
 @Injectable()
 export class RemotePostSaverService {
   // keep same defaults as your script; you can move these to env later
-  private readonly basePath = process.env.AUTOCONNECT_BASE_URL ?? 'https://ap-be.autoconnect.al';
-  private readonly code = process.env.AUTOCONNECT_CODE ?? 'ejkuU89EcU6LinIHVUvhpQz65gY8DOgG';
+  private readonly basePath =
+    process.env.AUTOCONNECT_BASE_URL ?? 'https://ap-be.autoconnect.al';
+  private readonly code =
+    process.env.AUTOCONNECT_CODE ?? 'ejkuU89EcU6LinIHVUvhpQz65gY8DOgG';
 
   // Import your existing PostModel from your project (same as save-post.ts)
   // Adjust the path to wherever you keep it in Nest.
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment,@typescript-eslint/no-require-imports,@typescript-eslint/no-unsafe-member-access
   private readonly PostModel = require('./types/instagram').PostModel;
 
   async getJwt(): Promise<string> {
-    const resp = await fetch(`${this.basePath}/authentication/login-with-code?code=${this.code}`);
+    const resp = await fetch(
+      `${this.basePath}/authentication/login-with-code?code=${this.code}`,
+    );
     if (!resp.ok) {
       throw new Error(`Login failed: ${resp.status} ${resp.statusText}`);
     }
@@ -43,13 +48,17 @@ export class RemotePostSaverService {
 
   async savePost(post: Post, jwt: string): Promise<void> {
     // Keep script gate:
-    if (post['product_type'] !== 'carousel_container' && post['origin'] !== 'ENCAR') return;
+    if (
+      post['product_type'] !== 'carousel_container' &&
+      post['origin'] !== 'ENCAR'
+    )
+      return;
 
-    let postToSave: any = post;
+    let postToSave = post;
 
     // Same mapping as save-post.ts for non-ENCAR
     if (post.origin !== 'ENCAR') {
-      postToSave = JSON.parse(JSON.stringify(this.PostModel));
+      postToSave = JSON.parse(JSON.stringify(this.PostModel)) as Post;
       postToSave.id = post.pk;
 
       // Script uses post.date (ms). Some sources use taken_at seconds.
@@ -60,9 +69,13 @@ export class RemotePostSaverService {
             ? post.taken_at * 1000
             : undefined;
 
-      postToSave.createdTime = dateMs ? (new Date(dateMs).getTime() / 1000).toString() : '';
+      postToSave.createdTime = dateMs
+        ? (new Date(dateMs).getTime() / 1000).toString()
+        : '';
       postToSave.caption =
-        typeof post.caption === 'string' ? post.caption : (post.caption?.text ?? '');
+        typeof post.caption === 'string'
+          ? post.caption
+          : ((post.caption as { text: string } | undefined)?.text ?? '');
       postToSave.likesCount = post.like_count;
       postToSave.commentsCount = post.comment_count;
 
@@ -70,10 +83,14 @@ export class RemotePostSaverService {
         ?.filter((m) => m.media_type === 1)
         .map((m) => ({
           id: m.pk,
-          imageStandardResolutionUrl: m.image_versions2?.candidates?.[0]?.url ?? '',
+          imageStandardResolutionUrl:
+            m.image_versions2?.candidates?.[0]?.url ?? '',
           type: 'image',
         }))
-        .filter((m: any) => m.imageStandardResolutionUrl !== '');
+        .filter(
+          (m: { imageStandardResolutionUrl: string }) =>
+            m.imageStandardResolutionUrl !== '',
+        );
     }
 
     const body = {

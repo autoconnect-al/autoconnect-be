@@ -8,6 +8,8 @@ import { SearchPostController } from './search-posts/search-post.controller';
 import { MakeModelController } from './makes-models/make-model.controller';
 import { RelatedPostsController } from './related-posts/related-posts.controller';
 import { RelatedPostsService } from './related-posts/related-posts.service';
+import { SearchHelper } from './common/search-helper';
+import { MakeModelService } from './makes-models/make-model.service';
 
 @Module({
   controllers: [
@@ -22,6 +24,8 @@ import { RelatedPostsService } from './related-posts/related-posts.service';
     MostWantedService,
     SearchPostService,
     RelatedPostsService,
+    SearchHelper,
+    MakeModelService,
   ],
 })
 export class SearchModule {}
