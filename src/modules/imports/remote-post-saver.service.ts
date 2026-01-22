@@ -46,13 +46,13 @@ export class RemotePostSaverService {
     // GET `${basePath}/authentication/login-with-code?code=${code}` then jwt = result
   }
 
-  async savePost(post: Post, jwt: string): Promise<void> {
+  async savePost(post: Post, jwt: string): Promise<string> {
     // Keep script gate:
     if (
       post['product_type'] !== 'carousel_container' &&
       post['origin'] !== 'ENCAR'
     )
-      return;
+      return 'skipped';
 
     let postToSave = post;
 
@@ -86,21 +86,23 @@ export class RemotePostSaverService {
       vendorId: post.user?.pk ?? 1,
     };
 
-    if (postToSave.id === '3814373755053722852') {
-      console.log('Post to save: ', postToSave);
-    }
-
     // Same request as script (note header name):
-    await fetch(`${this.basePath}/post/save-post?code=${this.code}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Http-Authorization': 'Bearer ' + jwt,
+    const response = await fetch(
+      `${this.basePath}/post/save-post?code=${this.code}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Http-Authorization': 'Bearer ' + jwt,
+        },
+        body: JSON.stringify(body),
       },
-      body: JSON.stringify(body),
-    }).catch((e) => {
+    ).catch((e) => {
       // script catches errors per request
       console.error(e);
     });
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const json = await response?.json();
+    return JSON.stringify(json);
   }
 }

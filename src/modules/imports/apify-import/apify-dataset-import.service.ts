@@ -15,6 +15,10 @@ export class ApifyDatasetImportService {
     process.env.APIFY_DATASET_URL ??
     `https://api.apify.com/v2/acts/instagram-scraper~fast-instagram-post-scraper/runs/last/dataset/items?token=${process.env.APIFY_API_TOKEN}`;
 
+  private batch: any[] = [];
+  private totalSeen = 0;
+  private totalQueuedForSave = 0;
+
   constructor(private readonly remoteSaver: RemotePostSaverService) {}
 
   async importLatestDataset() {
@@ -42,35 +46,33 @@ export class ApifyDatasetImportService {
     // Node 18+ has WHATWG ReadableStream on resp.body; convert to Node stream:
     const nodeStream = this.toNodeReadable(resp.body);
     if (!nodeStream) throw new Error('Apify response body is empty');
-
-    let batch: any[] = [];
-    let totalSeen = 0;
-    let totalQueuedForSave = 0;
+    const idsSeen = new Set<number>();
 
     const flush = async () => {
-      if (batch.length === 0) return;
-      const current = batch;
-      batch = [];
-
+      if (this.batch.length === 0) return;
       // same chunk pattern: Promise.all(savePost)
-      await Promise.all(
-        current.map((item) => this.remoteSaver.savePost(item, jwt)),
+      const responses = await Promise.all(
+        this.batch.map((item) => this.remoteSaver.savePost(item, jwt)),
       );
-      totalQueuedForSave += current.length;
 
-      console.log(
-        `[ApifyImport] saved batch size=${current.length} totalSaved=${totalQueuedForSave}`,
-      );
+      this.batch.forEach((item) => {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access,@typescript-eslint/no-unsafe-argument
+        idsSeen.add(item.pk);
+      });
+
+      this.totalQueuedForSave += this.batch.length;
+      this.batch = [];
+      return responses;
     };
 
     const pipeline = chain([nodeStream, parser(), streamArray()]);
 
     for await (const data of pipeline as any) {
-      totalSeen++;
+      this.totalSeen++;
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      batch.push(data.value);
+      this.batch.push(data.value);
 
-      if (batch.length >= this.CHUNK_SIZE) {
+      if (this.batch.length >= this.CHUNK_SIZE) {
         await flush();
       }
     }
@@ -78,7 +80,7 @@ export class ApifyDatasetImportService {
     await flush();
 
     console.log(
-      `[ApifyImport] done. totalSeen=${totalSeen} totalSaved=${totalQueuedForSave}`,
+      `[ApifyImport] done. totalSeen=${idsSeen.size} totalSaved=${this.totalQueuedForSave}`,
     );
   }
 
