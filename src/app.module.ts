@@ -6,6 +6,8 @@ import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AuthController } from './modules/auth/auth.controller';
 import { SearchController } from './modules/search/search.controller';
+import { AuthModule } from './modules/auth/auth.module';
+import { SearchModule } from './modules/search/search.module';
 
 void ConfigModule.forRoot({
   isGlobal: true,
@@ -21,13 +23,10 @@ void ConfigModule.forRoot({
         },
       ],
     }),
+    AuthModule,
+    SearchModule,
   ],
-  controllers: [
-    AppController,
-    HealthController,
-    AuthController,
-    SearchController,
-  ],
+  controllers: [AppController, HealthController],
   providers: [AppService],
 })
 export class AppModule {}
