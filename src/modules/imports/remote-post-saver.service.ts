@@ -60,22 +60,10 @@ export class RemotePostSaverService {
     if (post.origin !== 'ENCAR') {
       postToSave = JSON.parse(JSON.stringify(this.PostModel)) as Post;
       postToSave.id = post.pk;
-
-      // Script uses post.date (ms). Some sources use taken_at seconds.
-      const dateMs =
-        typeof post.date === 'number'
-          ? post.date
-          : typeof post.taken_at === 'number'
-            ? post.taken_at * 1000
-            : undefined;
-
-      postToSave.createdTime = dateMs
-        ? (new Date(dateMs).getTime() / 1000).toString()
+      postToSave.createdTime = post.date
+        ? (new Date(post.date).getTime() / 1000).toString()
         : '';
-      postToSave.caption =
-        typeof post.caption === 'string'
-          ? post.caption
-          : ((post.caption as { text: string } | undefined)?.text ?? '');
+      postToSave.caption = post.caption ?? '';
       postToSave.likesCount = post.like_count;
       postToSave.commentsCount = post.comment_count;
 
@@ -97,6 +85,10 @@ export class RemotePostSaverService {
       post: postToSave,
       vendorId: post.user?.pk ?? 1,
     };
+
+    if (postToSave.id === '3814373755053722852') {
+      console.log('Post to save: ', postToSave);
+    }
 
     // Same request as script (note header name):
     await fetch(`${this.basePath}/post/save-post?code=${this.code}`, {

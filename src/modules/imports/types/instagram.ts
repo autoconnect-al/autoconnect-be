@@ -17,7 +17,7 @@ export interface CardDetails {
   vin: string;
   contact: Contact;
   price: number;
-  drivetrain: string;
+  drivetrain?: string;
 }
 
 export interface SidecarMedia {
@@ -69,7 +69,6 @@ export const PostModel: PostModel = {
     engine: '',
     price: 0,
     vin: '',
-    drivetrain: '',
     contact: {
       phone_number: '',
       whatsapp: '',
