@@ -1,10 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { CreateVendorDto } from './dto/create-vendor.dto';
 import { UpdateVendorDto } from './dto/update-vendor.dto';
 
 @Injectable()
 export class VendorService {
+  private readonly logger = new Logger(VendorService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   async create(createVendorDto: CreateVendorDto, profilePicture?: string) {
@@ -169,6 +171,10 @@ export class VendorService {
   /**
    * Syncs vendor profile picture from Instagram public API
    * Fetches the profile picture URL from Instagram and updates the vendor
+   * 
+   * NOTE: This uses Instagram's public web interface which may be unreliable.
+   * For production use, consider using Instagram's official Basic Display API or Graph API.
+   * This method is provided as a convenience feature and may stop working if Instagram changes their API.
    */
   async syncFromInstagram(id: bigint): Promise<any> {
     const vendor = await this.findOne(id);
@@ -181,6 +187,7 @@ export class VendorService {
 
     try {
       // Fetch Instagram profile data from public API
+      // WARNING: This is an unofficial endpoint and may not work reliably
       const response = await fetch(
         `https://www.instagram.com/${vendor.accountName}/?__a=1&__d=dis`,
         {
@@ -226,7 +233,10 @@ export class VendorService {
         vendor: updatedVendor,
       };
     } catch (error) {
-      console.error('Error syncing from Instagram:', error);
+      this.logger.error(
+        `Error syncing from Instagram for vendor ${id}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        error instanceof Error ? error.stack : undefined,
+      );
       return {
         success: false,
         message: `Failed to sync from Instagram: ${error instanceof Error ? error.message : 'Unknown error'}`,
