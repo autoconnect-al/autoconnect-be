@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../database/prisma.service';
+import { Prisma } from '@prisma/client';
 import {
   generateCleanedCaption,
   encodeCaption,
@@ -34,7 +35,7 @@ export interface ImportPostData {
     seats?: number;
     numberOfDoors?: number;
     customsPaid?: boolean;
-    contact?: any;
+    contact?: Prisma.JsonValue;
     vin?: string;
     options?: string;
   };
@@ -89,11 +90,21 @@ export class PostImportService {
 
       if (carDetailsFromAI && Object.keys(carDetailsFromAI).length > 0) {
         // Create car_detail from AI-generated data
-        carDetailId = await this.createCarDetail(
-          carDetailsFromAI as any,
-          sold,
-          now,
-        );
+        // Convert AI format to cardDetails format
+        const aiAsCardDetails: ImportPostData['cardDetails'] = {
+          make: carDetailsFromAI.make,
+          model: carDetailsFromAI.model,
+          variant: carDetailsFromAI.variant,
+          registration: carDetailsFromAI.registration,
+          mileage: carDetailsFromAI.mileage,
+          transmission: carDetailsFromAI.transmission,
+          fuelType: carDetailsFromAI.fuelType,
+          engine: carDetailsFromAI.engineSize,
+          bodyType: carDetailsFromAI.bodyType,
+          price: carDetailsFromAI.price,
+          drivetrain: carDetailsFromAI.drivetrain,
+        };
+        carDetailId = await this.createCarDetail(aiAsCardDetails, sold, now);
       } else {
         // Create empty car_detail
         carDetailId = await this.createEmptyCarDetail(sold, now);
@@ -116,8 +127,8 @@ export class PostImportService {
         cleanedCaption,
         createdTime: postData.createdTime || now.toISOString(),
         sidecarMedias: postData.sidecarMedias
-          ? (postData.sidecarMedias as any)
-          : null,
+          ? postData.sidecarMedias
+          : Prisma.JsonNull,
         vendor_id: BigInt(vendorId),
         live: false,
         likesCount: postData.likesCount || 0,
@@ -130,8 +141,8 @@ export class PostImportService {
         cleanedCaption,
         createdTime: postData.createdTime || now.toISOString(),
         sidecarMedias: postData.sidecarMedias
-          ? (postData.sidecarMedias as any)
-          : null,
+          ? postData.sidecarMedias
+          : Prisma.JsonNull,
         likesCount: postData.likesCount || 0,
         viewsCount: postData.viewsCount || 0,
         car_detail_id: carDetailId,
@@ -145,9 +156,13 @@ export class PostImportService {
     sold: boolean,
     now: Date,
   ): Promise<bigint> {
-    // Generate a unique ID based on timestamp + random component
-    const id = BigInt(Date.now()) * 1000n + BigInt(Math.floor(Math.random() * 1000));
-    
+    // Generate a unique ID using timestamp + process ID + random component
+    // This reduces collision risk in concurrent scenarios
+    const timestamp = BigInt(Date.now()) * 1000000n;
+    const processId = BigInt(process.pid) * 1000n;
+    const random = BigInt(Math.floor(Math.random() * 1000));
+    const id = timestamp + processId + random;
+
     const carDetail = await this.prisma.car_detail.create({
       data: {
         id,
@@ -162,13 +177,22 @@ export class PostImportService {
   }
 
   private async createCarDetail(
-    carDetails: any,
+    carDetails: ImportPostData['cardDetails'],
     sold: boolean,
     now: Date,
   ): Promise<bigint> {
-    // Generate a unique ID based on timestamp + random component
-    const id = BigInt(Date.now()) * 1000n + BigInt(Math.floor(Math.random() * 1000));
-    
+    if (!carDetails) {
+      // If no car details provided, create empty
+      return this.createEmptyCarDetail(sold, now);
+    }
+
+    // Generate a unique ID using timestamp + process ID + random component
+    // This reduces collision risk in concurrent scenarios
+    const timestamp = BigInt(Date.now()) * 1000000n;
+    const processId = BigInt(process.pid) * 1000n;
+    const random = BigInt(Math.floor(Math.random() * 1000));
+    const id = timestamp + processId + random;
+
     const carDetail = await this.prisma.car_detail.create({
       data: {
         id,
@@ -183,11 +207,9 @@ export class PostImportService {
         mileage: carDetails.mileage || null,
         transmission: carDetails.transmission || null,
         fuelType: carDetails.fuelType || null,
-        engineSize: carDetails.engineSize
-          ? carDetails.engineSize.toString()
-          : carDetails.engine
-            ? carDetails.engine.toString()
-            : null,
+        engineSize: carDetails.engine
+          ? carDetails.engine.toString()
+          : null,
         drivetrain: carDetails.drivetrain || null,
         seats: carDetails.seats || null,
         numberOfDoors: carDetails.numberOfDoors || null,
@@ -196,7 +218,7 @@ export class PostImportService {
         customsPaid: carDetails.customsPaid || false,
         sold,
         published: false,
-        contact: carDetails.contact ? carDetails.contact : null,
+        contact: carDetails.contact ? carDetails.contact : Prisma.JsonNull,
         options: carDetails.options || null,
       },
     });

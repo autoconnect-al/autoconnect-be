@@ -51,13 +51,21 @@ export function decodeCaption(
   encodedCaption: string | null | undefined,
 ): string {
   if (!encodedCaption) return '';
-  
+
   // Check if the string looks like valid base64
-  const base64Regex = /^[A-Za-z0-9+/=]+$/;
-  if (!base64Regex.test(encodedCaption)) {
+  // Must be at least 4 characters and match base64 pattern with proper padding
+  if (encodedCaption.length < 4) {
+    return encodedCaption;
+  }
+
+  // More strict base64 validation: check for proper padding and length
+  const base64Regex = /^[A-Za-z0-9+/]+={0,2}$/;
+  const isValidLength = encodedCaption.length % 4 === 0;
+
+  if (!base64Regex.test(encodedCaption) || !isValidLength) {
     return encodedCaption; // Return as-is if doesn't look like base64
   }
-  
+
   try {
     const decoded = Buffer.from(encodedCaption, 'base64').toString('utf-8');
     // If decoded string contains invalid UTF-8 sequences or control characters,
