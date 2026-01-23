@@ -4,7 +4,27 @@ import { chain } from 'stream-chain';
 import { parser } from 'stream-json';
 import { streamArray } from 'stream-json/streamers/StreamArray';
 import { Readable } from 'stream';
-import { RemotePostSaverService } from '../remote-post-saver.service';
+import { PostImportService } from '../services/post-import.service';
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports,@typescript-eslint/no-unsafe-assignment
+const PostModel = require('../types/instagram').PostModel;
+
+type ApifyPost = {
+  pk?: number;
+  caption?: string;
+  like_count?: number;
+  comment_count?: number;
+  carousel_media?: Array<{
+    pk: number;
+    media_type: number;
+    image_versions2?: { candidates?: { url?: string }[] };
+  }>;
+  product_type?: string;
+  date?: number;
+  taken_at?: number;
+  user?: { pk?: number };
+  [key: string]: any;
+};
 
 @Injectable()
 export class ApifyDatasetImportService {
@@ -19,15 +39,12 @@ export class ApifyDatasetImportService {
   private totalSeen = 0;
   private totalQueuedForSave = 0;
 
-  constructor(private readonly remoteSaver: RemotePostSaverService) {}
+  constructor(private readonly postImportService: PostImportService) {}
 
-  async importLatestDataset() {
+  async importLatestDataset(useOpenAI = false) {
     console.log('[ApifyImport] starting import from dataset URL');
 
-    // 1) Get JWT once, reuse for all saves (same as before)
-    const jwt = await this.remoteSaver.getJwt();
-
-    // 2) Fetch dataset items (JSON array)
+    // 1) Fetch dataset items (JSON array)
     const resp = await fetch(this.apifyDatasetUrl, {
       method: 'GET',
       headers: {
@@ -42,7 +59,7 @@ export class ApifyDatasetImportService {
       );
     }
 
-    // 3) Stream parse JSON array items
+    // 2) Stream parse JSON array items
     // Node 18+ has WHATWG ReadableStream on resp.body; convert to Node stream:
     const nodeStream = this.toNodeReadable(resp.body);
     if (!nodeStream) throw new Error('Apify response body is empty');
@@ -50,19 +67,35 @@ export class ApifyDatasetImportService {
 
     const flush = async () => {
       if (this.batch.length === 0) return;
-      // same chunk pattern: Promise.all(savePost)
-      const responses = await Promise.all(
-        this.batch.map((item) => this.remoteSaver.savePost(item, jwt)),
+      // Process each item and save to DB
+      const results = await Promise.allSettled(
+        this.batch.map(async (item) => {
+          // Skip non-carousel posts
+          if (item['product_type'] !== 'carousel_container') {
+            return 'skipped';
+          }
+
+          // Map Instagram post to our format
+          const postData = this.mapInstagramPost(item);
+          const vendorId = item.user?.pk || 1;
+
+          // Save directly to DB
+          return this.postImportService.importPost(
+            postData,
+            vendorId,
+            useOpenAI,
+          );
+        }),
       );
 
       this.batch.forEach((item) => {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access,@typescript-eslint/no-unsafe-argument
-        idsSeen.add(item.pk);
+        if (item.pk) idsSeen.add(item.pk);
       });
 
       this.totalQueuedForSave += this.batch.length;
       this.batch = [];
-      return responses;
+      return results;
     };
 
     const pipeline = chain([nodeStream, parser(), streamArray()]);
@@ -82,6 +115,33 @@ export class ApifyDatasetImportService {
     console.log(
       `[ApifyImport] done. totalSeen=${idsSeen.size} totalSaved=${this.totalQueuedForSave}`,
     );
+  }
+
+  private mapInstagramPost(post: ApifyPost): any {
+    const postData = JSON.parse(JSON.stringify(PostModel)) as any;
+    postData.id = post.pk;
+    postData.createdTime = post.date
+      ? (new Date(post.date).getTime() / 1000).toString()
+      : '';
+    postData.caption = post.caption ?? '';
+    postData.likesCount = post.like_count;
+    postData.commentsCount = post.comment_count;
+    postData.origin = 'INSTAGRAM';
+
+    postData.sidecarMedias = post.carousel_media
+      ?.filter((m) => m.media_type === 1)
+      .map((m) => ({
+        id: m.pk,
+        imageStandardResolutionUrl:
+          m.image_versions2?.candidates?.[0]?.url ?? '',
+        type: 'image',
+      }))
+      .filter(
+        (m: { imageStandardResolutionUrl: string }) =>
+          m.imageStandardResolutionUrl !== '',
+      );
+
+    return postData;
   }
 
   /**
