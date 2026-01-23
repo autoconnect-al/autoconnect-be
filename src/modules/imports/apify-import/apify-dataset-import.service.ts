@@ -4,10 +4,8 @@ import { chain } from 'stream-chain';
 import { parser } from 'stream-json';
 import { streamArray } from 'stream-json/streamers/StreamArray';
 import { Readable } from 'stream';
-import { PostImportService } from '../services/post-import.service';
-
-// eslint-disable-next-line @typescript-eslint/no-require-imports,@typescript-eslint/no-unsafe-assignment
-const PostModel = require('../types/instagram').PostModel;
+import { PostImportService, ImportPostData } from '../services/post-import.service';
+import { PostModel } from '../types/instagram';
 
 type ApifyPost = {
   pk?: number;
@@ -23,7 +21,7 @@ type ApifyPost = {
   date?: number;
   taken_at?: number;
   user?: { pk?: number };
-  [key: string]: any;
+  [key: string]: unknown;
 };
 
 @Injectable()
@@ -35,7 +33,7 @@ export class ApifyDatasetImportService {
     process.env.APIFY_DATASET_URL ??
     `https://api.apify.com/v2/acts/instagram-scraper~fast-instagram-post-scraper/runs/last/dataset/items?token=${process.env.APIFY_API_TOKEN}`;
 
-  private batch: any[] = [];
+  private batch: ApifyPost[] = [];
   private totalSeen = 0;
   private totalQueuedForSave = 0;
 
@@ -100,9 +98,9 @@ export class ApifyDatasetImportService {
 
     const pipeline = chain([nodeStream, parser(), streamArray()]);
 
-    for await (const data of pipeline as any) {
+    type StreamData = { value: ApifyPost };
+    for await (const data of pipeline as AsyncIterable<StreamData>) {
       this.totalSeen++;
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       this.batch.push(data.value);
 
       if (this.batch.length >= this.CHUNK_SIZE) {
@@ -117,29 +115,29 @@ export class ApifyDatasetImportService {
     );
   }
 
-  private mapInstagramPost(post: ApifyPost): any {
-    const postData = JSON.parse(JSON.stringify(PostModel));
-    postData.id = post.pk;
-    postData.createdTime = post.date
-      ? (new Date(post.date).getTime() / 1000).toString()
-      : '';
-    postData.caption = post.caption ?? '';
-    postData.likesCount = post.like_count;
-    postData.commentsCount = post.comment_count;
-    postData.origin = 'INSTAGRAM';
-
-    postData.sidecarMedias = post.carousel_media
-      ?.filter((m) => m.media_type === 1)
-      .map((m) => ({
-        id: m.pk,
-        imageStandardResolutionUrl:
-          m.image_versions2?.candidates?.[0]?.url ?? '',
-        type: 'image',
-      }))
-      .filter(
-        (m: { imageStandardResolutionUrl: string }) =>
-          m.imageStandardResolutionUrl !== '',
-      );
+  private mapInstagramPost(post: ApifyPost): ImportPostData {
+    const postModelTemplate = JSON.parse(JSON.stringify(PostModel)) as typeof PostModel;
+    
+    // Create properly typed import data
+    const postData: ImportPostData = {
+      id: post.pk ?? 0,
+      createdTime: post.date
+        ? (new Date(post.date).getTime() / 1000).toString()
+        : '',
+      caption: post.caption ?? '',
+      likesCount: post.like_count,
+      viewsCount: post.comment_count,
+      origin: 'INSTAGRAM',
+      sidecarMedias: post.carousel_media
+        ?.filter((m) => m.media_type === 1)
+        .map((m) => ({
+          id: m.pk,
+          imageStandardResolutionUrl:
+            m.image_versions2?.candidates?.[0]?.url ?? '',
+          type: 'image' as const,
+        }))
+        .filter((m) => m.imageStandardResolutionUrl !== ''),
+    };
 
     return postData;
   }
@@ -147,22 +145,35 @@ export class ApifyDatasetImportService {
   /**
    * Converts WHATWG ReadableStream (from fetch) to Node.js Readable
    */
-  private toNodeReadable(body: any): Readable | null {
+  private toNodeReadable(body: unknown): Readable | null {
     if (!body) return null;
 
     // Node 18+ supports Readable.fromWeb
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const anyReadable: any = Readable as any;
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    if (typeof anyReadable.fromWeb === 'function') {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-return,@typescript-eslint/no-unsafe-call,@typescript-eslint/no-unsafe-member-access
-      return anyReadable.fromWeb(body);
+    // Type guard for checking if Readable has fromWeb method
+    interface ReadableWithFromWeb {
+      fromWeb: (stream: unknown) => Readable;
+    }
+
+    const hasFromWeb = (
+      r: typeof Readable,
+    ): r is typeof Readable & ReadableWithFromWeb => {
+      return 'fromWeb' in r && typeof r.fromWeb === 'function';
+    };
+
+    if (hasFromWeb(Readable)) {
+      return Readable.fromWeb(body);
     }
 
     // Fallback: if it's already a Node stream
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    if (typeof body.pipe === 'function') return body as Readable;
+    if (
+      body &&
+      typeof body === 'object' &&
+      'pipe' in body &&
+      typeof body.pipe === 'function'
+    ) {
+      return body as Readable;
+    }
 
     throw new Error(
       'Unsupported response body stream type (need Node 18+ or polyfill)',
