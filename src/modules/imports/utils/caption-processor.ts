@@ -12,10 +12,13 @@ export function generateCleanedCaption(
 ): string {
   if (!caption) return '';
 
-  // Remove emojis using regex patterns
-  // This regex matches most common emoji ranges
+  // Remove emojis using a comprehensive regex pattern
+  // This pattern matches most emoji ranges including:
+  // - Emoticons, symbols, and pictographs
+  // - Transport and map symbols
+  // - Additional symbols and pictographs
   let cleaned = caption.replace(
-    /([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g,
+    /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{2300}-\u{23FF}\u{2B50}\u{2B55}\u{231A}\u{231B}\u{2328}\u{23CF}\u{23E9}-\u{23F3}\u{23F8}-\u{23FA}\u{24C2}\u{25AA}\u{25AB}\u{25B6}\u{25C0}\u{25FB}-\u{25FE}\u{2934}\u{2935}\u{2B05}-\u{2B07}\u{2B1B}\u{2B1C}\u{3030}\u{303D}\u{3297}\u{3299}\u{FE00}-\u{FE0F}]/gu,
     '',
   );
 
@@ -48,10 +51,23 @@ export function decodeCaption(
   encodedCaption: string | null | undefined,
 ): string {
   if (!encodedCaption) return '';
+  
+  // Check if the string looks like valid base64
+  const base64Regex = /^[A-Za-z0-9+/=]+$/;
+  if (!base64Regex.test(encodedCaption)) {
+    return encodedCaption; // Return as-is if doesn't look like base64
+  }
+  
   try {
-    return Buffer.from(encodedCaption, 'base64').toString('utf-8');
+    const decoded = Buffer.from(encodedCaption, 'base64').toString('utf-8');
+    // If decoded string contains invalid UTF-8 sequences or control characters,
+    // it's probably not valid base64
+    if (decoded.includes('\uFFFD')) {
+      return encodedCaption;
+    }
+    return decoded;
   } catch {
-    return encodedCaption; // Return as-is if not valid base64
+    return encodedCaption; // Return as-is if decoding fails
   }
 }
 
