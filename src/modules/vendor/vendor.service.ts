@@ -2,7 +2,6 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { CreateVendorDto } from './dto/create-vendor.dto';
 import { UpdateVendorDto } from './dto/update-vendor.dto';
-import * as fs from 'fs/promises';
 
 @Injectable()
 export class VendorService {
@@ -101,14 +100,5 @@ export class VendorService {
     });
 
     return { message: 'Vendor and related posts deleted successfully' };
-  }
-
-  async deleteProfilePicture(filePath: string) {
-    try {
-      await fs.unlink(filePath);
-    } catch (error) {
-      // Ignore error if file doesn't exist
-      console.error('Error deleting profile picture:', error);
-    }
   }
 }
