@@ -1,8 +1,5 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 
-// IMPORTANT:
-// - If you generate client to the default location: use '@prisma/client'
-// - If you generate to a custom output (like ../generated/prisma): import from that output
 import { PrismaClient } from '@prisma/client';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 
@@ -22,8 +19,6 @@ export class PrismaService
 
     super({
       adapter,
-      // optional logging:
-      // log: ['error', 'warn'],
     });
   }
 
