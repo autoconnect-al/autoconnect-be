@@ -8,6 +8,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { SearchModule } from './modules/search/search.module';
 import { IngestModule } from './modules/imports/apify-import.module';
 import { DatabaseModule } from './database/database.module';
+import { VendorModule } from './modules/vendor/vendor.module';
 
 void ConfigModule.forRoot({
   isGlobal: true,
@@ -27,6 +28,7 @@ void ConfigModule.forRoot({
     SearchModule,
     IngestModule,
     DatabaseModule,
+    VendorModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],
