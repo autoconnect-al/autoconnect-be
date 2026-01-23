@@ -114,4 +114,9 @@ export class VendorController {
   remove(@Param('id') id: string) {
     return this.vendorService.remove(BigInt(id));
   }
+
+  @Post(':id/sync-instagram')
+  syncFromInstagram(@Param('id') id: string) {
+    return this.vendorService.syncFromInstagram(BigInt(id));
+  }
 }

@@ -10,6 +10,16 @@ All endpoints are prefixed with: `/v1/vendor`
 All endpoints require the `ADMIN_CODE` query parameter or JWT authentication with admin role.
 Example: `/v1/vendor?code=<ADMIN_CODE>`
 
+## Contact Object Structure
+The vendor's contact is a JSON object with the following structure:
+```json
+{
+  "phone_number": "string (optional)",
+  "address": "string (optional)",
+  "whatsapp": "string (optional)"
+}
+```
+
 ## Endpoints
 
 ### 1. Create Vendor
@@ -23,9 +33,16 @@ Creates a new vendor account with optional profile picture upload.
 - Body Parameters:
   - `accountName` (string, optional): Vendor's account name
   - `biography` (string, optional): Vendor's biography
-  - `contact` (JSON object, optional): Contact information
+  - `contact` (JSON object, optional): Contact information (see Contact Object Structure)
   - `accountExists` (boolean, optional): Whether the account exists (default: true)
   - `initialised` (boolean, optional): Whether the vendor is initialized
+  - `country` (string, optional): Country where vendor operates
+  - `city` (string, optional): City where vendor operates
+  - `countryOfOriginForVehicles` (string, optional): Country where vehicles originate (e.g., Korea for Korean cars sold in Albania)
+  - `phoneNumber` (string, optional): Vendor's phone number
+  - `whatsAppNumber` (string, optional): Vendor's WhatsApp number (should use variant with prefix)
+  - `location` (string, optional): Google Maps URL for vendor location
+  - `useDetailsForPosts` (boolean, optional): When true, vendor details will be synced to all car_details (default: false)
   - `profilePicture` (file, optional): Profile picture image (max 5MB)
 
 **Response:**
@@ -34,7 +51,18 @@ Creates a new vendor account with optional profile picture upload.
   "id": "1234567890123",
   "accountName": "Example Vendor",
   "biography": "Sample biography",
-  "contact": { "email": "vendor@example.com" },
+  "contact": { 
+    "phone_number": "123456789",
+    "address": "123 Main St",
+    "whatsapp": "+355123456789"
+  },
+  "country": "Albania",
+  "city": "Tirana",
+  "countryOfOriginForVehicles": "Korea",
+  "phoneNumber": "+355123456",
+  "whatsAppNumber": "+355123456",
+  "location": "https://maps.google.com/...",
+  "useDetailsForPosts": false,
   "profilePicture": "account_pictures/vendor-1234567890-123456789.jpg",
   "accountExists": true,
   "initialised": false,
@@ -121,7 +149,16 @@ Updates an existing vendor with optional profile picture upload.
   - `contact` (JSON object): Updated contact information
   - `accountExists` (boolean): Updated account existence status
   - `initialised` (boolean): Updated initialization status
+  - `country` (string): Updated country
+  - `city` (string): Updated city
+  - `countryOfOriginForVehicles` (string): Updated country of origin for vehicles
+  - `phoneNumber` (string): Updated phone number
+  - `whatsAppNumber` (string): Updated WhatsApp number
+  - `location` (string): Updated location (Google Maps URL)
+  - `useDetailsForPosts` (boolean): When set to true, vendor details will be synced to all associated car_details
   - `profilePicture` (file): New profile picture (max 5MB)
+
+**Note:** When `useDetailsForPosts` is set to `true`, the system will automatically update all car_details associated with this vendor's posts with the vendor's location information (country, city, countryOfOriginForVehicles, phoneNumber, whatsAppNumber, location).
 
 **Response:**
 ```json
@@ -129,7 +166,17 @@ Updates an existing vendor with optional profile picture upload.
   "id": "1234567890123",
   "accountName": "Updated Vendor Name",
   "biography": "Updated biography",
-  "contact": { "email": "updated@example.com" },
+  "contact": { 
+    "phone_number": "123456789",
+    "address": "123 Main St"
+  },
+  "country": "Albania",
+  "city": "Tirana",
+  "countryOfOriginForVehicles": "Korea",
+  "phoneNumber": "+355123456",
+  "whatsAppNumber": "+355123456",
+  "location": "https://maps.google.com/...",
+  "useDetailsForPosts": true,
   "profilePicture": "account_pictures/vendor-1234567890-987654321.jpg",
   "accountExists": true,
   "initialised": true,
@@ -162,6 +209,43 @@ Soft deletes a vendor and cascades the deletion to all related posts.
 **Error Responses:**
 - 404 Not Found: If vendor doesn't exist or is already deleted
 
+### 6. Sync Vendor Details from Instagram
+**POST** `/v1/vendor/:id/sync-instagram`
+
+Automatically fetches vendor profile picture from Instagram public API and updates the vendor record.
+
+**Request:**
+- Method: POST
+- URL Parameters:
+  - `id` (string, required): Vendor ID
+
+**Response (Success):**
+```json
+{
+  "success": true,
+  "message": "Profile picture synced from Instagram successfully",
+  "vendor": {
+    "id": "1234567890123",
+    "accountName": "example_vendor",
+    "profilePicture": "https://instagram.com/.../profile_pic.jpg",
+    ...
+  }
+}
+```
+
+**Response (Failure):**
+```json
+{
+  "success": false,
+  "message": "Failed to sync from Instagram: <error details>"
+}
+```
+
+**Error Responses:**
+- 404 Not Found: If vendor doesn't exist or doesn't have an Instagram account name
+
+**Note:** This endpoint attempts to fetch the profile picture from Instagram's public API. Instagram's API structure may change, so success is not guaranteed. The vendor must have an `accountName` set.
+
 ## File Upload Details
 
 ### Profile Picture Upload
@@ -185,6 +269,21 @@ When a vendor is deleted:
    - `GET /v1/vendor` (list all)
    - `GET /v1/vendor/:id` (get single - returns 404)
 
+## useDetailsForPosts Feature
+
+When `useDetailsForPosts` is set to `true` on a vendor:
+
+1. **Automatic Sync**: Any updates to the vendor's location details will automatically propagate to all associated car_details
+2. **Synced Fields**:
+   - `country`
+   - `city`
+   - `countryOfOriginForVehicles`
+   - `phoneNumber`
+   - `whatsAppNumber`
+   - `location`
+3. **Use Case**: Useful when a vendor operates in Albania but imports cars from Korea - you can set the vendor's location once and have it automatically apply to all their vehicle listings
+4. **Trigger**: The sync happens automatically when you update a vendor that has `useDetailsForPosts: true`
+
 ## Implementation Details
 
 ### Technologies Used
@@ -207,22 +306,49 @@ src/modules/vendor/
 ```
 
 ### Database Schema
-The vendor entity already exists in the Prisma schema with the following structure:
+The vendor entity has been updated in the Prisma schema with the following structure:
 ```prisma
 model vendor {
-  id             BigInt    @id @db.UnsignedBigInt
-  dateCreated    DateTime  @db.DateTime(0)
-  dateUpdated    DateTime? @db.DateTime(0)
-  deleted        Boolean   @default(false)
-  contact        Json?
-  accountName    String?   @db.VarChar(100)
-  profilePicture String?   @db.LongText
-  accountExists  Boolean   @default(true)
-  initialised    Boolean?
-  biography      String?   @db.VarChar(255)
-  post           post[]
+  id                          BigInt    @id @db.UnsignedBigInt
+  dateCreated                 DateTime  @db.DateTime(0)
+  dateUpdated                 DateTime? @db.DateTime(0)
+  deleted                     Boolean   @default(false)
+  contact                     Json?     // {phone_number?: string, address?: string, whatsapp?: string}
+  accountName                 String?   @db.VarChar(100)
+  profilePicture              String?   @db.LongText
+  accountExists               Boolean   @default(true)
+  initialised                 Boolean?
+  biography                   String?   @db.VarChar(255)
+  country                     String?   @db.VarChar(100)
+  city                        String?   @db.VarChar(100)
+  countryOfOriginForVehicles  String?   @db.VarChar(100)
+  phoneNumber                 String?   @db.VarChar(50)
+  whatsAppNumber              String?   @db.VarChar(50)
+  location                    String?   @db.VarChar(500)
+  useDetailsForPosts          Boolean   @default(false)
+  post                        post[]
 }
 ```
+
+The car_detail entity has been updated to include vendor location fields:
+```prisma
+model car_detail {
+  // ... existing fields ...
+  country                     String?   @db.VarChar(100)
+  city                        String?   @db.VarChar(100)
+  countryOfOriginForVehicles  String?   @db.VarChar(100)
+  phoneNumber                 String?   @db.VarChar(50)
+  whatsAppNumber              String?   @db.VarChar(50)
+  location                    String?   @db.VarChar(500)
+  // ... rest of fields ...
+}
+```
+
+### Migration
+A database migration script has been created at:
+`prisma/migrations/20260123204957_add_vendor_and_car_detail_fields/migration.sql`
+
+This migration adds the new fields to both vendor and car_detail tables.
 
 ## Testing
 

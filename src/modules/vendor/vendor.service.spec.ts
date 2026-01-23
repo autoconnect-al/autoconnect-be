@@ -16,6 +16,10 @@ describe('VendorService', () => {
     },
     post: {
       updateMany: jest.fn(),
+      findMany: jest.fn(),
+    },
+    car_detail: {
+      updateMany: jest.fn(),
     },
   };
 
@@ -149,6 +153,7 @@ describe('VendorService', () => {
         deleted: false,
         dateCreated: new Date(),
         dateUpdated: new Date(),
+        useDetailsForPosts: false,
       };
 
       const updateDto = { accountName: 'Updated Vendor' };
@@ -161,6 +166,46 @@ describe('VendorService', () => {
 
       expect(result.accountName).toBe('Updated Vendor');
       expect(mockPrismaService.vendor.update).toHaveBeenCalled();
+    });
+
+    it('should sync vendor details to car_details when useDetailsForPosts is true', async () => {
+      const mockVendor = {
+        id: BigInt(1),
+        accountName: 'Test Vendor',
+        deleted: false,
+        dateCreated: new Date(),
+        dateUpdated: new Date(),
+        useDetailsForPosts: false,
+        country: 'Albania',
+        city: 'Tirana',
+        phoneNumber: '+355123456',
+      };
+
+      const updateDto = {
+        useDetailsForPosts: true,
+        country: 'Albania',
+        city: 'Tirana',
+      };
+      const updatedVendor = { ...mockVendor, ...updateDto };
+
+      const mockPosts = [
+        { car_detail_id: BigInt(100) },
+        { car_detail_id: BigInt(101) },
+      ];
+
+      mockPrismaService.vendor.findUnique.mockResolvedValue(mockVendor);
+      mockPrismaService.vendor.update.mockResolvedValue(updatedVendor);
+      mockPrismaService.post.findMany.mockResolvedValue(mockPosts);
+      mockPrismaService.car_detail.updateMany.mockResolvedValue({ count: 2 });
+
+      const result = await service.update(BigInt(1), updateDto);
+
+      expect(result.useDetailsForPosts).toBe(true);
+      expect(mockPrismaService.post.findMany).toHaveBeenCalledWith({
+        where: { vendor_id: BigInt(1), deleted: false },
+        select: { car_detail_id: true },
+      });
+      expect(mockPrismaService.car_detail.updateMany).toHaveBeenCalled();
     });
   });
 

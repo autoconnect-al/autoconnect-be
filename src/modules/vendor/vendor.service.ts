@@ -21,6 +21,13 @@ export class VendorService {
         accountExists: createVendorDto.accountExists ?? true,
         initialised: createVendorDto.initialised,
         profilePicture: profilePicture,
+        country: createVendorDto.country,
+        city: createVendorDto.city,
+        countryOfOriginForVehicles: createVendorDto.countryOfOriginForVehicles,
+        phoneNumber: createVendorDto.phoneNumber,
+        whatsAppNumber: createVendorDto.whatsAppNumber,
+        location: createVendorDto.location,
+        useDetailsForPosts: createVendorDto.useDetailsForPosts ?? false,
       },
     });
     return vendor;
@@ -74,7 +81,64 @@ export class VendorService {
       data: updateData,
     });
 
+    // If useDetailsForPosts is true, update all car_details associated with this vendor's posts
+    if (vendor.useDetailsForPosts) {
+      await this.syncVendorDetailsToCarDetails(id, vendor);
+    }
+
     return vendor;
+  }
+
+  /**
+   * Syncs vendor details to all car_details associated with the vendor's posts
+   */
+  private async syncVendorDetailsToCarDetails(
+    vendorId: bigint,
+    vendor: any,
+  ): Promise<void> {
+    // Get all posts for this vendor
+    const posts = await this.prisma.post.findMany({
+      where: {
+        vendor_id: vendorId,
+        deleted: false,
+      },
+      select: {
+        car_detail_id: true,
+      },
+    });
+
+    // Extract car_detail_ids (filter out null values)
+    const carDetailIds = posts
+      .map((post) => post.car_detail_id)
+      .filter((id): id is bigint => id !== null);
+
+    if (carDetailIds.length === 0) {
+      return;
+    }
+
+    // Update all car_details with vendor information
+    await this.prisma.car_detail.updateMany({
+      where: {
+        id: {
+          in: carDetailIds,
+        },
+      },
+      data: {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+        country: vendor.country,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+        city: vendor.city,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+        countryOfOriginForVehicles: vendor.countryOfOriginForVehicles,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+        phoneNumber: vendor.phoneNumber,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+        whatsAppNumber: vendor.whatsAppNumber,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+        location: vendor.location,
+        dateUpdated: new Date(),
+      },
+    });
   }
 
   async remove(id: bigint) {
@@ -100,5 +164,73 @@ export class VendorService {
     });
 
     return { message: 'Vendor and related posts deleted successfully' };
+  }
+
+  /**
+   * Syncs vendor profile picture from Instagram public API
+   * Fetches the profile picture URL from Instagram and updates the vendor
+   */
+  async syncFromInstagram(id: bigint): Promise<any> {
+    const vendor = await this.findOne(id);
+
+    if (!vendor.accountName) {
+      throw new NotFoundException(
+        'Vendor does not have an Instagram account name',
+      );
+    }
+
+    try {
+      // Fetch Instagram profile data from public API
+      const response = await fetch(
+        `https://www.instagram.com/${vendor.accountName}/?__a=1&__d=dis`,
+        {
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            Accept: 'application/json',
+          },
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch Instagram profile');
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const data = await response.json();
+
+      // Extract profile picture URL
+      // Note: Instagram's API structure may vary, this is a common pattern
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      const profilePicUrl = data?.graphql?.user?.profile_pic_url_hd;
+
+      if (!profilePicUrl) {
+        return {
+          success: false,
+          message: 'Could not extract profile picture from Instagram',
+        };
+      }
+
+      // Update vendor with new profile picture URL
+      const updatedVendor = await this.prisma.vendor.update({
+        where: { id },
+        data: {
+          profilePicture: profilePicUrl as string,
+          dateUpdated: new Date(),
+        },
+      });
+
+      return {
+        success: true,
+        message: 'Profile picture synced from Instagram successfully',
+        vendor: updatedVendor,
+      };
+    } catch (error) {
+      console.error('Error syncing from Instagram:', error);
+      return {
+        success: false,
+        message: `Failed to sync from Instagram: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      };
+    }
   }
 }

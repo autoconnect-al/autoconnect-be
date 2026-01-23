@@ -46,6 +46,12 @@ model car_detail {
   contact                             Json?
   priceVerified                       Boolean?  @default(false)
   mileageVerified                     Boolean?  @default(false)
+  country                             String?   @db.VarChar(100)
+  city                                String?   @db.VarChar(100)
+  countryOfOriginForVehicles          String?   @db.VarChar(100)
+  phoneNumber                         String?   @db.VarChar(50)
+  whatsAppNumber                      String?   @db.VarChar(50)
+  location                            String?   @db.VarChar(500)
   post_car_detail_post_idTopost       post?     @relation("car_detail_post_idTopost", fields: [post_id], references: [id], onDelete: Cascade, map: "car_detail_post_id_fk")
   post_post_car_detail_idTocar_detail post[]    @relation("post_car_detail_idTocar_detail")
 
@@ -215,17 +221,24 @@ model user_role {
 }
 
 model vendor {
-  id             BigInt    @id @db.UnsignedBigInt
-  dateCreated    DateTime  @db.DateTime(0)
-  dateUpdated    DateTime? @db.DateTime(0)
-  deleted        Boolean   @default(false)
-  contact        Json?
-  accountName    String?   @db.VarChar(100)
-  profilePicture String?   @db.LongText
-  accountExists  Boolean   @default(true)
-  initialised    Boolean?
-  biography      String?   @db.VarChar(255)
-  post           post[]
+  id                          BigInt    @id @db.UnsignedBigInt
+  dateCreated                 DateTime  @db.DateTime(0)
+  dateUpdated                 DateTime? @db.DateTime(0)
+  deleted                     Boolean   @default(false)
+  contact                     Json?
+  accountName                 String?   @db.VarChar(100)
+  profilePicture              String?   @db.LongText
+  accountExists               Boolean   @default(true)
+  initialised                 Boolean?
+  biography                   String?   @db.VarChar(255)
+  country                     String?   @db.VarChar(100)
+  city                        String?   @db.VarChar(100)
+  countryOfOriginForVehicles  String?   @db.VarChar(100)
+  phoneNumber                 String?   @db.VarChar(50)
+  whatsAppNumber              String?   @db.VarChar(50)
+  location                    String?   @db.VarChar(500)
+  useDetailsForPosts          Boolean   @default(false)
+  post                        post[]
 
   @@index([dateUpdated], map: "dateUpdated")
   @@index([deleted, accountName, accountExists], map: "deleted")
