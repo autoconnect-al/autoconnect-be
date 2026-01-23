@@ -30,12 +30,15 @@ export class ApifyController {
 
     // Kick async job
     const shouldUseOpenAI = useOpenAI === 'true' || useOpenAI === '1';
-    const shouldDownloadImages = downloadImages === 'true' || downloadImages === '1';
-    
+    const shouldDownloadImages =
+      downloadImages === 'true' || downloadImages === '1';
+
     setImmediate(() => {
-      this.apifyImport.importLatestDataset(shouldUseOpenAI, shouldDownloadImages).catch((err) => {
-        console.error('[ApifyImport] failed:', err);
-      });
+      this.apifyImport
+        .importLatestDataset(shouldUseOpenAI, shouldDownloadImages)
+        .catch((err) => {
+          console.error('[ApifyImport] failed:', err);
+        });
     });
   }
 }

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import sharp from 'sharp';
 
 export interface ImageVariants {
   main: string; // Path to main image (WebP, good quality)
@@ -10,7 +11,7 @@ export interface ImageVariants {
 
 @Injectable()
 export class ImageDownloadService {
-  private readonly baseUploadDir = process.env.UPLOAD_DIR || '/tmp/uploads';
+  private readonly baseUploadDir = process.env.UPLOAD_DIR || './tmp/uploads';
   private readonly mainQuality = 85;
   private readonly thumbnailSize = 300; // px
   private readonly metadataSize = 150; // px
@@ -47,47 +48,44 @@ export class ImageDownloadService {
       const arrayBuffer = await response.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
 
-      // We'll use sharp if available, otherwise save original and create basic variants
-      let sharp: any;
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        sharp = require('sharp');
-      } catch {
-        // Sharp not available, use basic file operations
-        return this.saveFallbackVariants(buffer, uploadDir, imageId.toString());
-      }
-
       const imageIdStr = imageId.toString();
 
-      // Main image: good quality WebP
-      const mainPath = path.join(uploadDir, `${imageIdStr}.webp`);
-      await sharp(buffer).webp({ quality: this.mainQuality }).toFile(mainPath);
+      try {
+        // Main image: good quality WebP
+        const mainPath = path.join(uploadDir, `${imageIdStr}.webp`);
+        await sharp(buffer)
+          .webp({ quality: this.mainQuality })
+          .toFile(mainPath);
 
-      // Thumbnail: small WebP
-      const thumbnailPath = path.join(uploadDir, `${imageIdStr}-thumb.webp`);
-      await sharp(buffer)
-        .resize(this.thumbnailSize, this.thumbnailSize, {
-          fit: 'inside',
-          withoutEnlargement: true,
-        })
-        .webp({ quality: 80 })
-        .toFile(thumbnailPath);
+        // Thumbnail: small WebP
+        const thumbnailPath = path.join(uploadDir, `${imageIdStr}-thumb.webp`);
+        await sharp(buffer)
+          .resize(this.thumbnailSize, this.thumbnailSize, {
+            fit: 'inside',
+            withoutEnlargement: true,
+          })
+          .webp({ quality: 80 })
+          .toFile(thumbnailPath);
 
-      // Metadata: small JPG
-      const metadataPath = path.join(uploadDir, `${imageIdStr}-meta.jpg`);
-      await sharp(buffer)
-        .resize(this.metadataSize, this.metadataSize, {
-          fit: 'inside',
-          withoutEnlargement: true,
-        })
-        .jpeg({ quality: 75 })
-        .toFile(metadataPath);
+        // Metadata: small JPG
+        const metadataPath = path.join(uploadDir, `${imageIdStr}-meta.jpg`);
+        await sharp(buffer)
+          .resize(this.metadataSize, this.metadataSize, {
+            fit: 'inside',
+            withoutEnlargement: true,
+          })
+          .jpeg({ quality: 75 })
+          .toFile(metadataPath);
 
-      return {
-        main: mainPath,
-        thumbnail: thumbnailPath,
-        metadata: metadataPath,
-      };
+        return {
+          main: mainPath,
+          thumbnail: thumbnailPath,
+          metadata: metadataPath,
+        };
+      } catch (e) {
+        console.warn('Sharp processing failed, using fallback:', e);
+        return this.saveFallbackVariants(buffer, uploadDir, imageId.toString());
+      }
     } catch (error) {
       console.error('Error processing image:', error);
       throw error;
@@ -132,23 +130,22 @@ export class ImageDownloadService {
    * @returns Array of paths to image variants
    */
   async downloadAndProcessImages(
-    imageUrls: string[],
+    imageUrls: { imageUrls: string; name: string | number }[],
     vendorId: string | number,
     postId: string | number,
   ): Promise<ImageVariants[]> {
     const results: ImageVariants[] = [];
 
     for (let i = 0; i < imageUrls.length; i++) {
-      const imageUrl = imageUrls[i];
+      const imageUrl = imageUrls[i].imageUrls;
       // Use the image index or extract ID from URL if available
-      const imageId = `image-${i.toString().padStart(3, '0')}`;
-      
+
       try {
         const variants = await this.downloadAndProcessImage(
           imageUrl,
           vendorId,
           postId,
-          imageId,
+          imageUrls[i].name || `image-${i.toString().padStart(3, '0')}`,
         );
         results.push(variants);
       } catch (error) {

@@ -13,10 +13,12 @@ import type { Request } from 'express';
  */
 @Injectable()
 export class AdminGuard implements CanActivate {
-  private readonly adminCode =
-    process.env.ADMIN_CODE || 'ejkuU89EcU6LinIHVUvhpQz65gY8DOgG';
+  private readonly adminCode = process.env.ADMIN_CODE || '';
 
   canActivate(context: ExecutionContext): boolean {
+    if (!this.adminCode) {
+      throw new UnauthorizedException('Admin code not configured');
+    }
     const request = context.switchToHttp().getRequest<Request>();
 
     // Check for admin code in query params (legacy compatibility)

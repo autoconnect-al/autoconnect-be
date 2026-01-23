@@ -4,8 +4,10 @@ import { chain } from 'stream-chain';
 import { parser } from 'stream-json';
 import { streamArray } from 'stream-json/streamers/StreamArray';
 import { Readable } from 'stream';
-import { PostImportService, ImportPostData } from '../services/post-import.service';
-import { PostModel } from '../types/instagram';
+import {
+  ImportPostData,
+  PostImportService,
+} from '../services/post-import.service';
 
 type ApifyPost = {
   pk?: number;
@@ -88,12 +90,16 @@ export class ApifyDatasetImportService {
       );
 
       this.batch.forEach((item) => {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access,@typescript-eslint/no-unsafe-argument
         if (item.pk) idsSeen.add(item.pk);
       });
 
       this.totalQueuedForSave += this.batch.length;
       this.batch = [];
+      console.log(
+        '[ApifyImport] flushed batch, totalSeen=%d totalQueuedForSave=%d',
+        idsSeen.size,
+        this.totalQueuedForSave,
+      );
       return results;
     };
 
@@ -117,10 +123,8 @@ export class ApifyDatasetImportService {
   }
 
   private mapInstagramPost(post: ApifyPost): ImportPostData {
-    const postModelTemplate = JSON.parse(JSON.stringify(PostModel)) as typeof PostModel;
-    
     // Create properly typed import data
-    const postData: ImportPostData = {
+    return {
       id: post.pk ?? 0,
       createdTime: post.date
         ? (new Date(post.date).getTime() / 1000).toString()
@@ -139,8 +143,6 @@ export class ApifyDatasetImportService {
         }))
         .filter((m) => m.imageStandardResolutionUrl !== ''),
     };
-
-    return postData;
   }
 
   /**

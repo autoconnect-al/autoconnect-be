@@ -119,11 +119,21 @@ export class PostImportService {
     }
 
     // Download and process images if requested
-    if (downloadImages && postData.sidecarMedias && postData.sidecarMedias.length > 0) {
+    if (
+      downloadImages &&
+      postData.sidecarMedias &&
+      postData.sidecarMedias.length > 0
+    ) {
       try {
         const imageUrls = postData.sidecarMedias
-          .filter((media) => media.type === 'image' && media.imageStandardResolutionUrl)
-          .map((media) => media.imageStandardResolutionUrl);
+          .filter(
+            (media) =>
+              media.type === 'image' && media.imageStandardResolutionUrl,
+          )
+          .map((media) => ({
+            imageUrls: media.imageStandardResolutionUrl,
+            name: media.id,
+          }));
 
         if (imageUrls.length > 0) {
           await this.imageDownloadService.downloadAndProcessImages(
@@ -131,10 +141,15 @@ export class PostImportService {
             vendorId,
             postData.id,
           );
-          console.log(`Downloaded ${imageUrls.length} images for post ${postData.id}`);
+          console.log(
+            `Downloaded ${imageUrls.length} images for post ${postData.id}`,
+          );
         }
       } catch (error) {
-        console.error(`Failed to download images for post ${postData.id}:`, error);
+        console.error(
+          `Failed to download images for post ${postData.id}:`,
+          error,
+        );
         // Continue with post creation even if image download fails
       }
     }
@@ -232,9 +247,7 @@ export class PostImportService {
         mileage: carDetails.mileage || null,
         transmission: carDetails.transmission || null,
         fuelType: carDetails.fuelType || null,
-        engineSize: carDetails.engine
-          ? carDetails.engine.toString()
-          : null,
+        engineSize: carDetails.engine ? carDetails.engine.toString() : null,
         drivetrain: carDetails.drivetrain || null,
         seats: carDetails.seats || null,
         numberOfDoors: carDetails.numberOfDoors || null,
