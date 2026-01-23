@@ -46,15 +46,10 @@ export class ImageDownloadService {
 
       // Main image: good quality WebP
       const mainPath = path.join(this.uploadDir, `${baseName}.webp`);
-      await sharp(buffer)
-        .webp({ quality: this.mainQuality })
-        .toFile(mainPath);
+      await sharp(buffer).webp({ quality: this.mainQuality }).toFile(mainPath);
 
       // Thumbnail: small WebP
-      const thumbnailPath = path.join(
-        this.uploadDir,
-        `${baseName}-thumb.webp`,
-      );
+      const thumbnailPath = path.join(this.uploadDir, `${baseName}-thumb.webp`);
       await sharp(buffer)
         .resize(this.thumbnailSize, this.thumbnailSize, {
           fit: 'inside',

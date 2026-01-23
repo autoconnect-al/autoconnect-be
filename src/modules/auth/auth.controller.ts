@@ -1,10 +1,4 @@
-import {
-  Controller,
-  Post,
-  Body,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Post, Body, Req, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -48,10 +42,6 @@ export class AuthController {
 
   @Post('password-reset/confirm')
   confirmReset(@Body() dto: ConfirmPasswordResetDto) {
-    return this.authService.confirmPasswordReset(
-      dto.token,
-      dto.newPassword,
-    );
+    return this.authService.confirmPasswordReset(dto.token, dto.newPassword);
   }
-
 }

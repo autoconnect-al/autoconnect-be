@@ -7,7 +7,10 @@ describe('normalizeGeneralSearch', () => {
   });
 
   it('normalizes known typos', () => {
-    expect(normalizeGeneralSearch('benc mercedez')).toEqual(['benz', 'mercedes']);
+    expect(normalizeGeneralSearch('benc mercedez')).toEqual([
+      'benz',
+      'mercedes',
+    ]);
   });
 
   it('combines T Max into tmax', () => {

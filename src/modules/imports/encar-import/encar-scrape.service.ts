@@ -38,7 +38,7 @@ export class EncarScrapeService {
       }
 
       if (!resp.hasMore) break;
-      page = resp.page ?? (page + 1);
+      page = resp.page ?? page + 1;
     }
   }
 }

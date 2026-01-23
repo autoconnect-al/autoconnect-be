@@ -7,23 +7,25 @@
  * @param caption - Original caption text
  * @returns Cleaned caption without emojis
  */
-export function generateCleanedCaption(caption: string | null | undefined): string {
+export function generateCleanedCaption(
+  caption: string | null | undefined,
+): string {
   if (!caption) return '';
-  
+
   // Remove emojis using regex patterns
   // This regex matches most common emoji ranges
   let cleaned = caption.replace(
     /([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g,
     '',
   );
-  
+
   // Remove other formatting characters and normalize whitespace
   cleaned = cleaned
     .replace(/[\u200B-\u200D\uFEFF]/g, '') // Zero-width spaces
     .replace(/[\n\r\t]+/g, ' ') // Normalize line breaks and tabs to spaces
     .replace(/\s+/g, ' ') // Collapse multiple spaces
     .trim();
-  
+
   return cleaned;
 }
 
@@ -42,7 +44,9 @@ export function encodeCaption(caption: string | null | undefined): string {
  * @param encodedCaption - Base64 encoded caption
  * @returns Decoded caption text
  */
-export function decodeCaption(encodedCaption: string | null | undefined): string {
+export function decodeCaption(
+  encodedCaption: string | null | undefined,
+): string {
   if (!encodedCaption) return '';
   try {
     return Buffer.from(encodedCaption, 'base64').toString('utf-8');
@@ -60,14 +64,14 @@ export function decodeCaption(encodedCaption: string | null | undefined): string
  */
 export function isSold(cleanedCaption: string | null | undefined): boolean {
   if (!cleanedCaption) return false;
-  
+
   const lowerCaption = cleanedCaption.toLowerCase();
-  
+
   // Exclude if contains "per te shitur"
   if (lowerCaption.includes('per te shitur')) {
     return false;
   }
-  
+
   // Check for sold keywords
   const soldKeywords = ['sold', 'shitur', 'u shit', 'porositur', 'rezervuar'];
   return soldKeywords.some((keyword) => lowerCaption.includes(keyword));

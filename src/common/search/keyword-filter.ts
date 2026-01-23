@@ -30,6 +30,6 @@ export function buildKeywordSQL(keyword?: string): {
 
   return {
     sql: `AND (${parts.map(() => 'cleanedCaption LIKE ?').join(' OR ')})`,
-    params: parts.map(p => `%${p}%`),
+    params: parts.map((p) => `%${p}%`),
   };
 }

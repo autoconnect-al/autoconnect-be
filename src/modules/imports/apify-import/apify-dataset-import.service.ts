@@ -118,7 +118,7 @@ export class ApifyDatasetImportService {
   }
 
   private mapInstagramPost(post: ApifyPost): any {
-    const postData = JSON.parse(JSON.stringify(PostModel)) as any;
+    const postData = JSON.parse(JSON.stringify(PostModel));
     postData.id = post.pk;
     postData.createdTime = post.date
       ? (new Date(post.date).getTime() / 1000).toString()

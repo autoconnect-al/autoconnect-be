@@ -33,8 +33,7 @@ export function normalizeGeneralSearch(input?: string): string[] {
     const b = tokens[i + 1];
     const c = tokens[i + 2];
 
-    const isBMW =
-      a === 'bmw' || c === 'bmw';
+    const isBMW = a === 'bmw' || c === 'bmw';
 
     const isSeriesPattern =
       (b === 'series' && /^\d+$/.test(c)) ||

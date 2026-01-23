@@ -67,7 +67,7 @@ export class OpenAIService {
         return null;
       }
 
-      const data = (await response.json()) as any;
+      const data = await response.json();
       const content = data.choices?.[0]?.message?.content;
 
       if (!content) {
@@ -122,7 +122,7 @@ Return ONLY the JSON object, no additional text.
       const cleaned: CarDetailFromAI = {};
       for (const [key, value] of Object.entries(parsed)) {
         if (value !== null && value !== undefined && value !== '') {
-          cleaned[key as keyof CarDetailFromAI] = value as any;
+          cleaned[key as keyof CarDetailFromAI] = value;
         }
       }
 

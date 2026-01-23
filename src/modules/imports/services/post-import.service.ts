@@ -77,19 +77,14 @@ export class PostImportService {
 
     if (postData.origin === 'ENCAR' && postData.cardDetails) {
       // Encar: create car_detail from provided data
-      carDetailId = await this.createCarDetail(
-        postData.cardDetails,
-        sold,
-        now,
-      );
+      carDetailId = await this.createCarDetail(postData.cardDetails, sold, now);
     } else if (postData.origin === 'INSTAGRAM') {
       // Instagram: create empty car_detail or use OpenAI
       let carDetailsFromAI: CarDetailFromAI | null = null;
 
       if (useOpenAI && cleanedCaption) {
-        carDetailsFromAI = await this.openaiService.generateCarDetails(
-          cleanedCaption,
-        );
+        carDetailsFromAI =
+          await this.openaiService.generateCarDetails(cleanedCaption);
       }
 
       if (carDetailsFromAI && Object.keys(carDetailsFromAI).length > 0) {
@@ -105,11 +100,7 @@ export class PostImportService {
       }
     } else if (postData.cardDetails) {
       // Other sources with car details
-      carDetailId = await this.createCarDetail(
-        postData.cardDetails,
-        sold,
-        now,
-      );
+      carDetailId = await this.createCarDetail(postData.cardDetails, sold, now);
     }
 
     // Create or update post
@@ -154,8 +145,12 @@ export class PostImportService {
     sold: boolean,
     now: Date,
   ): Promise<bigint> {
+    // Generate a unique ID based on timestamp + random component
+    const id = BigInt(Date.now()) * 1000n + BigInt(Math.floor(Math.random() * 1000));
+    
     const carDetail = await this.prisma.car_detail.create({
       data: {
+        id,
         dateCreated: now,
         dateUpdated: now,
         sold,
@@ -171,8 +166,12 @@ export class PostImportService {
     sold: boolean,
     now: Date,
   ): Promise<bigint> {
+    // Generate a unique ID based on timestamp + random component
+    const id = BigInt(Date.now()) * 1000n + BigInt(Math.floor(Math.random() * 1000));
+    
     const carDetail = await this.prisma.car_detail.create({
       data: {
+        id,
         dateCreated: now,
         dateUpdated: now,
         make: carDetails.make || null,
@@ -197,7 +196,7 @@ export class PostImportService {
         customsPaid: carDetails.customsPaid || false,
         sold,
         published: false,
-        contact: carDetails.contact ? (carDetails.contact as any) : null,
+        contact: carDetails.contact ? carDetails.contact : null,
         options: carDetails.options || null,
       },
     });

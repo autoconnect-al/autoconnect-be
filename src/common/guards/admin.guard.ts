@@ -1,4 +1,10 @@
-import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  UnauthorizedException,
+} from '@nestjs/common';
+import type { Request } from 'express';
 
 /**
  * Admin guard that ensures only admin users can access protected routes
@@ -7,13 +13,14 @@ import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from
  */
 @Injectable()
 export class AdminGuard implements CanActivate {
-  private readonly adminCode = process.env.ADMIN_CODE || 'ejkuU89EcU6LinIHVUvhpQz65gY8DOgG';
+  private readonly adminCode =
+    process.env.ADMIN_CODE || 'ejkuU89EcU6LinIHVUvhpQz65gY8DOgG';
 
-  async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest();
-    
+  canActivate(context: ExecutionContext): boolean {
+    const request = context.switchToHttp().getRequest<Request>();
+
     // Check for admin code in query params (legacy compatibility)
-    const code = request.query.code;
+    const code = request.query.code as string | undefined;
     if (code && code === this.adminCode) {
       return true;
     }

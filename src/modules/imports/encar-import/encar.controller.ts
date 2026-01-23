@@ -1,4 +1,11 @@
-import { Controller, Post, Query, Res, HttpStatus, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Query,
+  Res,
+  HttpStatus,
+  UseGuards,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { EncarScrapeService } from './encar-scrape.service';
 import { AdminGuard } from '../../../common/guards/admin.guard';
