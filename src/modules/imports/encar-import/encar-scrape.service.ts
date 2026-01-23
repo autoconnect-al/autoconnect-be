@@ -11,7 +11,11 @@ export class EncarScrapeService {
 
   constructor(private readonly postImportService: PostImportService) {}
 
-  async scrapeAndSave(opts: { pages: number; useOpenAI?: boolean }) {
+  async scrapeAndSave(opts: { 
+    pages: number; 
+    useOpenAI?: boolean;
+    downloadImages?: boolean;
+  }) {
     let page = 1;
     let remaining = opts.pages;
 
@@ -32,6 +36,7 @@ export class EncarScrapeService {
               p,
               vendorId,
               opts.useOpenAI || false,
+              opts.downloadImages || false,
             );
           }),
         );

@@ -39,7 +39,7 @@ export class ApifyDatasetImportService {
 
   constructor(private readonly postImportService: PostImportService) {}
 
-  async importLatestDataset(useOpenAI = false) {
+  async importLatestDataset(useOpenAI = false, downloadImages = false) {
     console.log('[ApifyImport] starting import from dataset URL');
 
     // 1) Fetch dataset items (JSON array)
@@ -82,6 +82,7 @@ export class ApifyDatasetImportService {
             postData,
             vendorId,
             useOpenAI,
+            downloadImages,
           );
         }),
       );

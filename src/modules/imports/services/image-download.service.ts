@@ -10,18 +10,33 @@ export interface ImageVariants {
 
 @Injectable()
 export class ImageDownloadService {
-  private readonly uploadDir = process.env.UPLOAD_DIR || '/tmp/uploads';
+  private readonly baseUploadDir = process.env.UPLOAD_DIR || '/tmp/uploads';
   private readonly mainQuality = 85;
   private readonly thumbnailSize = 300; // px
   private readonly metadataSize = 150; // px
 
+  /**
+   * Downloads and processes an image with proper directory structure
+   * @param imageUrl - URL of the image to download
+   * @param vendorId - Vendor ID for directory structure
+   * @param postId - Post ID for directory structure
+   * @param imageId - Image ID for filename
+   * @returns Paths to the three image variants
+   */
   async downloadAndProcessImage(
     imageUrl: string,
-    targetFilename: string,
+    vendorId: string | number,
+    postId: string | number,
+    imageId: string | number,
   ): Promise<ImageVariants> {
     try {
-      // Ensure upload directory exists
-      await fs.mkdir(this.uploadDir, { recursive: true });
+      // Create directory structure: BASE_PATH/vendorId/postId/
+      const uploadDir = path.join(
+        this.baseUploadDir,
+        vendorId.toString(),
+        postId.toString(),
+      );
+      await fs.mkdir(uploadDir, { recursive: true });
 
       // Download the image
       const response = await fetch(imageUrl);
@@ -39,17 +54,17 @@ export class ImageDownloadService {
         sharp = require('sharp');
       } catch {
         // Sharp not available, use basic file operations
-        return this.saveFallbackVariants(buffer, targetFilename);
+        return this.saveFallbackVariants(buffer, uploadDir, imageId.toString());
       }
 
-      const baseName = path.parse(targetFilename).name;
+      const imageIdStr = imageId.toString();
 
       // Main image: good quality WebP
-      const mainPath = path.join(this.uploadDir, `${baseName}.webp`);
+      const mainPath = path.join(uploadDir, `${imageIdStr}.webp`);
       await sharp(buffer).webp({ quality: this.mainQuality }).toFile(mainPath);
 
       // Thumbnail: small WebP
-      const thumbnailPath = path.join(this.uploadDir, `${baseName}-thumb.webp`);
+      const thumbnailPath = path.join(uploadDir, `${imageIdStr}-thumb.webp`);
       await sharp(buffer)
         .resize(this.thumbnailSize, this.thumbnailSize, {
           fit: 'inside',
@@ -59,7 +74,7 @@ export class ImageDownloadService {
         .toFile(thumbnailPath);
 
       // Metadata: small JPG
-      const metadataPath = path.join(this.uploadDir, `${baseName}-meta.jpg`);
+      const metadataPath = path.join(uploadDir, `${imageIdStr}-meta.jpg`);
       await sharp(buffer)
         .resize(this.metadataSize, this.metadataSize, {
           fit: 'inside',
@@ -85,13 +100,12 @@ export class ImageDownloadService {
    */
   private async saveFallbackVariants(
     buffer: Buffer,
-    targetFilename: string,
+    uploadDir: string,
+    imageId: string,
   ): Promise<ImageVariants> {
-    const baseName = path.parse(targetFilename).name;
-
-    const mainPath = path.join(this.uploadDir, `${baseName}.jpg`);
-    const thumbnailPath = path.join(this.uploadDir, `${baseName}-thumb.jpg`);
-    const metadataPath = path.join(this.uploadDir, `${baseName}-meta.jpg`);
+    const mainPath = path.join(uploadDir, `${imageId}.jpg`);
+    const thumbnailPath = path.join(uploadDir, `${imageId}-thumb.jpg`);
+    const metadataPath = path.join(uploadDir, `${imageId}-meta.jpg`);
 
     await Promise.all([
       fs.writeFile(mainPath, buffer),
@@ -111,24 +125,34 @@ export class ImageDownloadService {
   }
 
   /**
-   * Downloads and processes multiple images
+   * Downloads and processes multiple images for a post
+   * @param imageUrls - Array of image URLs to download
+   * @param vendorId - Vendor ID for directory structure
+   * @param postId - Post ID for directory structure
+   * @returns Array of paths to image variants
    */
   async downloadAndProcessImages(
     imageUrls: string[],
-    baseFilename: string,
+    vendorId: string | number,
+    postId: string | number,
   ): Promise<ImageVariants[]> {
     const results: ImageVariants[] = [];
 
     for (let i = 0; i < imageUrls.length; i++) {
-      const filename = `${baseFilename}-${i.toString().padStart(2, '0')}`;
+      const imageUrl = imageUrls[i];
+      // Use the image index or extract ID from URL if available
+      const imageId = `image-${i.toString().padStart(3, '0')}`;
+      
       try {
         const variants = await this.downloadAndProcessImage(
-          imageUrls[i],
-          filename,
+          imageUrl,
+          vendorId,
+          postId,
+          imageId,
         );
         results.push(variants);
       } catch (error) {
-        console.error(`Failed to process image ${i}:`, error);
+        console.error(`Failed to process image ${i} (${imageUrl}):`, error);
         // Continue with other images
       }
     }

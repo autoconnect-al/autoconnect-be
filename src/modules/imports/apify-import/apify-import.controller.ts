@@ -22,6 +22,7 @@ export class ApifyController {
   @Post('import')
   importFromApifyNotification(
     @Query('useOpenAI') useOpenAI: string | undefined,
+    @Query('downloadImages') downloadImages: string | undefined,
     @Res() res: Response,
   ) {
     // Return immediately
@@ -29,8 +30,10 @@ export class ApifyController {
 
     // Kick async job
     const shouldUseOpenAI = useOpenAI === 'true' || useOpenAI === '1';
+    const shouldDownloadImages = downloadImages === 'true' || downloadImages === '1';
+    
     setImmediate(() => {
-      this.apifyImport.importLatestDataset(shouldUseOpenAI).catch((err) => {
+      this.apifyImport.importLatestDataset(shouldUseOpenAI, shouldDownloadImages).catch((err) => {
         console.error('[ApifyImport] failed:', err);
       });
     });

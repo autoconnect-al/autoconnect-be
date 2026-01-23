@@ -89,12 +89,17 @@ POST /encar/scrape?pages=1&useOpenAI=true&code=ADMIN_CODE
 
 ### 5. Image Download Service
 
-Generic service for downloading and processing images in multiple formats.
+Generic service for downloading and processing images in multiple formats with proper directory structure.
+
+**Directory Structure:**
+- Base path from `UPLOAD_DIR` environment variable
+- Creates folder: `UPLOAD_DIR/vendorId/postId/`
+- Saves images with their ID as filename
 
 **Output Formats:**
-1. **Main Image**: High-quality WebP format
-2. **Thumbnail**: Small WebP (300px max)
-3. **Metadata**: Small JPEG (150px max) for metadata extraction
+1. **Main Image**: High-quality WebP format (`imageId.webp`)
+2. **Thumbnail**: Small WebP (300px max, `imageId-thumb.webp`)
+3. **Metadata**: Small JPEG (150px max, `imageId-meta.jpg`)
 
 **Requirements:**
 - Install `sharp` package for image processing: `npm install sharp`
@@ -102,11 +107,15 @@ Generic service for downloading and processing images in multiple formats.
 
 **Usage:**
 ```typescript
-const variants = await imageDownloadService.downloadAndProcessImage(
-  imageUrl,
-  'post-123456'
+// Automatically downloads images during import when enabled
+await postImportService.importPost(
+  postData,
+  vendorId,
+  useOpenAI,
+  downloadImages: true  // Enable image downloading
 );
-// Returns: { main: '...', thumbnail: '...', metadata: '...' }
+
+// Files will be saved to: UPLOAD_DIR/vendorId/postId/image-000.webp
 ```
 
 ## API Endpoints
@@ -118,6 +127,7 @@ const variants = await imageDownloadService.downloadAndProcessImage(
 **Query Parameters:**
 - `code` (required): Admin access code
 - `useOpenAI` (optional): Enable AI car detail generation (`true` or `1`)
+- `downloadImages` (optional): Download and process post images (`true` or `1`)
 
 **Response:**
 ```json
@@ -132,7 +142,8 @@ const variants = await imageDownloadService.downloadAndProcessImage(
 2. Filters carousel posts
 3. Processes captions (clean, encode, detect sold status)
 4. Optionally generates car details with OpenAI
-5. Saves to database
+5. Optionally downloads and processes images to `UPLOAD_DIR/vendorId/postId/`
+6. Saves to database
 
 ### Encar Import (Korean Vehicles)
 
@@ -142,6 +153,7 @@ const variants = await imageDownloadService.downloadAndProcessImage(
 - `pages` (optional): Number of pages to scrape (default: 1)
 - `code` (required): Admin access code
 - `useOpenAI` (optional): Enable AI car detail generation (`true` or `1`)
+- `downloadImages` (optional): Download and process post images (`true` or `1`)
 
 **Response:**
 ```json

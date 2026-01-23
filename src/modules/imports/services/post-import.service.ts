@@ -7,6 +7,7 @@ import {
   isSold,
 } from '../utils/caption-processor';
 import { OpenAIService, CarDetailFromAI } from './openai.service';
+import { ImageDownloadService } from './image-download.service';
 
 export interface ImportPostData {
   id: number | string;
@@ -46,19 +47,22 @@ export class PostImportService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly openaiService: OpenAIService,
+    private readonly imageDownloadService: ImageDownloadService,
   ) {}
 
   /**
-   * Import a post with optional car details
+   * Import a post with optional car details and image downloads
    * @param postData - Post data to import
    * @param vendorId - Vendor ID
    * @param useOpenAI - Whether to use OpenAI to generate car details
+   * @param downloadImages - Whether to download and process images
    * @returns Saved post ID
    */
   async importPost(
     postData: ImportPostData,
     vendorId: number,
     useOpenAI = false,
+    downloadImages = false,
   ): Promise<bigint> {
     const now = new Date();
 
@@ -112,6 +116,27 @@ export class PostImportService {
     } else if (postData.cardDetails) {
       // Other sources with car details
       carDetailId = await this.createCarDetail(postData.cardDetails, sold, now);
+    }
+
+    // Download and process images if requested
+    if (downloadImages && postData.sidecarMedias && postData.sidecarMedias.length > 0) {
+      try {
+        const imageUrls = postData.sidecarMedias
+          .filter((media) => media.type === 'image' && media.imageStandardResolutionUrl)
+          .map((media) => media.imageStandardResolutionUrl);
+
+        if (imageUrls.length > 0) {
+          await this.imageDownloadService.downloadAndProcessImages(
+            imageUrls,
+            vendorId,
+            postData.id,
+          );
+          console.log(`Downloaded ${imageUrls.length} images for post ${postData.id}`);
+        }
+      } catch (error) {
+        console.error(`Failed to download images for post ${postData.id}:`, error);
+        // Continue with post creation even if image download fails
+      }
     }
 
     // Create or update post
