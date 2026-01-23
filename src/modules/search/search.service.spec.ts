@@ -80,9 +80,9 @@ describe('SearchService', () => {
       'BMW',
       'X5 (all)',
     );
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+
     expect(dto.make1).toBe('BMW');
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+
     expect(dto.model1).toBe('X5');
   });
 

@@ -43,14 +43,14 @@ export async function scrapeEncar(
       if (price && images?.length > 5) {
         const postData = JSON.parse(JSON.stringify(PostModel)) as PostModel;
         postData.id = vehicle.lots[0].lot;
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+
         postData.cardDetails.make = mapMake(vehicle.manufacturer.name);
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+
         postData.cardDetails.model = mapModel(
           vehicle.model.name,
           postData.cardDetails.make,
         );
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+
         postData.cardDetails.variant = mapVariant(
           vehicle.title,
           postData.cardDetails?.model,
