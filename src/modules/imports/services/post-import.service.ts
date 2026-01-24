@@ -154,7 +154,7 @@ export class PostImportService {
               vendorId,
               postData.id,
             );
-          postData.sidecarMedias = JSON.stringify(result);
+          postData.sidecarMedias = result as any;
           console.log(
             `Downloaded ${imageUrls.length} images for post ${postData.id}`,
           );
