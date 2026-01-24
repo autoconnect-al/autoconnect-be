@@ -15,11 +15,13 @@ export interface ImportPostData {
   createdTime?: string;
   likesCount?: number;
   viewsCount?: number;
-  sidecarMedias?: Array<{
-    id: number | string;
-    imageStandardResolutionUrl: string;
-    type: 'image' | 'video';
-  }>;
+  sidecarMedias?:
+    | Array<{
+        id: number | string;
+        imageStandardResolutionUrl: string;
+        type: 'image' | 'video';
+      }>
+    | string;
   origin?: string; // 'INSTAGRAM', 'ENCAR', etc.
   cardDetails?: {
     make?: string;
@@ -125,7 +127,17 @@ export class PostImportService {
       postData.sidecarMedias.length > 0
     ) {
       try {
-        const imageUrls = postData.sidecarMedias
+        if (!Array.isArray(postData.sidecarMedias)) {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          postData.sidecarMedias = JSON.parse(postData.sidecarMedias);
+        }
+        const imageUrls = (
+          postData.sidecarMedias as {
+            imageStandardResolutionUrl: string;
+            type: string;
+            id: string;
+          }[]
+        )
           .filter(
             (media) =>
               media.type === 'image' && media.imageStandardResolutionUrl,
@@ -136,11 +148,13 @@ export class PostImportService {
           }));
 
         if (imageUrls.length > 0) {
-          await this.imageDownloadService.downloadAndProcessImages(
-            imageUrls,
-            vendorId,
-            postData.id,
-          );
+          const result =
+            await this.imageDownloadService.downloadAndProcessImages(
+              imageUrls,
+              vendorId,
+              postData.id,
+            );
+          postData.sidecarMedias = JSON.stringify(result);
           console.log(
             `Downloaded ${imageUrls.length} images for post ${postData.id}`,
           );

@@ -4,8 +4,8 @@ import * as path from 'path';
 import sharp from 'sharp';
 
 export interface ImageVariants {
-  main: string; // Path to main image (WebP, good quality)
-  thumbnail: string; // Path to thumbnail (WebP, small)
+  imageStandardResolutionUrl: string; // Path to main image (WebP, good quality)
+  imageThumbnailUrl: string; // Path to thumbnail (WebP, small)
   metadata: string; // Path to metadata image (JPG, small)
 }
 
@@ -78,8 +78,8 @@ export class ImageDownloadService {
           .toFile(metadataPath);
 
         return {
-          main: mainPath,
-          thumbnail: thumbnailPath,
+          imageStandardResolutionUrl: mainPath,
+          imageThumbnailUrl: thumbnailPath,
           metadata: metadataPath,
         };
       } catch (e) {
@@ -116,8 +116,8 @@ export class ImageDownloadService {
     );
 
     return {
-      main: mainPath,
-      thumbnail: thumbnailPath,
+      imageStandardResolutionUrl: mainPath,
+      imageThumbnailUrl: thumbnailPath,
       metadata: metadataPath,
     };
   }
