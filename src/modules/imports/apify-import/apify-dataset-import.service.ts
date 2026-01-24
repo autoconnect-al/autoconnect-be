@@ -1,4 +1,3 @@
-// apify-dataset-import.service.ts
 import { Injectable } from '@nestjs/common';
 import { chain } from 'stream-chain';
 import { parser } from 'stream-json';
@@ -8,6 +7,7 @@ import {
   ImportPostData,
   PostImportService,
 } from '../services/post-import.service';
+import { isWithinThreeMonths } from '../utils/date-filter';
 
 type ApifyPost = {
   pk?: number;
@@ -77,6 +77,13 @@ export class ApifyDatasetImportService {
 
           // Map Instagram post to our format
           const postData = this.mapInstagramPost(item);
+
+          // Skip posts older than 3 months
+          if (!isWithinThreeMonths(postData.createdTime)) {
+            console.log(`Skipping post ${postData.id} - older than 3 months`);
+            return 'skipped:old';
+          }
+
           const vendorId = item.user?.pk || 1;
 
           // Save directly to DB

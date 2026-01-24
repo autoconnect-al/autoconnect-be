@@ -39,6 +39,37 @@ export class ImageDownloadService {
       );
       await fs.mkdir(uploadDir, { recursive: true });
 
+      const imageIdStr = imageId.toString();
+
+      // Define expected file paths
+      const mainPath = path.join(uploadDir, `${imageIdStr}.webp`);
+      const thumbnailPath = path.join(uploadDir, `${imageIdStr}-thumb.webp`);
+      const metadataPath = path.join(uploadDir, `${imageIdStr}-meta.jpg`);
+
+      // Check if all three variants already exist
+      const filesExist = await this.checkFilesExist([
+        mainPath,
+        thumbnailPath,
+        metadataPath,
+      ]);
+
+      if (filesExist) {
+        console.log(
+          `Images already exist for ${imageIdStr}, skipping download`,
+        );
+        return {
+          imageStandardResolutionUrl: mainPath.replace(
+            '/var/www/backend_main/',
+            '',
+          ),
+          imageThumbnailUrl: thumbnailPath.replace(
+            '/var/www/backend_main/',
+            '',
+          ),
+          metadata: metadataPath.replace('/var/www/backend_main/', ''),
+        };
+      }
+
       // Download the image
       const response = await fetch(imageUrl);
       if (!response.ok) {
@@ -48,17 +79,13 @@ export class ImageDownloadService {
       const arrayBuffer = await response.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
 
-      const imageIdStr = imageId.toString();
-
       try {
         // Main image: good quality WebP
-        const mainPath = path.join(uploadDir, `${imageIdStr}.webp`);
         await sharp(buffer)
           .webp({ quality: this.mainQuality })
           .toFile(mainPath);
 
         // Thumbnail: small WebP
-        const thumbnailPath = path.join(uploadDir, `${imageIdStr}-thumb.webp`);
         await sharp(buffer)
           .resize(this.thumbnailSize, this.thumbnailSize, {
             fit: 'inside',
@@ -68,7 +95,6 @@ export class ImageDownloadService {
           .toFile(thumbnailPath);
 
         // Metadata: small JPG
-        const metadataPath = path.join(uploadDir, `${imageIdStr}-meta.jpg`);
         await sharp(buffer)
           .resize(this.metadataSize, this.metadataSize, {
             fit: 'inside',
@@ -95,6 +121,29 @@ export class ImageDownloadService {
     } catch (error) {
       console.error('Error processing image:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Check if all specified files exist
+   * @param filePaths - Array of file paths to check
+   * @returns true if all files exist, false otherwise
+   */
+  private async checkFilesExist(filePaths: string[]): Promise<boolean> {
+    try {
+      const checks = await Promise.all(
+        filePaths.map(async (filePath) => {
+          try {
+            await fs.access(filePath);
+            return true;
+          } catch {
+            return false;
+          }
+        }),
+      );
+      return checks.every((exists) => exists);
+    } catch {
+      return false;
     }
   }
 
