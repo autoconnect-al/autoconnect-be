@@ -154,6 +154,7 @@ export class PostImportService {
               vendorId,
               postData.id,
             );
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           postData.sidecarMedias = result as any;
           console.log(
             `Downloaded ${imageUrls.length} images for post ${postData.id}`,
