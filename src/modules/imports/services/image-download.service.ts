@@ -78,9 +78,15 @@ export class ImageDownloadService {
           .toFile(metadataPath);
 
         return {
-          imageStandardResolutionUrl: mainPath,
-          imageThumbnailUrl: thumbnailPath,
-          metadata: metadataPath,
+          imageStandardResolutionUrl: mainPath.replace(
+            '/var/www/backend_main/',
+            '',
+          ),
+          imageThumbnailUrl: thumbnailPath.replace(
+            '/var/www/backend_main/',
+            '',
+          ),
+          metadata: metadataPath.replace('/var/www/backend_main/', ''),
         };
       } catch (e) {
         console.warn('Sharp processing failed, using fallback:', e);
@@ -116,9 +122,12 @@ export class ImageDownloadService {
     );
 
     return {
-      imageStandardResolutionUrl: mainPath,
-      imageThumbnailUrl: thumbnailPath,
-      metadata: metadataPath,
+      imageStandardResolutionUrl: mainPath.replace(
+        '/var/www/backend_main/',
+        '',
+      ),
+      imageThumbnailUrl: thumbnailPath.replace('/var/www/backend_main/', ''),
+      metadata: metadataPath.replace('/var/www/backend_main/', ''),
     };
   }
 
