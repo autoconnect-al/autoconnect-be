@@ -68,7 +68,7 @@ describe('Date Filter', () => {
       const exactlyThreeMonths = new Date();
       exactlyThreeMonths.setMonth(exactlyThreeMonths.getMonth() - 3);
       const timestamp = exactlyThreeMonths.getTime() / 1000;
-      // Should return true (>= 3 months ago)
+      // Should return true (posts from exactly 3 months ago or newer are included)
       expect(isWithinThreeMonths(timestamp)).toBe(true);
     });
   });

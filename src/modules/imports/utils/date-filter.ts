@@ -2,6 +2,10 @@
  * Utility functions for filtering posts by date
  */
 
+// Timestamp threshold: Unix timestamps less than this are in seconds, >= are in milliseconds
+// This value (10 billion) corresponds to Sept 2286, a reasonable cutoff
+const TIMESTAMP_THRESHOLD_MS = 10000000000;
+
 /**
  * Checks if a post is within the last 3 months
  * @param createdTime - Post creation time (ISO string or Unix timestamp in seconds)
@@ -28,8 +32,8 @@ export function isWithinThreeMonths(
         // Try to parse as Unix timestamp (in seconds as string)
         const timestamp = parseFloat(createdTime);
         if (!isNaN(timestamp)) {
-          if (timestamp < 10000000000) {
-            // Unix timestamp in seconds (less than year 2286)
+          if (timestamp < TIMESTAMP_THRESHOLD_MS) {
+            // Unix timestamp in seconds
             postDate = new Date(timestamp * 1000);
           } else {
             // Unix timestamp in milliseconds
@@ -42,7 +46,7 @@ export function isWithinThreeMonths(
       }
     } else {
       // Numeric timestamp
-      if (createdTime < 10000000000) {
+      if (createdTime < TIMESTAMP_THRESHOLD_MS) {
         // Unix timestamp in seconds
         postDate = new Date(createdTime * 1000);
       } else {

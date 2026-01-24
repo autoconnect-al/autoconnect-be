@@ -12,6 +12,7 @@ export interface ImageVariants {
 @Injectable()
 export class ImageDownloadService {
   private readonly baseUploadDir = process.env.UPLOAD_DIR || './tmp/uploads';
+  private readonly baseProdPath = '/var/www/backend_main/'; // Production path prefix to remove
   private readonly mainQuality = 85;
   private readonly thumbnailSize = 300; // px
   private readonly metadataSize = 150; // px
@@ -58,15 +59,9 @@ export class ImageDownloadService {
           `Images already exist for ${imageIdStr}, skipping download`,
         );
         return {
-          imageStandardResolutionUrl: mainPath.replace(
-            '/var/www/backend_main/',
-            '',
-          ),
-          imageThumbnailUrl: thumbnailPath.replace(
-            '/var/www/backend_main/',
-            '',
-          ),
-          metadata: metadataPath.replace('/var/www/backend_main/', ''),
+          imageStandardResolutionUrl: mainPath.replace(this.baseProdPath, ''),
+          imageThumbnailUrl: thumbnailPath.replace(this.baseProdPath, ''),
+          metadata: metadataPath.replace(this.baseProdPath, ''),
         };
       }
 
@@ -104,15 +99,9 @@ export class ImageDownloadService {
           .toFile(metadataPath);
 
         return {
-          imageStandardResolutionUrl: mainPath.replace(
-            '/var/www/backend_main/',
-            '',
-          ),
-          imageThumbnailUrl: thumbnailPath.replace(
-            '/var/www/backend_main/',
-            '',
-          ),
-          metadata: metadataPath.replace('/var/www/backend_main/', ''),
+          imageStandardResolutionUrl: mainPath.replace(this.baseProdPath, ''),
+          imageThumbnailUrl: thumbnailPath.replace(this.baseProdPath, ''),
+          metadata: metadataPath.replace(this.baseProdPath, ''),
         };
       } catch (e) {
         console.warn('Sharp processing failed, using fallback:', e);
@@ -171,12 +160,9 @@ export class ImageDownloadService {
     );
 
     return {
-      imageStandardResolutionUrl: mainPath.replace(
-        '/var/www/backend_main/',
-        '',
-      ),
-      imageThumbnailUrl: thumbnailPath.replace('/var/www/backend_main/', ''),
-      metadata: metadataPath.replace('/var/www/backend_main/', ''),
+      imageStandardResolutionUrl: mainPath.replace(this.baseProdPath, ''),
+      imageThumbnailUrl: thumbnailPath.replace(this.baseProdPath, ''),
+      metadata: metadataPath.replace(this.baseProdPath, ''),
     };
   }
 
