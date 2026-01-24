@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PostImportService } from '../services/post-import.service';
+import { isWithinThreeMonths } from '../utils/date-filter';
 
 // Reuse your existing scrape function file.
 // Adjust import path to wherever you place your migrated `save-from-encar.ts`.
@@ -11,8 +12,8 @@ export class EncarScrapeService {
 
   constructor(private readonly postImportService: PostImportService) {}
 
-  async scrapeAndSave(opts: { 
-    pages: number; 
+  async scrapeAndSave(opts: {
+    pages: number;
     useOpenAI?: boolean;
     downloadImages?: boolean;
   }) {
@@ -30,8 +31,17 @@ export class EncarScrapeService {
         const chunk = posts.slice(i, i + this.CHUNK_SIZE);
         await Promise.allSettled(
           chunk.map((p: any) => {
+            // Skip posts older than 3 months
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
+            if (!isWithinThreeMonths(p.createdTime)) {
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+              console.log(`Skipping Encar post ${p.id} - older than 3 months`);
+              return Promise.resolve('skipped:old');
+            }
+
             // Extract vendor ID (default to 1 for Encar)
             const vendorId = 1; // Could be made configurable
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
             return this.postImportService.importPost(
               p,
               vendorId,

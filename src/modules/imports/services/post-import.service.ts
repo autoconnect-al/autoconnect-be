@@ -8,6 +8,9 @@ import {
 } from '../utils/caption-processor';
 import { OpenAIService, CarDetailFromAI } from './openai.service';
 import { ImageDownloadService } from './image-download.service';
+import { isWithinThreeMonths } from '../utils/date-filter';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 
 export interface ImportPostData {
   id: number | string;
@@ -58,15 +61,39 @@ export class PostImportService {
    * @param vendorId - Vendor ID
    * @param useOpenAI - Whether to use OpenAI to generate car details
    * @param downloadImages - Whether to download and process images
-   * @returns Saved post ID
+   * @returns Saved post ID or null if post is old and marked as deleted
    */
   async importPost(
     postData: ImportPostData,
     vendorId: number,
     useOpenAI = false,
     downloadImages = false,
-  ): Promise<bigint> {
+  ): Promise<bigint | null> {
     const now = new Date();
+    const postId = BigInt(postData.id);
+
+    // Check if post exists and if it's older than 3 months
+    const existingPost = await this.prisma.post.findUnique({
+      where: { id: postId },
+      select: {
+        id: true,
+        createdTime: true,
+        vendor_id: true,
+        deleted: true,
+      },
+    });
+
+    if (existingPost) {
+      // Check if existing post is older than 3 months
+      if (!isWithinThreeMonths(existingPost.createdTime)) {
+        console.log(
+          `Post ${postId} exists but is older than 3 months - marking as deleted`,
+        );
+        // Mark post as deleted
+        await this.markPostAsDeleted(postId, existingPost.vendor_id);
+        return null;
+      }
+    }
 
     // Process caption
     const originalCaption = postData.caption || '';
@@ -170,8 +197,6 @@ export class PostImportService {
     }
 
     // Create or update post
-    const postId = BigInt(postData.id);
-
     const post = await this.prisma.post.upsert({
       where: { id: postId },
       create: {
@@ -295,6 +320,62 @@ export class PostImportService {
           accountExists: true,
         },
       });
+    }
+  }
+
+  /**
+   * Mark a post as deleted and delete its associated images
+   * @param postId - Post ID to mark as deleted
+   * @param vendorId - Vendor ID for directory structure
+   */
+  private async markPostAsDeleted(
+    postId: bigint,
+    vendorId: bigint,
+  ): Promise<void> {
+    // Mark post as deleted in database
+    await this.prisma.post.update({
+      where: { id: postId },
+      data: {
+        deleted: true,
+        dateUpdated: new Date(),
+      },
+    });
+
+    // Delete images from filesystem
+    await this.deletePostImages(postId, vendorId);
+  }
+
+  /**
+   * Delete all images associated with a post
+   * @param postId - Post ID
+   * @param vendorId - Vendor ID for directory structure
+   */
+  private async deletePostImages(
+    postId: bigint,
+    vendorId: bigint,
+  ): Promise<void> {
+    const baseUploadDir = process.env.UPLOAD_DIR || './tmp/uploads';
+    const postDir = path.join(
+      baseUploadDir,
+      vendorId.toString(),
+      postId.toString(),
+    );
+
+    try {
+      // Check if directory exists
+      await fs.access(postDir);
+
+      // Delete the entire post directory
+      await fs.rm(postDir, { recursive: true, force: true });
+      console.log(`Deleted images directory for post ${postId}: ${postDir}`);
+    } catch (error) {
+      // Directory doesn't exist or error deleting - log and continue
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        console.error(
+          `Error deleting images for post ${postId}:`,
+          (error as Error).message,
+        );
+      }
     }
   }
 }
