@@ -239,8 +239,8 @@ export class PostImportService {
         cleanedCaption,
         createdTime: postData.createdTime || now.toISOString(),
         sidecarMedias: postData.sidecarMedias
-          ? postData.sidecarMedias
-          : Prisma.JsonNull,
+          ? JSON.stringify(postData.sidecarMedias)
+          : '[]',
         vendor_id: BigInt(vendorId),
         live: false,
         likesCount: postData.likesCount || 0,
@@ -253,8 +253,8 @@ export class PostImportService {
         cleanedCaption,
         createdTime: postData.createdTime || now.toISOString(),
         sidecarMedias: postData.sidecarMedias
-          ? postData.sidecarMedias
-          : Prisma.JsonNull,
+          ? JSON.stringify(postData.sidecarMedias)
+          : '',
         likesCount: postData.likesCount || 0,
         viewsCount: postData.viewsCount || 0,
         car_detail_id: carDetailId,
@@ -328,7 +328,7 @@ export class PostImportService {
         customsPaid: carDetails.customsPaid || false,
         sold,
         published: false,
-        contact: carDetails.contact ? carDetails.contact : Prisma.JsonNull,
+        contact: carDetails.contact ? JSON.stringify(carDetails.contact) : '',
         options: carDetails.options || null,
       },
     });

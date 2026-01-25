@@ -252,7 +252,8 @@ export class SearchService {
       ...(excludeId ? [excludeId] : []),
     ];
 
-    const result = await this.prisma.$queryRawUnsafe(sql, ...params);
+    const result: any[] = await this.prisma.$queryRawUnsafe(sql, ...params);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     return result[0] || null;
   }
 }

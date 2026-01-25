@@ -21,7 +21,7 @@ export class RelatedPostsService {
   ): Promise<Search[]> {
     const postIdBig = BigInt(postId);
 
-    const postResult = await this.prisma.$queryRawUnsafe(
+    const postResult: any[] = await this.prisma.$queryRawUnsafe(
       `SELECT * FROM search WHERE id = ? AND deleted = '0'`,
       postIdBig,
     );
@@ -30,7 +30,9 @@ export class RelatedPostsService {
       throw new NotFoundException('Post not found');
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const post = postResult[0];
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     return this.fetchRelatedPosts(post, options);
   }
 
@@ -52,10 +54,11 @@ export class RelatedPostsService {
   ): Promise<{ cleanedCaption: string; mediaUrl: string }> {
     const postIdBig = BigInt(postId);
 
-    const result = await this.prisma.$queryRawUnsafe(
-      `SELECT cleanedCaption, sidecarMedias FROM search WHERE id = ? AND deleted = '0'`,
-      postIdBig,
-    );
+    const result: { cleanedCaption: string; sidecarMedias: string }[] =
+      await this.prisma.$queryRawUnsafe(
+        `SELECT cleanedCaption, sidecarMedias FROM search WHERE id = ? AND deleted = '0'`,
+        postIdBig,
+      );
 
     if (!result.length) throw new NotFoundException('No post found');
 
@@ -130,9 +133,10 @@ export class RelatedPostsService {
       params.push(...remainingExcludeIds);
       params.push(limit - finalPosts.length);
 
-      const result = await this.prisma.$queryRawUnsafe(sql, ...params);
+      const result: any[] = await this.prisma.$queryRawUnsafe(sql, ...params);
       const resultArray = result || [];
       finalPosts.push(...resultArray);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument,@typescript-eslint/no-unsafe-return,@typescript-eslint/no-unsafe-member-access
       remainingExcludeIds.push(...resultArray.map((r) => r.id));
 
       if (finalPosts.length >= limit) break;
