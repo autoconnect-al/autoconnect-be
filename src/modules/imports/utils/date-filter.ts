@@ -64,7 +64,7 @@ export function isWithinThreeMonths(
     const threeMonthsAgo = new Date();
     threeMonthsAgo.setMonth(now.getMonth() - 3);
 
-    return postDate >= threeMonthsAgo;
+    return postDate.getTime() >= threeMonthsAgo.getTime();
   } catch (error) {
     console.error('Error checking date filter:', error);
     return false;

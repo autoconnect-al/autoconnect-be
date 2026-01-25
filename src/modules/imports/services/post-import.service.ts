@@ -83,7 +83,7 @@ export class PostImportService {
       },
     });
 
-    if (existingPost) {
+    if (existingPost && !existingPost.deleted) {
       // Check if existing post is older than 3 months
       if (!isWithinThreeMonths(existingPost.createdTime)) {
         console.log(
@@ -93,6 +93,9 @@ export class PostImportService {
         await this.markPostAsDeleted(postId, existingPost.vendor_id);
         return null;
       }
+    } else if (existingPost && existingPost.deleted) {
+      console.log(`Skipping post. Post ${postId} deleted`);
+      return postId;
     }
 
     // Process caption
