@@ -20,20 +20,25 @@ export class EncarController {
     @Query('pages') pages = '1',
     @Query('useOpenAI') useOpenAI: string | undefined,
     @Query('downloadImages') downloadImages: string | undefined,
+    @Query('forceDownloadImages') forceDownloadImages: string | undefined,
     @Res() res: Response,
   ) {
     const pagesNum = Math.max(1, Number(pages) || 1);
     const shouldUseOpenAI = useOpenAI === 'true' || useOpenAI === '1';
-    const shouldDownloadImages = downloadImages === 'true' || downloadImages === '1';
+    const shouldDownloadImages =
+      downloadImages === 'true' || downloadImages === '1';
+    const shouldForceDownloadImages =
+      forceDownloadImages === 'true' || forceDownloadImages === '1';
 
     res.status(HttpStatus.ACCEPTED).json({ ok: true, pages: pagesNum });
 
     setImmediate(() => {
       this.encarScrapeService
-        .scrapeAndSave({ 
-          pages: pagesNum, 
+        .scrapeAndSave({
+          pages: pagesNum,
           useOpenAI: shouldUseOpenAI,
           downloadImages: shouldDownloadImages,
+          forceDownloadImages: shouldForceDownloadImages,
         })
         .catch((err) => {
           console.error('[EncarScrape] failed', err);

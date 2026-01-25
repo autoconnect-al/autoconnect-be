@@ -61,6 +61,7 @@ export class PostImportService {
    * @param vendorId - Vendor ID
    * @param useOpenAI - Whether to use OpenAI to generate car details
    * @param downloadImages - Whether to download and process images
+   * @param forceDownloadImages - If true, re-download images even if they exist
    * @returns Saved post ID or null if post is old and marked as deleted
    */
   async importPost(
@@ -68,6 +69,7 @@ export class PostImportService {
     vendorId: number,
     useOpenAI = false,
     downloadImages = false,
+    forceDownloadImages = false,
   ): Promise<bigint | null> {
     const now = new Date();
     const postId = BigInt(postData.id);
@@ -183,11 +185,12 @@ export class PostImportService {
               imageUrls,
               vendorId,
               postData.id,
+              forceDownloadImages,
             );
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           postData.sidecarMedias = result as any;
           console.log(
-            `Downloaded ${imageUrls.length} images for post ${postData.id}`,
+            `Downloaded ${imageUrls.length} images for post ${postData.id}${forceDownloadImages ? ' (forced)' : ''}`,
           );
         }
       } catch (error) {

@@ -13,9 +13,11 @@ export interface ImageVariants {
 export class ImageDownloadService {
   private readonly baseUploadDir = process.env.UPLOAD_DIR || './tmp/uploads';
   private readonly baseProdPath = '/var/www/backend_main/'; // Production path prefix to remove
-  private readonly mainQuality = 85;
-  private readonly thumbnailSize = 300; // px
-  private readonly metadataSize = 150; // px
+  private readonly mainQuality = 90; // Increased for better quality
+  private readonly thumbnailSize = 400; // Increased size for better quality
+  private readonly thumbnailQuality = 85; // Increased quality
+  private readonly metadataSize = 200; // Increased size for better quality
+  private readonly metadataQuality = 80; // Increased quality
 
   /**
    * Downloads and processes an image with proper directory structure
@@ -23,6 +25,7 @@ export class ImageDownloadService {
    * @param vendorId - Vendor ID for directory structure
    * @param postId - Post ID for directory structure
    * @param imageId - Image ID for filename
+   * @param forceDownload - If true, re-download even if files exist
    * @returns Paths to the three image variants
    */
   async downloadAndProcessImage(
@@ -30,6 +33,7 @@ export class ImageDownloadService {
     vendorId: string | number,
     postId: string | number,
     imageId: string | number,
+    forceDownload = false,
   ): Promise<ImageVariants> {
     try {
       // Create directory structure: BASE_PATH/vendorId/postId/
@@ -47,22 +51,26 @@ export class ImageDownloadService {
       const thumbnailPath = path.join(uploadDir, `${imageIdStr}-thumb.webp`);
       const metadataPath = path.join(uploadDir, `${imageIdStr}-meta.jpg`);
 
-      // Check if all three variants already exist
-      const filesExist = await this.checkFilesExist([
-        mainPath,
-        thumbnailPath,
-        metadataPath,
-      ]);
+      // Check if all three variants already exist (unless forcing download)
+      if (!forceDownload) {
+        const filesExist = await this.checkFilesExist([
+          mainPath,
+          thumbnailPath,
+          metadataPath,
+        ]);
 
-      if (filesExist) {
-        console.log(
-          `Images already exist for ${imageIdStr}, skipping download`,
-        );
-        return {
-          imageStandardResolutionUrl: mainPath.replace(this.baseProdPath, ''),
-          imageThumbnailUrl: thumbnailPath.replace(this.baseProdPath, ''),
-          metadata: metadataPath.replace(this.baseProdPath, ''),
-        };
+        if (filesExist) {
+          console.log(
+            `Images already exist for ${imageIdStr}, skipping download`,
+          );
+          return {
+            imageStandardResolutionUrl: mainPath.replace(this.baseProdPath, ''),
+            imageThumbnailUrl: thumbnailPath.replace(this.baseProdPath, ''),
+            metadata: metadataPath.replace(this.baseProdPath, ''),
+          };
+        }
+      } else {
+        console.log(`Force downloading images for ${imageIdStr}`);
       }
 
       // Download the image
@@ -80,22 +88,22 @@ export class ImageDownloadService {
           .webp({ quality: this.mainQuality })
           .toFile(mainPath);
 
-        // Thumbnail: small WebP
+        // Thumbnail: small WebP with higher quality
         await sharp(buffer)
           .resize(this.thumbnailSize, this.thumbnailSize, {
             fit: 'inside',
             withoutEnlargement: true,
           })
-          .webp({ quality: 80 })
+          .webp({ quality: this.thumbnailQuality })
           .toFile(thumbnailPath);
 
-        // Metadata: small JPG
+        // Metadata: small JPG with higher quality
         await sharp(buffer)
           .resize(this.metadataSize, this.metadataSize, {
             fit: 'inside',
             withoutEnlargement: true,
           })
-          .jpeg({ quality: 75 })
+          .jpeg({ quality: this.metadataQuality })
           .toFile(metadataPath);
 
         return {
@@ -171,12 +179,14 @@ export class ImageDownloadService {
    * @param imageUrls - Array of image URLs to download
    * @param vendorId - Vendor ID for directory structure
    * @param postId - Post ID for directory structure
+   * @param forceDownload - If true, re-download even if files exist
    * @returns Array of paths to image variants
    */
   async downloadAndProcessImages(
     imageUrls: { imageUrls: string; name: string | number }[],
     vendorId: string | number,
     postId: string | number,
+    forceDownload = false,
   ): Promise<ImageVariants[]> {
     const results: ImageVariants[] = [];
 
@@ -190,6 +200,7 @@ export class ImageDownloadService {
           vendorId,
           postId,
           imageUrls[i].name || `image-${i.toString().padStart(3, '0')}`,
+          forceDownload,
         );
         results.push(variants);
       } catch (error) {

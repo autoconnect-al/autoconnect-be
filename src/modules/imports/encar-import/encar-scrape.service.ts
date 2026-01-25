@@ -16,6 +16,7 @@ export class EncarScrapeService {
     pages: number;
     useOpenAI?: boolean;
     downloadImages?: boolean;
+    forceDownloadImages?: boolean;
   }) {
     let page = 1;
     let remaining = opts.pages;
@@ -47,6 +48,7 @@ export class EncarScrapeService {
               vendorId,
               opts.useOpenAI || false,
               opts.downloadImages || false,
+              opts.forceDownloadImages || false,
             );
           }),
         );

@@ -23,6 +23,7 @@ export class ApifyController {
   importFromApifyNotification(
     @Query('useOpenAI') useOpenAI: string | undefined,
     @Query('downloadImages') downloadImages: string | undefined,
+    @Query('forceDownloadImages') forceDownloadImages: string | undefined,
     @Res() res: Response,
   ) {
     // Return immediately
@@ -32,10 +33,16 @@ export class ApifyController {
     const shouldUseOpenAI = useOpenAI === 'true' || useOpenAI === '1';
     const shouldDownloadImages =
       downloadImages === 'true' || downloadImages === '1';
+    const shouldForceDownloadImages =
+      forceDownloadImages === 'true' || forceDownloadImages === '1';
 
     setImmediate(() => {
       this.apifyImport
-        .importLatestDataset(shouldUseOpenAI, shouldDownloadImages)
+        .importLatestDataset(
+          shouldUseOpenAI,
+          shouldDownloadImages,
+          shouldForceDownloadImages,
+        )
         .catch((err) => {
           console.error('[ApifyImport] failed:', err);
         });
