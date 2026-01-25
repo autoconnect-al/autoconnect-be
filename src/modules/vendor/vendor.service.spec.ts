@@ -233,12 +233,12 @@ describe('VendorService', () => {
       expect(result.message).toBe(
         'Vendor and related posts deleted successfully',
       );
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+
       expect(mockPrismaService.vendor.update).toHaveBeenCalledWith({
         where: { id: BigInt(1) },
         data: expect.objectContaining({ deleted: true }),
       });
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+
       expect(mockPrismaService.post.updateMany).toHaveBeenCalledWith({
         where: { vendor_id: BigInt(1) },
         data: expect.objectContaining({ deleted: true }),

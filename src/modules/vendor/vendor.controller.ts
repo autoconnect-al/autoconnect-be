@@ -10,6 +10,16 @@ import {
   UseInterceptors,
   UploadedFile,
 } from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiOkResponse,
+  ApiCreatedResponse,
+  ApiBadRequestResponse,
+  ApiNotFoundResponse,
+  ApiBearerAuth,
+  ApiConsumes,
+} from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
@@ -43,11 +53,25 @@ const storage = diskStorage({
   path: 'vendor',
   version: '1',
 })
+@ApiTags('Vendor')
+@ApiBearerAuth('JWT-auth')
 @UseGuards(AdminGuard)
 export class VendorController {
   constructor(private readonly vendorService: VendorService) {}
 
   @Post()
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Create vendor',
+    description:
+      'Create a new vendor account with optional profile picture upload. Admin only.',
+  })
+  @ApiCreatedResponse({
+    description: 'Vendor created successfully',
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid vendor data or file upload error',
+  })
   @UseInterceptors(
     FileInterceptor('profilePicture', {
       storage,
@@ -72,16 +96,45 @@ export class VendorController {
   }
 
   @Get()
+  @ApiOperation({
+    summary: 'Get all vendors',
+    description: 'Retrieve a list of all vendors. Admin only.',
+  })
+  @ApiOkResponse({
+    description: 'List of vendors',
+  })
   findAll() {
     return this.vendorService.findAll();
   }
 
   @Get(':id')
+  @ApiOperation({
+    summary: 'Get vendor by ID',
+    description: 'Retrieve a specific vendor by their ID. Admin only.',
+  })
+  @ApiOkResponse({
+    description: 'Vendor details',
+  })
+  @ApiNotFoundResponse({
+    description: 'Vendor not found',
+  })
   findOne(@Param('id') id: string) {
     return this.vendorService.findOne(BigInt(id));
   }
 
   @Patch(':id')
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Update vendor',
+    description:
+      'Update vendor information with optional profile picture. Admin only.',
+  })
+  @ApiOkResponse({
+    description: 'Vendor updated successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Vendor not found',
+  })
   @UseInterceptors(
     FileInterceptor('profilePicture', {
       storage,
@@ -111,11 +164,32 @@ export class VendorController {
   }
 
   @Delete(':id')
+  @ApiOperation({
+    summary: 'Delete vendor',
+    description: 'Delete a vendor account. Admin only.',
+  })
+  @ApiOkResponse({
+    description: 'Vendor deleted successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Vendor not found',
+  })
   remove(@Param('id') id: string) {
     return this.vendorService.remove(BigInt(id));
   }
 
   @Post(':id/sync-instagram')
+  @ApiOperation({
+    summary: 'Sync Instagram content',
+    description:
+      'Synchronize vendor Instagram content to their profile. Admin only.',
+  })
+  @ApiOkResponse({
+    description: 'Instagram sync completed',
+  })
+  @ApiNotFoundResponse({
+    description: 'Vendor not found',
+  })
   syncFromInstagram(@Param('id') id: string) {
     return this.vendorService.syncFromInstagram(BigInt(id));
   }

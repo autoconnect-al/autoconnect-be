@@ -180,8 +180,8 @@ export class SearchService {
     /* -----------------------------
        DATA QUERY
     -------------------------------- */
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-    const items: Search[] = (await this.prisma.$queryRawUnsafe(
+
+    const items: Search[] = await this.prisma.$queryRawUnsafe(
       `
     SELECT *
     ${sql}
@@ -191,12 +191,12 @@ export class SearchService {
       ...params,
       limit,
       offset,
-    )) as Search[];
+    );
 
     /* -----------------------------
        COUNT QUERY
     -------------------------------- */
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment,@typescript-eslint/no-unsafe-call
+
     const countResult: any = await this.prisma.$queryRawUnsafe(
       `
     SELECT COUNT(*) as total
@@ -252,11 +252,7 @@ export class SearchService {
       ...(excludeId ? [excludeId] : []),
     ];
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-    const result = (await this.prisma.$queryRawUnsafe(
-      sql,
-      ...params,
-    )) as Search[];
+    const result = await this.prisma.$queryRawUnsafe(sql, ...params);
     return result[0] || null;
   }
 }

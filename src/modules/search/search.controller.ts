@@ -1,4 +1,5 @@
 import { Controller, Get, Query, Req } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiOkResponse } from '@nestjs/swagger';
 import { SearchService } from './search.service';
 import { SearchDto } from './dto/search.dto';
 import { MostWantedService } from './most-wanted/most-wanted.service';
@@ -8,6 +9,7 @@ import { MostWantedDto } from './dto/most-wanted.dto';
   path: 'search',
   version: '1',
 })
+@ApiTags('Search')
 export class SearchController {
   constructor(
     private readonly searchService: SearchService,
@@ -15,6 +17,14 @@ export class SearchController {
   ) {}
 
   @Get()
+  @ApiOperation({
+    summary: 'Search vehicles',
+    description:
+      'Search and filter vehicles based on various criteria. Returns paginated results with promoted posts for engaged users.',
+  })
+  @ApiOkResponse({
+    description: 'Search results with vehicle listings',
+  })
   async search(@Query() query: SearchDto, @Req() req: Request) {
     // Optional: user ID from JWT if present
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
@@ -28,6 +38,14 @@ export class SearchController {
   }
 
   @Get('most-wanted')
+  @ApiOperation({
+    summary: 'Get most wanted vehicles',
+    description:
+      'Retrieve the list of most wanted or trending vehicles based on user search patterns',
+  })
+  @ApiOkResponse({
+    description: 'List of most wanted vehicles',
+  })
   async getMostWanted(@Query() query: MostWantedDto) {
     return this.mostWantedService.getMostWanted(query);
   }

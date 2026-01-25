@@ -171,7 +171,7 @@ export class VendorService {
   /**
    * Syncs vendor profile picture from Instagram public API
    * Fetches the profile picture URL from Instagram and updates the vendor
-   * 
+   *
    * NOTE: This uses Instagram's public web interface which may be unreliable.
    * For production use, consider using Instagram's official Basic Display API or Graph API.
    * This method is provided as a convenience feature and may stop working if Instagram changes their API.

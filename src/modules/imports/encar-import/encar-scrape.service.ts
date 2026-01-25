@@ -17,6 +17,7 @@ export class EncarScrapeService {
     useOpenAI?: boolean;
     downloadImages?: boolean;
     forceDownloadImages?: boolean;
+    forceDownloadImagesDays?: number;
   }) {
     let page = 1;
     let remaining = opts.pages;
@@ -42,13 +43,14 @@ export class EncarScrapeService {
 
             // Extract vendor ID (default to 1 for Encar)
             const vendorId = 1; // Could be made configurable
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+
             return this.postImportService.importPost(
               p,
               vendorId,
               opts.useOpenAI || false,
               opts.downloadImages || false,
               opts.forceDownloadImages || false,
+              opts.forceDownloadImagesDays,
             );
           }),
         );

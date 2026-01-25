@@ -43,10 +43,31 @@ async function bootstrap() {
   app.useGlobalInterceptors(new BigIntInterceptor());
 
   const config = new DocumentBuilder()
-    .setTitle('AutoConnect API')
-    .setDescription('API documentation for AutoConnect')
-    .setVersion('1.0')
-    .addBearerAuth() // if you use JWT
+    .setTitle('Vehicle API')
+    .setDescription(
+      'Comprehensive API for vehicle search, vendor management, authentication, and data import.',
+    )
+    .setVersion('1.0.0')
+    .setContact(
+      'Support',
+      'https://github.com/reipano/vehicle-api',
+      'support@example.com',
+    )
+    .setLicense('UNLICENSED', '')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description: 'Enter JWT token',
+      },
+      'JWT-auth',
+    )
+    .addTag('Health', 'Health check and system status endpoints')
+    .addTag('Auth', 'Authentication endpoints for login and password reset')
+    .addTag('Search', 'Search and filtering endpoints for vehicles')
+    .addTag('Vendor', 'Vendor management endpoints')
+    .addTag('Imports', 'Data import and synchronization endpoints')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

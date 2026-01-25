@@ -6,18 +6,6 @@ datasource db {
   provider = "mysql"
 }
 
-model Article {
-  id          String    @id @db.VarChar(100)
-  dateCreated DateTime  @db.DateTime(0)
-  dateUpdated DateTime? @db.DateTime(0)
-  deleted     Boolean   @default(false)
-  title       String    @db.VarChar(255)
-  category    String    @db.VarChar(100)
-  data        Json?
-  image       String?   @db.VarChar(255)
-  appName     String?   @db.VarChar(255)
-}
-
 model car_detail {
   id                                  BigInt    @id @unique(map: "car_detail_id_uindex") @db.UnsignedBigInt
   dateCreated                         DateTime? @db.DateTime(0)
@@ -38,14 +26,16 @@ model car_detail {
   bodyType                            String?   @db.VarChar(255)
   published                           Boolean?  @default(false)
   customsPaid                         Boolean?  @default(false)
+  canExchange                         Boolean?
   options                             String?   @db.LongText
   sold                                Boolean?  @default(false)
   price                               Float?    @default(0) @db.Float
   emissionGroup                       String?   @db.VarChar(10)
   type                                String    @default("car") @db.VarChar(20)
-  contact                             Json?
+  contact                             String?   @db.LongText
   priceVerified                       Boolean?  @default(false)
   mileageVerified                     Boolean?  @default(false)
+  fuelVerified                        Boolean?  @default(false)
   country                             String?   @db.VarChar(100)
   city                                String?   @db.VarChar(100)
   countryOfOriginForVehicles          String?   @db.VarChar(100)
@@ -99,7 +89,7 @@ model post {
   deleted                                   Boolean      @default(false)
   caption                                   String?      @db.LongText
   createdTime                               String?      @db.VarChar(100)
-  sidecarMedias                             Json?
+  sidecarMedias                             String?      @db.LongText
   vendor_id                                 BigInt       @db.UnsignedBigInt
   live                                      Boolean      @default(false)
   likesCount                                Int          @default(0)
@@ -113,6 +103,8 @@ model post {
   renewInterval                             String?      @db.VarChar(10)
   renewedTime                               Int?
   mostWantedTo                              Int?
+  origin                                    String?      @db.VarChar(30)
+  status                                    String?      @db.VarChar(30)
   car_detail_car_detail_post_idTopost       car_detail[] @relation("car_detail_post_idTopost")
   car_detail_post_car_detail_idTocar_detail car_detail?  @relation("post_car_detail_idTocar_detail", fields: [car_detail_id], references: [id], onDelete: Cascade, map: "car_detail___fk")
   vendor                                    vendor       @relation(fields: [vendor_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "post_FK")
@@ -146,31 +138,32 @@ model search {
   caption        String?   @db.LongText
   cleanedCaption String    @db.LongText
   createdTime    BigInt?   @db.UnsignedBigInt
-  sidecarMedias  Json?
+  sidecarMedias  String?   @db.LongText
   likesCount     Int?      @db.UnsignedInt
   viewsCount     Int?      @db.UnsignedInt
-  vendorContact  Json?
+  vendorContact  String?   @db.LongText
   biography      String?   @db.Text
   accountName    String?   @db.VarChar(100)
-  vendorId       BigInt    @db.UnsignedBigInt
+  vendorId       BigInt?   @db.UnsignedBigInt
   profilePicture String?   @db.MediumText
   make           String?   @db.VarChar(100)
   model          String?   @db.VarChar(100)
   variant        String?   @db.VarChar(255)
-  registration   Int?      @db.Year
+  registration   String?   @db.VarChar(4)
   mileage        Int?      @db.UnsignedInt
   price          Int?      @db.UnsignedInt
   transmission   String?   @db.VarChar(100)
   fuelType       String?   @db.VarChar(100)
-  engineSize     Decimal?  @db.Decimal(10, 0)
+  engineSize     String?   @db.VarChar(255)
   drivetrain     String?   @db.VarChar(100)
   seats          Int?      @db.UnsignedTinyInt
   numberOfDoors  Int?      @db.UnsignedTinyInt
   bodyType       String?   @db.VarChar(100)
   emissionGroup  String?   @db.VarChar(100)
-  contact        Json?
+  contact        String?   @db.LongText
   customsPaid    Boolean?
-  options        Json?
+  canExchange    Boolean   @default(false)
+  options        String?   @db.LongText
   sold           Boolean?
   type           String?   @db.VarChar(100)
   promotionTo    Int?      @db.UnsignedInt
@@ -179,33 +172,35 @@ model search {
   renewInterval  String?   @db.VarChar(100)
   renewedTime    Int?      @db.UnsignedInt
   mostWantedTo   Int?      @db.UnsignedInt
-  minPrice       Int?
-  maxPrice       Int?
-  canExchange    Boolean?  @default(false)
+  minPrice       Int?      @db.UnsignedInt
+  maxPrice       Int?      @db.UnsignedInt
+
+  @@index([bodyType], map: "bodyType")
+  @@index([createdTime], map: "createdTime")
+  @@index([emissionGroup], map: "emissionGroup")
+  @@index([make, model, variant], map: "make")
+  @@index([promotionTo, highlightedTo, renewTo, renewedTime, mostWantedTo], map: "promotionTo")
+  @@index([registration, mileage, price, transmission, fuelType], map: "registration")
+  @@index([type], map: "type")
 }
 
 model user {
-  id             BigInt    @id @default(autoincrement())
-  name           String    @db.VarChar(255)
-  username       String    @db.VarChar(255)
-  blocked        Boolean
-  attemptedLogin Int
-  password       String    @db.VarChar(255)
-  email          String    @db.VarChar(255)
-  deleted        Boolean
-  dateCreated    DateTime  @db.DateTime(0)
-  dateUpdated    DateTime? @db.DateTime(0)
-  profileImage   String?   @db.LongText
-}
-
-model password_reset_token {
-  id        BigInt   @id @default(autoincrement())
-  userId    BigInt
-  token     String   @db.VarChar(255)
-  expiresAt DateTime
-  used      Boolean  @default(false)
-
-  @@index([token])
+  id               BigInt    @id @db.UnsignedBigInt
+  name             String    @db.VarChar(255)
+  username         String    @db.VarChar(255)
+  blocked          Boolean
+  attemptedLogin   Int
+  password         String    @db.Text
+  email            String    @db.VarChar(255)
+  phone            String?   @db.VarChar(255)
+  whatsapp         String?   @db.VarChar(255)
+  location         String?   @db.VarChar(255)
+  deleted          Boolean
+  dateCreated      DateTime  @db.DateTime(0)
+  dateUpdated      DateTime? @db.DateTime(0)
+  profileImage     String?   @db.LongText
+  verified         Boolean?
+  verificationCode String?   @db.VarChar(255)
 }
 
 /// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
@@ -213,34 +208,68 @@ model user_role {
   user_id BigInt
   role_id Int
 
-  @@id([user_id, role_id])
-  @@unique([user_id, role_id], map: "user_role_user_id_IDX")
   @@index([user_id], map: "user_role_FK")
   @@index([role_id], map: "user_role_FK_1")
   @@ignore
 }
 
 model vendor {
-  id                          BigInt    @id @db.UnsignedBigInt
-  dateCreated                 DateTime  @db.DateTime(0)
-  dateUpdated                 DateTime? @db.DateTime(0)
-  deleted                     Boolean   @default(false)
-  contact                     Json?
-  accountName                 String?   @db.VarChar(100)
-  profilePicture              String?   @db.LongText
-  accountExists               Boolean   @default(true)
-  initialised                 Boolean?
-  biography                   String?   @db.VarChar(255)
-  country                     String?   @db.VarChar(100)
-  city                        String?   @db.VarChar(100)
-  countryOfOriginForVehicles  String?   @db.VarChar(100)
-  phoneNumber                 String?   @db.VarChar(50)
-  whatsAppNumber              String?   @db.VarChar(50)
-  location                    String?   @db.VarChar(500)
-  useDetailsForPosts          Boolean   @default(false)
-  post                        post[]
+  id                         BigInt    @id @db.UnsignedBigInt
+  dateCreated                DateTime  @db.DateTime(0)
+  dateUpdated                DateTime? @db.DateTime(0)
+  deleted                    Boolean   @default(false)
+  contact                    String?   @db.LongText
+  accountName                String?   @db.VarChar(100)
+  profilePicture             String?   @db.LongText
+  accountExists              Boolean   @default(true)
+  initialised                Boolean?
+  biography                  String?   @db.VarChar(255)
+  merrjep_username           String?   @db.VarChar(255)
+  country                    String?   @db.VarChar(100)
+  city                       String?   @db.VarChar(100)
+  countryOfOriginForVehicles String?   @db.VarChar(100)
+  phoneNumber                String?   @db.VarChar(50)
+  whatsAppNumber             String?   @db.VarChar(50)
+  location                   String?   @db.VarChar(500)
+  useDetailsForPosts         Boolean   @default(false)
+  post                       post[]
 
   @@index([dateUpdated], map: "dateUpdated")
   @@index([deleted, accountName, accountExists], map: "deleted")
 }
 
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model article {
+  id          String    @id @db.VarChar(100)
+  dateCreated DateTime  @db.DateTime(0)
+  dateUpdated DateTime? @db.DateTime(0)
+  deleted     Boolean   @default(false)
+  title       String    @db.VarChar(255)
+  category    String    @db.VarChar(100)
+  data        String?   @db.LongText
+  image       String?   @db.VarChar(255)
+  appName     String    @default("autoconnect") @db.VarChar(255)
+}
+
+model customer_orders {
+  id          BigInt    @id
+  dateCreated DateTime  @db.DateTime(0)
+  dateUpdated DateTime? @db.DateTime(0)
+  deleted     Boolean   @default(false)
+  paypalId    String?   @db.VarChar(255)
+  postId      String?   @db.VarChar(255)
+  packages    String?   @db.VarChar(255)
+  email       String?   @db.VarChar(255)
+  phoneNumber String?   @db.VarChar(255)
+  fullName    String?   @db.VarChar(255)
+  status      String?   @db.VarChar(40)
+}
+
+model promotion_packages {
+  id          Int       @id
+  dateCreated DateTime  @db.DateTime(0)
+  dateUpdated DateTime? @db.DateTime(0)
+  name        String    @db.VarChar(20)
+  price       Float     @db.Float
+  deleted     Boolean   @default(false)
+}

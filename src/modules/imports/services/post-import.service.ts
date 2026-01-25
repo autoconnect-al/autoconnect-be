@@ -8,7 +8,7 @@ import {
 } from '../utils/caption-processor';
 import { OpenAIService, CarDetailFromAI } from './openai.service';
 import { ImageDownloadService } from './image-download.service';
-import { isWithinThreeMonths } from '../utils/date-filter';
+import { isWithinThreeMonths, isWithinDays } from '../utils/date-filter';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -62,6 +62,7 @@ export class PostImportService {
    * @param useOpenAI - Whether to use OpenAI to generate car details
    * @param downloadImages - Whether to download and process images
    * @param forceDownloadImages - If true, re-download images even if they exist
+   * @param forceDownloadImagesDays - If set, only force download for posts within the last X days
    * @returns Saved post ID or null if post is old and marked as deleted
    */
   async importPost(
@@ -70,6 +71,7 @@ export class PostImportService {
     useOpenAI = false,
     downloadImages = false,
     forceDownloadImages = false,
+    forceDownloadImagesDays?: number,
   ): Promise<bigint | null> {
     const now = new Date();
     const postId = BigInt(postData.id);
@@ -180,17 +182,41 @@ export class PostImportService {
           }));
 
         if (imageUrls.length > 0) {
+          // Determine if we should force download for this post
+          let shouldForceDownload = forceDownloadImages;
+
+          // If forceDownloadImagesDays is set, only force download if post is within that period
+          if (
+            forceDownloadImages &&
+            forceDownloadImagesDays !== undefined &&
+            forceDownloadImagesDays > 0
+          ) {
+            shouldForceDownload = isWithinDays(
+              postData.createdTime,
+              forceDownloadImagesDays,
+            );
+            if (shouldForceDownload) {
+              console.log(
+                `Post ${postData.id} is within last ${forceDownloadImagesDays} days - forcing image download`,
+              );
+            } else {
+              console.log(
+                `Post ${postData.id} is older than ${forceDownloadImagesDays} days - skipping forced download`,
+              );
+            }
+          }
+
           const result =
             await this.imageDownloadService.downloadAndProcessImages(
               imageUrls,
               vendorId,
               postData.id,
-              forceDownloadImages,
+              shouldForceDownload,
             );
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           postData.sidecarMedias = result as any;
           console.log(
-            `Downloaded ${imageUrls.length} images for post ${postData.id}${forceDownloadImages ? ' (forced)' : ''}`,
+            `Downloaded ${imageUrls.length} images for post ${postData.id}${shouldForceDownload ? ' (forced)' : ''}`,
           );
         }
       } catch (error) {

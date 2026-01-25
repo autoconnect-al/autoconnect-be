@@ -16,7 +16,6 @@ export class SearchHelper {
     make: string,
     model: string,
   ): Promise<{ model: string; isVariant: boolean } | null> {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call,@typescript-eslint/no-unsafe-member-access
     const dbModels = (await this.prisma.car_make_model.findMany({
       where: { Make: make },
       select: { Model: true, isVariant: true },
@@ -81,7 +80,7 @@ export class SearchHelper {
    */
   async getCorrectMake(make: string): Promise<string> {
     // Only fetch makes containing a dash (like '%-%' in SQL)
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call,@typescript-eslint/no-unsafe-member-access
+
     const dbMakes = (await this.prisma.car_make_model.findMany({
       where: { Make: { contains: '-' } },
       select: { Make: true },

@@ -24,6 +24,8 @@ export class ApifyController {
     @Query('useOpenAI') useOpenAI: string | undefined,
     @Query('downloadImages') downloadImages: string | undefined,
     @Query('forceDownloadImages') forceDownloadImages: string | undefined,
+    @Query('forceDownloadImagesDays')
+    forceDownloadImagesDays: string | undefined,
     @Res() res: Response,
   ) {
     // Return immediately
@@ -35,6 +37,9 @@ export class ApifyController {
       downloadImages === 'true' || downloadImages === '1';
     const shouldForceDownloadImages =
       forceDownloadImages === 'true' || forceDownloadImages === '1';
+    const forceDownloadDays = forceDownloadImagesDays
+      ? Number(forceDownloadImagesDays)
+      : undefined;
 
     setImmediate(() => {
       this.apifyImport
@@ -42,6 +47,7 @@ export class ApifyController {
           shouldUseOpenAI,
           shouldDownloadImages,
           shouldForceDownloadImages,
+          forceDownloadDays,
         )
         .catch((err) => {
           console.error('[ApifyImport] failed:', err);

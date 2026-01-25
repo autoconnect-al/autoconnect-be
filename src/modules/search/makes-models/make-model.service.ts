@@ -7,7 +7,6 @@ export class MakeModelService {
 
   /** Fetch all unique makes for a given type (car or motorcycle) */
   async getMakes(type: string = 'car'): Promise<string[]> {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment,@typescript-eslint/no-unsafe-call
     const result: { Make: string }[] = await this.prisma.$queryRawUnsafe(
       `
       SELECT DISTINCT Make
@@ -23,7 +22,6 @@ export class MakeModelService {
 
   /** Fetch models for a given make and type */
   async getModels(make: string, type: string = 'car'): Promise<string[]> {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment,@typescript-eslint/no-unsafe-call
     const result: { Model: string }[] = await this.prisma.$queryRawUnsafe(
       `
       SELECT DISTINCT Model

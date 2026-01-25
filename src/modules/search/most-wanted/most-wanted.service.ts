@@ -61,7 +61,6 @@ export class MostWantedService {
         ? `AND id NOT IN (${excludeIds.map(() => '?').join(',')})`
         : '';
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     return this.prisma.$queryRawUnsafe(
       `
       SELECT *
@@ -94,7 +93,6 @@ export class MostWantedService {
         ? `AND id NOT IN (${excludeIds.map(() => '?').join(',')})`
         : '';
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     return this.prisma.$queryRawUnsafe(
       `
       SELECT *,
