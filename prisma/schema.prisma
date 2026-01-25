@@ -101,6 +101,8 @@ model post {
   renewInterval                             String?      @db.VarChar(10)
   renewedTime                               Int?
   mostWantedTo                              Int?
+  origin                                    String?      @db.VarChar(100)
+  status                                    String?      @db.VarChar(100)
   car_detail_car_detail_post_idTopost       car_detail[] @relation("car_detail_post_idTopost")
   car_detail_post_car_detail_idTocar_detail car_detail?  @relation("post_car_detail_idTocar_detail", fields: [car_detail_id], references: [id], onDelete: Cascade, map: "car_detail___fk")
   vendor                                    vendor       @relation(fields: [vendor_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "post_FK")

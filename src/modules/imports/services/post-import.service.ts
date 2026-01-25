@@ -246,6 +246,8 @@ export class PostImportService {
         likesCount: postData.likesCount || 0,
         viewsCount: postData.viewsCount || 0,
         car_detail_id: carDetailId,
+        origin: postData.origin || null,
+        status: 'DRAFT',
       },
       update: {
         dateUpdated: now,
@@ -258,6 +260,8 @@ export class PostImportService {
         likesCount: postData.likesCount || 0,
         viewsCount: postData.viewsCount || 0,
         car_detail_id: carDetailId,
+        origin: postData.origin || null,
+        status: 'DRAFT',
       },
     });
 
