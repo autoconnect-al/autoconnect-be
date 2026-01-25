@@ -65,6 +65,7 @@ export interface ParsedResult {
   emissionGroup?: string | null;
   sold?: boolean | null;
   customsPaid?: boolean | null;
+  // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
   contact?: unknown | null;
   type?: string | null;
   priceVerified?: boolean | null;
@@ -157,11 +158,13 @@ export class PostImportService {
       carDetailId = existingPost.car_detail_id;
     } else if (postData.origin === 'ENCAR' && postData.cardDetails) {
       // Encar: create car_detail from provided data (only for new posts)
-      carDetailId = await this.createCarDetail(postData.cardDetails, sold, now);
-    } else if (
-      postData.origin === 'INSTAGRAM' &&
-      !existingPost
-    ) {
+      carDetailId = await this.createCarDetail(
+        postData.cardDetails,
+        sold,
+        now,
+        postId,
+      );
+    } else if (postData.origin === 'INSTAGRAM' && !existingPost) {
       // New Instagram post: create empty car_detail or use OpenAI
       let carDetailsFromAI: CarDetailFromAI | null = null;
 
@@ -186,14 +189,24 @@ export class PostImportService {
           price: carDetailsFromAI.price,
           drivetrain: carDetailsFromAI.drivetrain,
         };
-        carDetailId = await this.createCarDetail(aiAsCardDetails, sold, now);
+        carDetailId = await this.createCarDetail(
+          aiAsCardDetails,
+          sold,
+          now,
+          postId,
+        );
       } else {
         // Create empty car_detail
-        carDetailId = await this.createEmptyCarDetail(sold, now);
+        carDetailId = await this.createEmptyCarDetail(sold, now, postId);
       }
     } else if (postData.cardDetails) {
       // Other sources with car details
-      carDetailId = await this.createCarDetail(postData.cardDetails, sold, now);
+      carDetailId = await this.createCarDetail(
+        postData.cardDetails,
+        sold,
+        now,
+        postId,
+      );
     }
 
     // Download and process images if requested
@@ -311,17 +324,11 @@ export class PostImportService {
   private async createEmptyCarDetail(
     sold: boolean,
     now: Date,
+    postId: bigint,
   ): Promise<bigint> {
-    // Generate a unique ID using timestamp + process ID + random component
-    // This reduces collision risk in concurrent scenarios
-    const timestamp = BigInt(Date.now()) * 1000000n;
-    const processId = BigInt(process.pid) * 1000n;
-    const random = BigInt(Math.floor(Math.random() * 1000));
-    const id = timestamp + processId + random;
-
     const carDetail = await this.prisma.car_detail.create({
       data: {
-        id,
+        id: postId,
         dateCreated: now,
         dateUpdated: now,
         sold,
@@ -336,10 +343,11 @@ export class PostImportService {
     carDetails: ImportPostData['cardDetails'],
     sold: boolean,
     now: Date,
+    postId: bigint,
   ): Promise<bigint> {
     if (!carDetails) {
       // If no car details provided, create empty
-      return this.createEmptyCarDetail(sold, now);
+      return this.createEmptyCarDetail(sold, now, postId);
     }
 
     // Generate a unique ID using timestamp + process ID + random component
@@ -550,13 +558,22 @@ export class PostImportService {
         } else {
           const cd = existingCarDetail;
 
-          if (!Object.prototype.hasOwnProperty.call(parsedResult, 'priceVerified')) {
+          if (
+            !Object.prototype.hasOwnProperty.call(parsedResult, 'priceVerified')
+          ) {
             parsedResult.priceVerified = false;
           }
-          if (!Object.prototype.hasOwnProperty.call(parsedResult, 'mileageVerified')) {
+          if (
+            !Object.prototype.hasOwnProperty.call(
+              parsedResult,
+              'mileageVerified',
+            )
+          ) {
             parsedResult.mileageVerified = false;
           }
-          if (!Object.prototype.hasOwnProperty.call(parsedResult, 'fuelVerified')) {
+          if (
+            !Object.prototype.hasOwnProperty.call(parsedResult, 'fuelVerified')
+          ) {
             parsedResult.fuelVerified = false;
           }
 
@@ -566,7 +583,9 @@ export class PostImportService {
               model: parsedResult.model ?? cd.model,
               make: parsedResult.make ?? cd.make,
               variant: parsedResult.variant ?? cd.variant,
-              registration: (parsedResult.registration ?? cd.registration) as any,
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+              registration: (parsedResult.registration ??
+                cd.registration) as any,
               mileage: parsedResult.mileage ?? cd.mileage,
               transmission: parsedResult.transmission ?? cd.transmission,
               fuelType: parsedResult.fuelType ?? cd.fuelType,
@@ -577,7 +596,8 @@ export class PostImportService {
                   ? parsedResult.seats
                   : cd.seats,
               numberOfDoors:
-                parsedResult.numberOfDoors !== undefined && parsedResult.numberOfDoors !== null
+                parsedResult.numberOfDoors !== undefined &&
+                parsedResult.numberOfDoors !== null
                   ? parsedResult.numberOfDoors
                   : cd.numberOfDoors,
               bodyType: parsedResult.bodyType ?? cd.bodyType,
@@ -587,12 +607,16 @@ export class PostImportService {
               customsPaid: parsedResult.customsPaid ?? cd.customsPaid,
               options: null,
               contact: parsedResult.contact
-                ? (JSON.stringify(parsedResult.contact) as unknown as Prisma.InputJsonValue)
+                ? (JSON.stringify(
+                    parsedResult.contact,
+                  ) as unknown as Prisma.InputJsonValue)
                 : (cd.contact as unknown as Prisma.NullableJsonNullValueInput),
               published: true,
               type: parsedResult.type ?? cd.type,
-              priceVerified: (parsedResult.priceVerified ?? cd.priceVerified ?? false) as boolean,
-              mileageVerified: (parsedResult.mileageVerified ?? cd.mileageVerified ?? false) as boolean,
+              priceVerified:
+                parsedResult.priceVerified ?? cd.priceVerified ?? false,
+              mileageVerified:
+                parsedResult.mileageVerified ?? cd.mileageVerified ?? false,
               dateUpdated: new Date(),
             },
           });
@@ -604,12 +628,30 @@ export class PostImportService {
             await this.prisma.post.update({
               where: { id: postId },
               data: {
-                status: this.getPromotionFieldValueOrDefault(parsedResult.status, post.status),
-                origin: this.getPromotionFieldValueOrDefault(parsedResult.origin, post.origin),
-                renewTo: this.getPromotionFieldValueOrDefault(parsedResult.renewTo, post.renewTo),
-                highlightedTo: this.getPromotionFieldValueOrDefault(parsedResult.highlightedTo, post.highlightedTo),
-                promotionTo: this.getPromotionFieldValueOrDefault(parsedResult.promotionTo, post.promotionTo),
-                mostWantedTo: this.getPromotionFieldValueOrDefault(parsedResult.mostWantedTo, post.mostWantedTo),
+                status: this.getPromotionFieldValueOrDefault(
+                  parsedResult.status,
+                  post.status,
+                ),
+                origin: this.getPromotionFieldValueOrDefault(
+                  parsedResult.origin,
+                  post.origin,
+                ),
+                renewTo: this.getPromotionFieldValueOrDefault(
+                  parsedResult.renewTo,
+                  post.renewTo,
+                ),
+                highlightedTo: this.getPromotionFieldValueOrDefault(
+                  parsedResult.highlightedTo,
+                  post.highlightedTo,
+                ),
+                promotionTo: this.getPromotionFieldValueOrDefault(
+                  parsedResult.promotionTo,
+                  post.promotionTo,
+                ),
+                mostWantedTo: this.getPromotionFieldValueOrDefault(
+                  parsedResult.mostWantedTo,
+                  post.mostWantedTo,
+                ),
                 live: true,
                 revalidate: false,
                 dateUpdated: new Date(),
@@ -629,16 +671,18 @@ export class PostImportService {
 
     return {
       success: errors.length === 0,
-      message: errors.length === 0 ? 'Updated car detail' : 'Completed with errors',
+      message:
+        errors.length === 0 ? 'Updated car detail' : 'Completed with errors',
       updated,
       deleted,
       errors: errors.length ? errors : undefined,
     };
   }
 
-  private getPromotionFieldValueOrDefault<
-    T
-  >(value: T | null | undefined, defaultValue: T): T {
+  private getPromotionFieldValueOrDefault<T>(
+    value: T | null | undefined,
+    defaultValue: T,
+  ): T {
     return value ?? defaultValue;
   }
 
