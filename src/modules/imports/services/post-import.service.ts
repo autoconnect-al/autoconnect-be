@@ -298,7 +298,7 @@ export class PostImportService {
         live: false,
         likesCount: postData.likesCount || 0,
         viewsCount: postData.viewsCount || 0,
-        car_detail_id: carDetailId,
+        car_detail_id: postId,
         origin: postData.origin || null,
         status: 'DRAFT',
         revalidate: false,
@@ -311,7 +311,7 @@ export class PostImportService {
         sidecarMedias: postData.sidecarMedias ? postData.sidecarMedias : '',
         likesCount: postData.likesCount || 0,
         viewsCount: postData.viewsCount || 0,
-        car_detail_id: carDetailId,
+        car_detail_id: postId,
         origin: postData.origin || null,
         status: existingPost?.status ?? 'DRAFT',
         revalidate: cleanedCaption !== existingPost?.cleanedCaption,
@@ -351,16 +351,9 @@ export class PostImportService {
       return this.createEmptyCarDetail(sold, now, postId);
     }
 
-    // Generate a unique ID using timestamp + process ID + random component
-    // This reduces collision risk in concurrent scenarios
-    const timestamp = BigInt(Date.now()) * 1000000n;
-    const processId = BigInt(process.pid) * 1000n;
-    const random = BigInt(Math.floor(Math.random() * 1000));
-    const id = timestamp + processId + random;
-
     const carDetail = await this.prisma.car_detail.create({
       data: {
-        id,
+        id: postId,
         dateCreated: now,
         dateUpdated: now,
         make: carDetails.make || null,
@@ -383,6 +376,7 @@ export class PostImportService {
         published: !!carDetails.make && !!carDetails.model,
         contact: carDetails.contact ? JSON.stringify(carDetails.contact) : '',
         options: carDetails.options || null,
+        post_id: postId,
       },
     });
 
