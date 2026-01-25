@@ -298,7 +298,7 @@ export class PostImportService {
         live: false,
         likesCount: postData.likesCount || 0,
         viewsCount: postData.viewsCount || 0,
-        car_detail_id: postId,
+        car_detail_id: carDetailId ?? null,
         origin: postData.origin || null,
         status: 'DRAFT',
         revalidate: false,
@@ -311,12 +311,23 @@ export class PostImportService {
         sidecarMedias: postData.sidecarMedias ? postData.sidecarMedias : '',
         likesCount: postData.likesCount || 0,
         viewsCount: postData.viewsCount || 0,
-        car_detail_id: postId,
+        car_detail_id: carDetailId ?? existingPost?.car_detail_id ?? null,
         origin: postData.origin || null,
         status: existingPost?.status ?? 'DRAFT',
         revalidate: cleanedCaption !== existingPost?.cleanedCaption,
       },
     });
+
+    // Ensure car_detail.post_id is linked to this post (backfill if missing or mismatched)
+    if (carDetailId) {
+      await this.prisma.car_detail.updateMany({
+        where: {
+          id: carDetailId,
+          OR: [{ post_id: null }, { post_id: { not: postId } }],
+        },
+        data: { post_id: postId },
+      });
+    }
 
     return post.id;
   }
