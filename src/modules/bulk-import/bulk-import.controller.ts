@@ -1,26 +1,18 @@
 import {
+  BadRequestException,
   Controller,
   Get,
+  Header,
+  Logger,
   Post,
   Query,
+  StreamableFile,
+  UploadedFile,
   UseGuards,
   UseInterceptors,
-  UploadedFile,
-  BadRequestException,
-  Header,
-  StreamableFile,
-  Logger,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiConsumes,
-  ApiBody,
-  ApiQuery,
-  ApiBearerAuth,
-} from '@nestjs/swagger';
+import { ApiBody, ApiConsumes, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { BulkImportService } from './bulk-import.service';
 import { ExportQueryDto } from './dto/export-query.dto';
@@ -33,7 +25,6 @@ import { Readable } from 'stream';
 @ApiTags('Bulk Import')
 @Controller('bulk-import')
 @UseGuards(AdminGuard)
-@ApiBearerAuth()
 export class BulkImportController {
   private readonly logger = new Logger(BulkImportController.name);
 
