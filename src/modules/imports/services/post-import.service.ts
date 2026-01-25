@@ -47,6 +47,38 @@ export interface ImportPostData {
   };
 }
 
+export interface ParsedResult {
+  id: string | number;
+  make?: string | null;
+  model?: string | null;
+  variant?: string | null;
+  registration?: string | number | null;
+  mileage?: number | null;
+  transmission?: string | null;
+  fuelType?: string | null;
+  engineSize?: string | null;
+  drivetrain?: string | null;
+  seats?: number | null;
+  numberOfDoors?: number | null;
+  bodyType?: string | null;
+  price?: number | null;
+  emissionGroup?: string | null;
+  sold?: boolean | null;
+  customsPaid?: boolean | null;
+  contact?: unknown | null;
+  type?: string | null;
+  priceVerified?: boolean | null;
+  mileageVerified?: boolean | null;
+  fuelVerified?: boolean | null;
+  // Post fields
+  status?: string | null;
+  origin?: string | null;
+  renewTo?: number | null;
+  highlightedTo?: number | null;
+  promotionTo?: number | null;
+  mostWantedTo?: number | null;
+}
+
 @Injectable()
 export class PostImportService {
   constructor(
@@ -86,6 +118,7 @@ export class PostImportService {
         deleted: true,
         status: true,
         cleanedCaption: true,
+        car_detail_id: true,
       },
     });
 
@@ -118,11 +151,18 @@ export class PostImportService {
     // Determine if we have car details
     let carDetailId: bigint | null = null;
 
-    if (postData.origin === 'ENCAR' && postData.cardDetails) {
-      // Encar: create car_detail from provided data
+    // For existing posts (Instagram or Encar), preserve car_detail - assume user data is complete
+    if (existingPost) {
+      // Reuse existing car_detail ID for any existing post
+      carDetailId = existingPost.car_detail_id;
+    } else if (postData.origin === 'ENCAR' && postData.cardDetails) {
+      // Encar: create car_detail from provided data (only for new posts)
       carDetailId = await this.createCarDetail(postData.cardDetails, sold, now);
-    } else if (postData.origin === 'INSTAGRAM') {
-      // Instagram: create empty car_detail or use OpenAI
+    } else if (
+      postData.origin === 'INSTAGRAM' &&
+      !existingPost
+    ) {
+      // New Instagram post: create empty car_detail or use OpenAI
       let carDetailsFromAI: CarDetailFromAI | null = null;
 
       if (useOpenAI && cleanedCaption) {
@@ -331,7 +371,7 @@ export class PostImportService {
         price: carDetails.price || null,
         customsPaid: carDetails.customsPaid || false,
         sold,
-        published: true,
+        published: !!carDetails.make && !!carDetails.model,
         contact: carDetails.contact ? JSON.stringify(carDetails.contact) : '',
         options: carDetails.options || null,
       },
@@ -413,5 +453,196 @@ export class PostImportService {
         );
       }
     }
+  }
+
+  /**
+   * Process AI parsed results (JSON string) and update car_detail and post records.
+   * Mirrors legacy PHP logic provided by user.
+   */
+  async importResult(data: string): Promise<{
+    success: boolean;
+    message: string;
+    updated?: number;
+    deleted?: number;
+    errors?: Array<{ id: string | number; error: string }>;
+  }> {
+    let parsedData: ParsedResult[];
+    try {
+      const raw = JSON.parse(data) as unknown;
+      if (!Array.isArray(raw)) {
+        throw new Error('Parsed data must be an array');
+      }
+      parsedData = raw as ParsedResult[];
+    } catch (e) {
+      return {
+        success: false,
+        message: 'Invalid JSON payload',
+        errors: [
+          {
+            id: 'N/A',
+            error: e instanceof Error ? e.message : 'Unknown error',
+          },
+        ],
+      };
+    }
+
+    let updated = 0;
+    let deleted = 0;
+    const errors: Array<{ id: string | number; error: string }> = [];
+
+    for (const parsedResult of parsedData) {
+      const id = parsedResult.id;
+      if (!id) {
+        errors.push({ id: 'N/A', error: 'Missing id in parsed result' });
+        continue;
+      }
+      const postId = BigInt(id);
+
+      try {
+        if (this.resultIsEmpty(parsedResult)) {
+          await this.prisma.post
+            .update({
+              where: { id: postId },
+              data: { deleted: true, dateUpdated: new Date() },
+            })
+            .catch(() => undefined);
+
+          const carDetail = await this.prisma.car_detail.findFirst({
+            where: { post_id: postId },
+            select: { id: true },
+          });
+          if (carDetail) {
+            await this.prisma.car_detail.update({
+              where: { id: carDetail.id },
+              data: { deleted: true, dateUpdated: new Date() },
+            });
+          }
+          deleted++;
+          continue;
+        }
+
+        const existingCarDetail = await this.prisma.car_detail.findFirst({
+          where: { post_id: postId },
+          include: { post_car_detail_post_idTopost: true },
+        });
+
+        if (!existingCarDetail) {
+          const now = new Date();
+          const timestamp = BigInt(Date.now()) * 1000000n;
+          const processId = BigInt(process.pid) * 1000n;
+          const random = BigInt(Math.floor(Math.random() * 1000));
+          const newId = timestamp + processId + random;
+
+          await this.prisma.car_detail.create({
+            data: {
+              id: newId,
+              dateCreated: now,
+              dateUpdated: now,
+              post_id: postId,
+              published: true,
+              deleted: false,
+              sold: parsedResult.sold ?? false,
+              make: parsedResult.make ?? null,
+              model: parsedResult.model ?? null,
+              variant: parsedResult.variant ?? null,
+            },
+          });
+        } else {
+          const cd = existingCarDetail;
+
+          if (!Object.prototype.hasOwnProperty.call(parsedResult, 'priceVerified')) {
+            parsedResult.priceVerified = false;
+          }
+          if (!Object.prototype.hasOwnProperty.call(parsedResult, 'mileageVerified')) {
+            parsedResult.mileageVerified = false;
+          }
+          if (!Object.prototype.hasOwnProperty.call(parsedResult, 'fuelVerified')) {
+            parsedResult.fuelVerified = false;
+          }
+
+          await this.prisma.car_detail.update({
+            where: { id: cd.id },
+            data: {
+              model: parsedResult.model ?? cd.model,
+              make: parsedResult.make ?? cd.make,
+              variant: parsedResult.variant ?? cd.variant,
+              registration: (parsedResult.registration ?? cd.registration) as any,
+              mileage: parsedResult.mileage ?? cd.mileage,
+              transmission: parsedResult.transmission ?? cd.transmission,
+              fuelType: parsedResult.fuelType ?? cd.fuelType,
+              engineSize: parsedResult.engineSize ?? cd.engineSize,
+              drivetrain: parsedResult.drivetrain ?? cd.drivetrain,
+              seats:
+                parsedResult.seats !== undefined && parsedResult.seats !== null
+                  ? parsedResult.seats
+                  : cd.seats,
+              numberOfDoors:
+                parsedResult.numberOfDoors !== undefined && parsedResult.numberOfDoors !== null
+                  ? parsedResult.numberOfDoors
+                  : cd.numberOfDoors,
+              bodyType: parsedResult.bodyType ?? cd.bodyType,
+              price: parsedResult.price ?? cd.price,
+              emissionGroup: parsedResult.emissionGroup ?? cd.emissionGroup,
+              sold: parsedResult.sold ?? cd.sold,
+              customsPaid: parsedResult.customsPaid ?? cd.customsPaid,
+              options: null,
+              contact: parsedResult.contact
+                ? (JSON.stringify(parsedResult.contact) as unknown as Prisma.InputJsonValue)
+                : (cd.contact as unknown as Prisma.NullableJsonNullValueInput),
+              published: true,
+              type: parsedResult.type ?? cd.type,
+              priceVerified: (parsedResult.priceVerified ?? cd.priceVerified ?? false) as boolean,
+              mileageVerified: (parsedResult.mileageVerified ?? cd.mileageVerified ?? false) as boolean,
+              dateUpdated: new Date(),
+            },
+          });
+
+          const post = await this.prisma.post.findUnique({
+            where: { id: postId },
+          });
+          if (post) {
+            await this.prisma.post.update({
+              where: { id: postId },
+              data: {
+                status: this.getPromotionFieldValueOrDefault(parsedResult.status, post.status),
+                origin: this.getPromotionFieldValueOrDefault(parsedResult.origin, post.origin),
+                renewTo: this.getPromotionFieldValueOrDefault(parsedResult.renewTo, post.renewTo),
+                highlightedTo: this.getPromotionFieldValueOrDefault(parsedResult.highlightedTo, post.highlightedTo),
+                promotionTo: this.getPromotionFieldValueOrDefault(parsedResult.promotionTo, post.promotionTo),
+                mostWantedTo: this.getPromotionFieldValueOrDefault(parsedResult.mostWantedTo, post.mostWantedTo),
+                live: true,
+                revalidate: false,
+                dateUpdated: new Date(),
+              },
+            });
+          }
+        }
+
+        updated++;
+      } catch (e) {
+        errors.push({
+          id,
+          error: e instanceof Error ? e.message : 'Unknown error',
+        });
+      }
+    }
+
+    return {
+      success: errors.length === 0,
+      message: errors.length === 0 ? 'Updated car detail' : 'Completed with errors',
+      updated,
+      deleted,
+      errors: errors.length ? errors : undefined,
+    };
+  }
+
+  private getPromotionFieldValueOrDefault<
+    T
+  >(value: T | null | undefined, defaultValue: T): T {
+    return value ?? defaultValue;
+  }
+
+  private resultIsEmpty(result: ParsedResult): boolean {
+    return (result.model ?? null) === null && (result.make ?? null) === null;
   }
 }
