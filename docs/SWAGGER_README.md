@@ -42,16 +42,16 @@ Implementation checklist and verification status.
 ### I want to...
 
 #### **Start using the API**
-→ Read [SWAGGER_QUICK_START.md](./SWAGGER_QUICK_START.md)
+→ Read [SWAGGER_QUICK_START.md](SWAGGER_QUICK_START.md)
 
 #### **Understand all available endpoints**
-→ Read [SWAGGER_DOCUMENTATION.md](./SWAGGER_DOCUMENTATION.md)
+→ Read [SWAGGER_DOCUMENTATION.md](SWAGGER_DOCUMENTATION.md)
 
 #### **See what was implemented**
-→ Read [SWAGGER_SETUP_SUMMARY.md](./SWAGGER_SETUP_SUMMARY.md)
+→ Read [SWAGGER_SETUP_SUMMARY.md](SWAGGER_SETUP_SUMMARY.md)
 
 #### **Verify completeness**
-→ Read [SWAGGER_VERIFICATION.md](./SWAGGER_VERIFICATION.md)
+→ Read [SWAGGER_VERIFICATION.md](SWAGGER_VERIFICATION.md)
 
 #### **Access the interactive documentation**
 → Visit `http://localhost:3000/api-docs` (dev environment)
@@ -130,17 +130,17 @@ The API uses **JWT (JSON Web Tokens)** for security.
 - **Protected endpoints**: Change password, all Vendor operations
 - **Admin endpoints**: All Vendor operations
 
-See [SWAGGER_QUICK_START.md](./SWAGGER_QUICK_START.md#-authentication) for authentication guide.
+See [SWAGGER_QUICK_START.md](SWAGGER_QUICK_START.md#-authentication) for authentication guide.
 
 ## 📋 Common Tasks
 
 | Task | Location | Steps |
 |------|----------|-------|
-| Search vehicles | [Quick Start](./SWAGGER_QUICK_START.md#search-vehicles-by-make-and-model) | 3 steps |
-| Login to API | [Quick Start](./SWAGGER_QUICK_START.md#-authentication) | 3 steps |
-| Create vendor | [Quick Start](./SWAGGER_QUICK_START.md#create-a-new-vendor) | 5 steps |
-| Update vendor | [Quick Start](./SWAGGER_QUICK_START.md#update-vendor) | 5 steps |
-| Handle errors | [Quick Start](./SWAGGER_QUICK_START.md#-error-codes) | Error reference |
+| Search vehicles | [Quick Start](SWAGGER_QUICK_START.md#search-vehicles-by-make-and-model) | 3 steps |
+| Login to API | [Quick Start](SWAGGER_QUICK_START.md#-authentication) | 3 steps |
+| Create vendor | [Quick Start](SWAGGER_QUICK_START.md#create-a-new-vendor) | 5 steps |
+| Update vendor | [Quick Start](SWAGGER_QUICK_START.md#update-vendor) | 5 steps |
+| Handle errors | [Quick Start](SWAGGER_QUICK_START.md#-error-codes) | Error reference |
 
 ## 🛠️ For Developers
 
@@ -162,45 +162,45 @@ See [SWAGGER_QUICK_START.md](./SWAGGER_QUICK_START.md#-authentication) for authe
 ## 📱 Usage Scenarios
 
 ### Scenario 1: Frontend Developer
-1. Read [SWAGGER_QUICK_START.md](./SWAGGER_QUICK_START.md)
+1. Read [SWAGGER_QUICK_START.md](SWAGGER_QUICK_START.md)
 2. Open Swagger UI to test endpoints
-3. Reference [SWAGGER_DOCUMENTATION.md](./SWAGGER_DOCUMENTATION.md) for details
+3. Reference [SWAGGER_DOCUMENTATION.md](SWAGGER_DOCUMENTATION.md) for details
 4. Use response schemas to build UI
 
 ### Scenario 2: Mobile Developer
-1. Review authentication in [SWAGGER_QUICK_START.md](./SWAGGER_QUICK_START.md#-authentication)
-2. Check search filters in [SWAGGER_DOCUMENTATION.md](./SWAGGER_DOCUMENTATION.md)
+1. Review authentication in [SWAGGER_QUICK_START.md](SWAGGER_QUICK_START.md#-authentication)
+2. Check search filters in [SWAGGER_DOCUMENTATION.md](SWAGGER_DOCUMENTATION.md)
 3. Test endpoints in Swagger UI
 4. Implement error handling from error reference
 
 ### Scenario 3: API Integration
-1. Review [SWAGGER_DOCUMENTATION.md](./SWAGGER_DOCUMENTATION.md) for complete reference
+1. Review [SWAGGER_DOCUMENTATION.md](SWAGGER_DOCUMENTATION.md) for complete reference
 2. Check rate limiting section
 3. Implement retry logic for 429 errors
 4. Use provided examples for common operations
 
 ### Scenario 4: DevOps/Project Manager
-1. Check [SWAGGER_VERIFICATION.md](./SWAGGER_VERIFICATION.md) for completeness
-2. Review [SWAGGER_SETUP_SUMMARY.md](./SWAGGER_SETUP_SUMMARY.md) for implementation details
+1. Check [SWAGGER_VERIFICATION.md](SWAGGER_VERIFICATION.md) for completeness
+2. Review [SWAGGER_SETUP_SUMMARY.md](SWAGGER_SETUP_SUMMARY.md) for implementation details
 3. Files modified list shows scope of work
 4. Future recommendations section for planning
 
 ## 🎓 Learning Path
 
 ### Beginner
-1. Start with [SWAGGER_QUICK_START.md](./SWAGGER_QUICK_START.md)
+1. Start with [SWAGGER_QUICK_START.md](SWAGGER_QUICK_START.md)
 2. Open Swagger UI
 3. Test a few endpoints
 4. Read error handling section
 
 ### Intermediate
-1. Read [SWAGGER_DOCUMENTATION.md](./SWAGGER_DOCUMENTATION.md)
+1. Read [SWAGGER_DOCUMENTATION.md](SWAGGER_DOCUMENTATION.md)
 2. Review all filtering options
 3. Test complex search queries
 4. Implement authentication flow
 
 ### Advanced
-1. Review [SWAGGER_SETUP_SUMMARY.md](./SWAGGER_SETUP_SUMMARY.md)
+1. Review [SWAGGER_SETUP_SUMMARY.md](SWAGGER_SETUP_SUMMARY.md)
 2. Understand implementation details
 3. Check code in GitHub
 4. Review future recommendations
@@ -259,14 +259,14 @@ Every endpoint has:
 - Verify data types match schema
 - See examples in Swagger UI
 
-For more help, see [SWAGGER_QUICK_START.md](./SWAGGER_QUICK_START.md#-debugging)
+For more help, see [SWAGGER_QUICK_START.md](SWAGGER_QUICK_START.md#-debugging)
 
 ## 📞 Support Resources
 
 - **API Docs**: `http://localhost:3000/api-docs`
-- **Quick Start Guide**: [SWAGGER_QUICK_START.md](./SWAGGER_QUICK_START.md)
-- **Full Documentation**: [SWAGGER_DOCUMENTATION.md](./SWAGGER_DOCUMENTATION.md)
-- **Implementation Summary**: [SWAGGER_SETUP_SUMMARY.md](./SWAGGER_SETUP_SUMMARY.md)
+- **Quick Start Guide**: [SWAGGER_QUICK_START.md](SWAGGER_QUICK_START.md)
+- **Full Documentation**: [SWAGGER_DOCUMENTATION.md](SWAGGER_DOCUMENTATION.md)
+- **Implementation Summary**: [SWAGGER_SETUP_SUMMARY.md](SWAGGER_SETUP_SUMMARY.md)
 - **NestJS Docs**: https://docs.nestjs.com/
 - **Swagger Docs**: https://swagger.io/
 
@@ -274,10 +274,10 @@ For more help, see [SWAGGER_QUICK_START.md](./SWAGGER_QUICK_START.md#-debugging)
 
 Choose what you need to do:
 
-- 👤 **New to API?** → [SWAGGER_QUICK_START.md](./SWAGGER_QUICK_START.md)
-- 🔍 **Need details?** → [SWAGGER_DOCUMENTATION.md](./SWAGGER_DOCUMENTATION.md)
-- 📊 **Managing project?** → [SWAGGER_VERIFICATION.md](./SWAGGER_VERIFICATION.md)
-- 💻 **Developer review?** → [SWAGGER_SETUP_SUMMARY.md](./SWAGGER_SETUP_SUMMARY.md)
+- 👤 **New to API?** → [SWAGGER_QUICK_START.md](SWAGGER_QUICK_START.md)
+- 🔍 **Need details?** → [SWAGGER_DOCUMENTATION.md](SWAGGER_DOCUMENTATION.md)
+- 📊 **Managing project?** → [SWAGGER_VERIFICATION.md](SWAGGER_VERIFICATION.md)
+- 💻 **Developer review?** → [SWAGGER_SETUP_SUMMARY.md](SWAGGER_SETUP_SUMMARY.md)
 - 🌐 **Test live API?** → `http://localhost:3000/api-docs`
 
 ---
@@ -296,7 +296,7 @@ Choose what you need to do:
 
 **Welcome to the Vehicle API!** 🚀
 
-Start with the [Quick Start Guide](./SWAGGER_QUICK_START.md) or open [Swagger UI](http://localhost:3000/api-docs).
+Start with the [Quick Start Guide](SWAGGER_QUICK_START.md) or open [Swagger UI](http://localhost:3000/api-docs).
 
 All documentation was generated following NestJS and OpenAPI 3.0 best practices.
 

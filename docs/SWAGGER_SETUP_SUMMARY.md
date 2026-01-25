@@ -154,7 +154,7 @@ The API is organized into 5 logical tags:
 ## Resources
 
 - [Swagger UI](http://localhost:3000/api-docs)
-- [Full Documentation](./SWAGGER_DOCUMENTATION.md)
+- [Full Documentation](SWAGGER_DOCUMENTATION.md)
 - [NestJS Swagger Module](https://docs.nestjs.com/openapi/introduction)
 - [OpenAPI Specification](https://spec.openapis.org/oas/v3.0.3)
 

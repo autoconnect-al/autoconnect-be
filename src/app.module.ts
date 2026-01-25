@@ -9,6 +9,7 @@ import { SearchModule } from './modules/search/search.module';
 import { IngestModule } from './modules/imports/apify-import.module';
 import { DatabaseModule } from './database/database.module';
 import { VendorModule } from './modules/vendor/vendor.module';
+import { BulkImportModule } from './modules/bulk-import/bulk-import.module';
 
 void ConfigModule.forRoot({
   isGlobal: true,
@@ -29,6 +30,7 @@ void ConfigModule.forRoot({
     IngestModule,
     DatabaseModule,
     VendorModule,
+    BulkImportModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],
