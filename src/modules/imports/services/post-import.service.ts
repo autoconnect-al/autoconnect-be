@@ -84,6 +84,8 @@ export class PostImportService {
         createdTime: true,
         vendor_id: true,
         deleted: true,
+        status: true,
+        cleanedCaption: true,
       },
     });
 
@@ -238,9 +240,7 @@ export class PostImportService {
         caption: encodedCaption,
         cleanedCaption,
         createdTime: postData.createdTime || now.toISOString(),
-        sidecarMedias: postData.sidecarMedias
-          ? JSON.stringify(postData.sidecarMedias)
-          : '[]',
+        sidecarMedias: postData.sidecarMedias ? postData.sidecarMedias : '[]',
         vendor_id: BigInt(vendorId),
         live: false,
         likesCount: postData.likesCount || 0,
@@ -248,20 +248,20 @@ export class PostImportService {
         car_detail_id: carDetailId,
         origin: postData.origin || null,
         status: 'DRAFT',
+        revalidate: false,
       },
       update: {
         dateUpdated: now,
         caption: encodedCaption,
         cleanedCaption,
         createdTime: postData.createdTime || now.toISOString(),
-        sidecarMedias: postData.sidecarMedias
-          ? JSON.stringify(postData.sidecarMedias)
-          : '',
+        sidecarMedias: postData.sidecarMedias ? postData.sidecarMedias : '',
         likesCount: postData.likesCount || 0,
         viewsCount: postData.viewsCount || 0,
         car_detail_id: carDetailId,
         origin: postData.origin || null,
-        status: 'DRAFT',
+        status: existingPost?.status ?? 'DRAFT',
+        revalidate: cleanedCaption !== existingPost?.cleanedCaption,
       },
     });
 
