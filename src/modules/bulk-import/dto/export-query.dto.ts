@@ -19,4 +19,8 @@ export class ExportQueryDto {
   @Min(1)
   @Max(100)
   limit?: number = 100;
+
+  // Allow code parameter for admin authentication (handled by AdminGuard)
+  @IsOptional()
+  code?: string;
 }
