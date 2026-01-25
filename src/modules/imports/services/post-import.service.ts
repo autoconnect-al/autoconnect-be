@@ -331,6 +331,7 @@ export class PostImportService {
         id: postId,
         dateCreated: now,
         dateUpdated: now,
+        post_id: postId,
         sold,
         published: false,
       },
