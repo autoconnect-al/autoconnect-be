@@ -331,7 +331,7 @@ export class PostImportService {
         price: carDetails.price || null,
         customsPaid: carDetails.customsPaid || false,
         sold,
-        published: false,
+        published: true,
         contact: carDetails.contact ? JSON.stringify(carDetails.contact) : '',
         options: carDetails.options || null,
       },
