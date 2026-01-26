@@ -109,22 +109,10 @@ export class BulkImportService {
     return results.map((result) => ({
       // Post fields
       post_id: String(result.id),
-      post_origin: result.origin,
-      post_revalidate: result.revalidate,
-      post_dateCreated: result.dateCreated,
-      post_caption: result.caption,
       post_cleanedCaption: result.cleanedCaption,
-      post_vendor_id: String(result.vendor_id),
-      post_car_detail_id: result.car_detail_id
-        ? String(result.car_detail_id)
-        : null,
-      post_status: result.status,
 
       // Car detail fields
-      cd_id: result.cd_id ? String(result.cd_id) : null,
-      cd_published: result.cd_published,
-      cd_sold: result.cd_sold,
-      cd_deleted: result.cd_deleted,
+      cd_id: result.cd_id ? String(result.cd_id) : 'null',
       cd_make: result.cd_make,
       cd_model: result.cd_model,
       cd_variant: result.cd_variant,
@@ -192,19 +180,10 @@ export class BulkImportService {
     const query = `
       SELECT
         p.id,
-        p.origin,
-        p.revalidate,
-        p.dateCreated,
-        p.car_detail_id,
-        p.caption,
         p.cleanedCaption,
         p.vendor_id,
         p.status,
 
-        cd.id          AS cd_id,
-        cd.published   AS cd_published,
-        cd.sold        AS cd_sold,
-        cd.deleted     AS cd_deleted,
         cd.make        AS cd_make,
         cd.model       AS cd_model,
         cd.variant     AS cd_variant,
@@ -218,7 +197,6 @@ export class BulkImportService {
         cd.numberOfDoors AS cd_numberOfDoors,
         cd.bodyType    AS cd_bodyType,
         cd.customsPaid AS cd_customsPaid,
-        cd.options     AS cd_options,
         cd.price       AS cd_price,
         cd.emissionGroup AS cd_emissionGroup,
         cd.type        AS cd_type,
@@ -409,9 +387,6 @@ export class BulkImportService {
       phoneNumber: row.cd_phoneNumber,
       whatsAppNumber: row.cd_whatsAppNumber,
       location: row.cd_location,
-      published: row.cd_published === true,
-      sold: row.cd_sold === true,
-      deleted: row.cd_deleted === true,
       dateUpdated: new Date(),
     };
 
@@ -441,14 +416,6 @@ export class BulkImportService {
       this.logger.debug(
         `Created car_detail ${newCarDetail.id} for post ${postId}`,
       );
-    }
-
-    // Update post revalidate flag if it's set in the CSV
-    if (row.post_revalidate !== post.revalidate) {
-      await this.prisma.post.update({
-        where: { id: postId },
-        data: { revalidate: row.post_revalidate === true },
-      });
     }
   }
 

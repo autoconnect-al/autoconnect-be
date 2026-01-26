@@ -5,20 +5,10 @@
 export interface BulkImportRow {
   // Post fields
   post_id: string;
-  post_origin: string | null;
-  post_revalidate: boolean | null;
-  post_dateCreated: Date | string;
-  post_caption: string | null;
   post_cleanedCaption: string | null;
-  post_vendor_id: string;
-  post_car_detail_id: string | null;
-  post_status: string | null;
 
   // Car detail fields
   cd_id: string | null;
-  cd_published: boolean | null;
-  cd_sold: boolean | null;
-  cd_deleted: boolean | null;
   cd_make: string | null;
   cd_model: string | null;
   cd_variant: string | null;
