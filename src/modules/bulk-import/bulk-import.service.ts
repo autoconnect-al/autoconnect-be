@@ -145,14 +145,27 @@ export class BulkImportService {
     }));
   }
 
+  private convertToCSVRowsMinimal(
+    results: BulkImportQueryResult[],
+  ): { id: string; cleanedCaption: string | null }[] {
+    return results.map((result) => ({
+      // Post fields
+      id: String(result.id),
+      cleanedCaption: result.cleanedCaption,
+    }));
+  }
+
   /**
    * Generates CSV string from query results
    * @param limit Maximum number of rows to export
+   * @param minimal If true, exports only id and cleanedCaption
    * @returns CSV string
    */
-  async generateCSV(limit?: number): Promise<string> {
+  async generateCSV(limit?: number, minimal = false): Promise<string> {
     const results = await this.fetchPostsForExport(limit);
-    const rows = this.convertToCSVRows(results);
+    const rows = minimal
+      ? this.convertToCSVRowsMinimal(results)
+      : this.convertToCSVRows(results);
 
     return stringify(rows, {
       header: true,
