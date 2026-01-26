@@ -177,21 +177,19 @@ export class BulkImportService {
   /**
    * Fetches published posts with complete car details for export
    * Excludes drafts, manual uploads, and posts without make/model
-   * @param limit Maximum number of rows to fetch
+   * @param limit Maximum number of rows to fetch (optional - if not provided, fetches all)
    * @returns Array of query results
    */
   async fetchPublishedPostsForExport(
     limit?: number,
   ): Promise<BulkImportQueryResult[]> {
-    const actualLimit = limit ?? 100;
-
+    const limitText = limit ? `${limit}` : 'ALL';
     this.logger.log(
-      `Fetching ${actualLimit} published posts with car details for export`,
+      `Fetching ${limitText} published posts with car details for export`,
     );
 
     // Query for published posts with complete car details
-    const results: any[] = await this.prisma.$queryRawUnsafe(
-      `
+    const query = `
       SELECT
         p.id,
         p.origin,
@@ -248,10 +246,11 @@ export class BulkImportService {
         AND cd.model IS NOT NULL
         AND cd.model != ''
       ORDER BY p.dateCreated DESC
-      LIMIT ?
-    `,
-      actualLimit,
-    );
+    `;
+
+    const results: any[] = limit
+      ? await this.prisma.$queryRawUnsafe(`${query} LIMIT ?`, limit)
+      : await this.prisma.$queryRawUnsafe(query);
 
     this.logger.log(
       `Fetched ${results.length} published posts with car details`,

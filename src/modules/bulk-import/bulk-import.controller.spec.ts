@@ -72,20 +72,6 @@ describe('BulkImportController', () => {
   });
 
   describe('exportPublishedPostsCSV', () => {
-    it('should export published posts with default limit', async () => {
-      const mockCSV = 'post_id,cd_make,cd_model\n1,Toyota,Camry\n';
-      mockBulkImportService.generatePublishedPostsCSV.mockResolvedValue(
-        mockCSV,
-      );
-
-      const result = await controller.exportPublishedPostsCSV({ limit: 100 });
-
-      expect(result).toBeDefined();
-      expect(
-        mockBulkImportService.generatePublishedPostsCSV,
-      ).toHaveBeenCalledWith(100);
-    });
-
     it('should export published posts with custom limit', async () => {
       const mockCSV = 'post_id,cd_make,cd_model\n1,Toyota,Camry\n';
       mockBulkImportService.generatePublishedPostsCSV.mockResolvedValue(
@@ -98,6 +84,21 @@ describe('BulkImportController', () => {
       expect(
         mockBulkImportService.generatePublishedPostsCSV,
       ).toHaveBeenCalledWith(50);
+    });
+
+    it('should export all published posts when no limit is provided', async () => {
+      const mockCSV =
+        'post_id,cd_make,cd_model\n1,Toyota,Camry\n2,Honda,Civic\n3,Ford,Focus\n';
+      mockBulkImportService.generatePublishedPostsCSV.mockResolvedValue(
+        mockCSV,
+      );
+
+      const result = await controller.exportPublishedPostsCSV({});
+
+      expect(result).toBeDefined();
+      expect(
+        mockBulkImportService.generatePublishedPostsCSV,
+      ).toHaveBeenCalledWith(undefined);
     });
   });
 

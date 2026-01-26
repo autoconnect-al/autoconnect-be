@@ -24,3 +24,25 @@ export class ExportQueryDto {
   @IsOptional()
   code?: string;
 }
+
+/**
+ * DTO for published posts CSV export query parameters
+ * No limit restriction - can export all records
+ */
+export class ExportPublishedQueryDto {
+  @ApiPropertyOptional({
+    description:
+      'Maximum number of rows to export (optional - leave empty to export all)',
+    minimum: 1,
+    example: 100,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  limit?: number;
+
+  // Allow code parameter for admin authentication (handled by AdminGuard)
+  @IsOptional()
+  code?: string;
+}
