@@ -28,7 +28,7 @@ export class BulkImportService {
     this.logger.log(`Fetching ${actualLimit} posts for export`);
 
     // Execute the raw SQL query as specified
-    const results = (await this.prisma.$queryRawUnsafe(
+    const results: any[] = await this.prisma.$queryRawUnsafe(
       `
       SELECT
         p.id,
@@ -92,10 +92,11 @@ export class BulkImportService {
       LIMIT ?
     `,
       actualLimit,
-    )) as unknown as BulkImportQueryResult[];
+    );
 
     this.logger.log(`Fetched ${results.length} posts`);
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     return results;
   }
 
@@ -144,7 +145,7 @@ export class BulkImportService {
       cd_contact:
         result.cd_contact && typeof result.cd_contact === 'object'
           ? JSON.stringify(result.cd_contact)
-          : (result.cd_contact as string | null),
+          : result.cd_contact,
       cd_priceVerified: result.cd_priceVerified,
       cd_mileageVerified: result.cd_mileageVerified,
       cd_country: result.cd_country,
@@ -163,6 +164,110 @@ export class BulkImportService {
    */
   async generateCSV(limit?: number): Promise<string> {
     const results = await this.fetchPostsForExport(limit);
+    const rows = this.convertToCSVRows(results);
+
+    return stringify(rows, {
+      header: true,
+      quoted: true,
+      quoted_empty: true,
+      escape: '"',
+    });
+  }
+
+  /**
+   * Fetches published posts with complete car details for export
+   * Excludes drafts, manual uploads, and posts without make/model
+   * @param limit Maximum number of rows to fetch
+   * @returns Array of query results
+   */
+  async fetchPublishedPostsForExport(
+    limit?: number,
+  ): Promise<BulkImportQueryResult[]> {
+    const actualLimit = limit ?? 100;
+
+    this.logger.log(
+      `Fetching ${actualLimit} published posts with car details for export`,
+    );
+
+    // Query for published posts with complete car details
+    const results: any[] = await this.prisma.$queryRawUnsafe(
+      `
+      SELECT
+        p.id,
+        p.origin,
+        p.revalidate,
+        p.dateCreated,
+        p.car_detail_id,
+        p.caption,
+        p.cleanedCaption,
+        p.vendor_id,
+        p.status,
+
+        cd.id          AS cd_id,
+        cd.published   AS cd_published,
+        cd.sold        AS cd_sold,
+        cd.deleted     AS cd_deleted,
+        cd.make        AS cd_make,
+        cd.model       AS cd_model,
+        cd.variant     AS cd_variant,
+        cd.registration AS cd_registration,
+        cd.mileage     AS cd_mileage,
+        cd.transmission AS cd_transmission,
+        cd.fuelType    AS cd_fuelType,
+        cd.engineSize  AS cd_engineSize,
+        cd.drivetrain  AS cd_drivetrain,
+        cd.seats       AS cd_seats,
+        cd.numberOfDoors AS cd_numberOfDoors,
+        cd.bodyType    AS cd_bodyType,
+        cd.customsPaid AS cd_customsPaid,
+        cd.options     AS cd_options,
+        cd.price       AS cd_price,
+        cd.emissionGroup AS cd_emissionGroup,
+        cd.type        AS cd_type,
+        cd.contact     AS cd_contact,
+        cd.priceVerified AS cd_priceVerified,
+        cd.mileageVerified AS cd_mileageVerified,
+        cd.country     AS cd_country,
+        cd.city        AS cd_city,
+        cd.countryOfOriginForVehicles AS cd_countryOfOriginForVehicles,
+        cd.phoneNumber AS cd_phoneNumber,
+        cd.whatsAppNumber AS cd_whatsAppNumber,
+        cd.location    AS cd_location,
+
+        1 AS matches_query,
+        0 AS car_detail_missing
+
+      FROM post p
+      INNER JOIN car_detail cd
+        ON p.car_detail_id = cd.id
+      WHERE
+        p.status != 'DRAFT'
+        AND p.origin != 'MANUAL'
+        AND cd.make IS NOT NULL
+        AND cd.make != ''
+        AND cd.model IS NOT NULL
+        AND cd.model != ''
+      ORDER BY p.dateCreated DESC
+      LIMIT ?
+    `,
+      actualLimit,
+    );
+
+    this.logger.log(
+      `Fetched ${results.length} published posts with car details`,
+    );
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+    return results;
+  }
+
+  /**
+   * Generates CSV string from published posts with car details
+   * @param limit Maximum number of rows to export
+   * @returns CSV string
+   */
+  async generatePublishedPostsCSV(limit?: number): Promise<string> {
+    const results = await this.fetchPublishedPostsForExport(limit);
     const rows = this.convertToCSVRows(results);
 
     return stringify(rows, {
@@ -233,7 +338,7 @@ export class BulkImportService {
     };
 
     for (let i = 0; i < rows.length; i++) {
-      const row = rows[i] as BulkImportRow;
+      const row = rows[i];
       try {
         await this.processRow(row);
 
@@ -295,6 +400,7 @@ export class BulkImportService {
       price: row.cd_price !== null ? Number(row.cd_price) : null,
       emissionGroup: row.cd_emissionGroup,
       type: row.cd_type || 'car',
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       contact: row.cd_contact ? this.parseJSON(row.cd_contact) : null,
       priceVerified: row.cd_priceVerified === true,
       mileageVerified: row.cd_mileageVerified === true,

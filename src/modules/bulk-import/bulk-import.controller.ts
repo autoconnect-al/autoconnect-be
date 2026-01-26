@@ -12,7 +12,14 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiBody, ApiConsumes, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBody,
+  ApiConsumes,
+  ApiOperation,
+  ApiQuery,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { BulkImportService } from './bulk-import.service';
 import { ExportQueryDto } from './dto/export-query.dto';
@@ -111,6 +118,64 @@ export class BulkImportController {
     this.logger.warn('Exporting ALL posts - this may take a while');
 
     const csvContent = await this.bulkImportService.generateCSV(999999);
+    const buffer = Buffer.from(csvContent, 'utf-8');
+    const stream = Readable.from(buffer);
+
+    return new StreamableFile(stream);
+  }
+
+  /**
+   * Export published posts with complete car details as CSV
+   * Only includes processed posts with make and model
+   * Excludes drafts and manual uploads
+   */
+  @Get('export-published')
+  @ApiOperation({
+    summary: 'Export published posts with car details as CSV',
+    description:
+      'Exports published posts with their complete car details in CSV format. ' +
+      'Includes cleanedCaption and all car_detail fields. ' +
+      'Excludes: DRAFT status, MANUAL origin, and posts without make/model. ' +
+      'Maximum limit is 100 rows.',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Number of rows to export (1-100)',
+    example: 50,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'CSV file successfully generated',
+    content: {
+      'text/csv': {
+        schema: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Admin access required',
+  })
+  @Header('Content-Type', 'text/csv')
+  @Header(
+    'Content-Disposition',
+    'attachment; filename="published-posts-export.csv"',
+  )
+  async exportPublishedPostsCSV(
+    @Query() query: ExportQueryDto,
+  ): Promise<StreamableFile> {
+    this.logger.log(
+      `Exporting published posts CSV with limit: ${query.limit || 100}`,
+    );
+
+    const csvContent = await this.bulkImportService.generatePublishedPostsCSV(
+      query.limit,
+    );
     const buffer = Buffer.from(csvContent, 'utf-8');
     const stream = Readable.from(buffer);
 

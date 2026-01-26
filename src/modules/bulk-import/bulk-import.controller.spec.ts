@@ -10,6 +10,7 @@ describe('BulkImportController', () => {
 
   const mockBulkImportService = {
     generateCSV: jest.fn(),
+    generatePublishedPostsCSV: jest.fn(),
     processBulkImport: jest.fn(),
   };
 
@@ -67,6 +68,36 @@ describe('BulkImportController', () => {
 
       expect(result).toBeDefined();
       expect(mockBulkImportService.generateCSV).toHaveBeenCalledWith(999999);
+    });
+  });
+
+  describe('exportPublishedPostsCSV', () => {
+    it('should export published posts with default limit', async () => {
+      const mockCSV = 'post_id,cd_make,cd_model\n1,Toyota,Camry\n';
+      mockBulkImportService.generatePublishedPostsCSV.mockResolvedValue(
+        mockCSV,
+      );
+
+      const result = await controller.exportPublishedPostsCSV({ limit: 100 });
+
+      expect(result).toBeDefined();
+      expect(
+        mockBulkImportService.generatePublishedPostsCSV,
+      ).toHaveBeenCalledWith(100);
+    });
+
+    it('should export published posts with custom limit', async () => {
+      const mockCSV = 'post_id,cd_make,cd_model\n1,Toyota,Camry\n';
+      mockBulkImportService.generatePublishedPostsCSV.mockResolvedValue(
+        mockCSV,
+      );
+
+      const result = await controller.exportPublishedPostsCSV({ limit: 50 });
+
+      expect(result).toBeDefined();
+      expect(
+        mockBulkImportService.generatePublishedPostsCSV,
+      ).toHaveBeenCalledWith(50);
     });
   });
 
