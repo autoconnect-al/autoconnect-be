@@ -80,7 +80,10 @@ export class BulkImportController {
   async exportCSV(@Query() query: ExportQueryDto): Promise<StreamableFile> {
     this.logger.log(`Exporting CSV with limit: ${query.limit || 100}`);
 
-    const csvContent = await this.bulkImportService.generateCSV(query.limit);
+    const csvContent = await this.bulkImportService.generateCSV(
+      query.limit,
+      true,
+    );
     const buffer = Buffer.from(csvContent, 'utf-8');
     const stream = Readable.from(buffer);
 
