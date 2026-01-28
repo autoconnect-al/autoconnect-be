@@ -5,6 +5,7 @@ import {
   generateCleanedCaption,
   encodeCaption,
   isSold,
+  isCustomsPaid,
 } from '../utils/caption-processor';
 import { OpenAIService, CarDetailFromAI } from './openai.service';
 import { ImageDownloadService } from './image-download.service';
@@ -106,234 +107,261 @@ export class PostImportService {
     forceDownloadImages = false,
     forceDownloadImagesDays?: number,
   ): Promise<bigint | null> {
-    const now = new Date();
-    const postId = BigInt(postData.id);
+    try {
+      const now = new Date();
+      const postId = BigInt(postData.id);
 
-    // Check if post exists and if it's older than 3 months
-    const existingPost = await this.prisma.post.findUnique({
-      where: { id: postId },
-      select: {
-        id: true,
-        createdTime: true,
-        vendor_id: true,
-        deleted: true,
-        status: true,
-        cleanedCaption: true,
-        car_detail_id: true,
-      },
-    });
-
-    if (existingPost && !existingPost.deleted) {
-      // Check if existing post is older than 3 months
-      if (!isWithinThreeMonths(existingPost.createdTime)) {
-        console.log(
-          `Post ${postId} exists but is older than 3 months - marking as deleted`,
-        );
-        // Mark post as deleted
-        await this.markPostAsDeleted(postId, existingPost.vendor_id);
-        return null;
-      }
-    } else if (existingPost && existingPost.deleted) {
-      console.log(`Skipping post. Post ${postId} deleted`);
-      return postId;
-    }
-
-    // Process caption
-    const originalCaption = postData.caption || '';
-    const cleanedCaption = generateCleanedCaption(originalCaption);
-    const encodedCaption = encodeCaption(originalCaption);
-
-    // Check if sold
-    const sold = isSold(cleanedCaption);
-
-    // Check if vendor exists, if not create it
-    await this.ensureVendorExists(BigInt(vendorId));
-
-    // Determine if we have car details
-    let carDetailId: bigint | null = null;
-
-    // For existing posts (Instagram or Encar), preserve car_detail - assume user data is complete
-    if (existingPost) {
-      // Reuse existing car_detail ID for any existing post
-      carDetailId = existingPost.car_detail_id;
-    } else if (postData.origin === 'ENCAR' && postData.cardDetails) {
-      // Encar: create car_detail from provided data (only for new posts)
-      carDetailId = await this.createCarDetail(
-        postData.cardDetails,
-        sold,
-        now,
-        postId,
+      console.log(
+        `📥 Processing post ${postId} | vendor: ${vendorId} | origin: ${postData.origin || 'N/A'}`,
       );
-    } else if (postData.origin === 'INSTAGRAM' && !existingPost) {
-      // New Instagram post: create empty car_detail or use OpenAI
-      let carDetailsFromAI: CarDetailFromAI | null = null;
 
-      if (useOpenAI && cleanedCaption) {
-        carDetailsFromAI =
-          await this.openaiService.generateCarDetails(cleanedCaption);
+      // Check if post exists and if it's older than 3 months
+      const existingPost = await this.prisma.post.findUnique({
+        where: { id: postId },
+        select: {
+          id: true,
+          createdTime: true,
+          vendor_id: true,
+          deleted: true,
+          status: true,
+          cleanedCaption: true,
+          car_detail_id: true,
+        },
+      });
+
+      if (existingPost && !existingPost.deleted) {
+        // Check if existing post is older than 3 months
+        if (!isWithinThreeMonths(existingPost.createdTime)) {
+          console.log(
+            `⚠️  Post ${postId} exists but is older than 3 months - marking as deleted`,
+          );
+          // Mark post as deleted
+          await this.markPostAsDeleted(postId, existingPost.vendor_id);
+          console.log(`🗑️  Post ${postId} marked as deleted`);
+          return null;
+        }
+      } else if (existingPost && existingPost.deleted) {
+        console.log(`⏭️  Skipping post ${postId} - already deleted`);
+        return postId;
       }
 
-      if (carDetailsFromAI && Object.keys(carDetailsFromAI).length > 0) {
-        // Create car_detail from AI-generated data
-        // Convert AI format to cardDetails format
-        const aiAsCardDetails: ImportPostData['cardDetails'] = {
-          make: carDetailsFromAI.make,
-          model: carDetailsFromAI.model,
-          variant: carDetailsFromAI.variant,
-          registration: carDetailsFromAI.registration,
-          mileage: carDetailsFromAI.mileage,
-          transmission: carDetailsFromAI.transmission,
-          fuelType: carDetailsFromAI.fuelType,
-          engine: carDetailsFromAI.engineSize,
-          bodyType: carDetailsFromAI.bodyType,
-          price: carDetailsFromAI.price,
-          drivetrain: carDetailsFromAI.drivetrain,
-        };
+      // Process caption
+      const originalCaption = postData.caption || '';
+      const cleanedCaption = generateCleanedCaption(originalCaption);
+      const encodedCaption = encodeCaption(originalCaption);
+
+      // Check if sold
+      const sold = isSold(cleanedCaption);
+      const customsPaid = isCustomsPaid(cleanedCaption);
+
+      // Check if vendor exists, if not create it
+      await this.ensureVendorExists(BigInt(vendorId));
+
+      // Download and process images if requested
+      if (
+        downloadImages &&
+        postData.sidecarMedias &&
+        postData.sidecarMedias.length > 0
+      ) {
+        try {
+          if (!Array.isArray(postData.sidecarMedias)) {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            postData.sidecarMedias = JSON.parse(postData.sidecarMedias);
+          }
+          const imageUrls = (
+            postData.sidecarMedias as {
+              imageStandardResolutionUrl: string;
+              type: string;
+              id: string;
+            }[]
+          )
+            .filter(
+              (media) =>
+                media.type === 'image' && media.imageStandardResolutionUrl,
+            )
+            .map((media) => ({
+              imageUrls: media.imageStandardResolutionUrl,
+              name: media.id,
+            }));
+
+          if (imageUrls.length > 0) {
+            // Determine if we should force download for this post
+            let shouldForceDownload = forceDownloadImages;
+
+            // If forceDownloadImagesDays is set, only force download if post is within that period
+            if (
+              forceDownloadImages &&
+              forceDownloadImagesDays !== undefined &&
+              forceDownloadImagesDays > 0
+            ) {
+              shouldForceDownload = isWithinDays(
+                postData.createdTime,
+                forceDownloadImagesDays,
+              );
+              if (shouldForceDownload) {
+                console.log(
+                  `Post ${postData.id} is within last ${forceDownloadImagesDays} days - forcing image download`,
+                );
+              } else {
+                console.log(
+                  `Post ${postData.id} is older than ${forceDownloadImagesDays} days - skipping forced download`,
+                );
+              }
+            }
+
+            const result =
+              await this.imageDownloadService.downloadAndProcessImages(
+                imageUrls,
+                vendorId,
+                postData.id,
+                shouldForceDownload,
+              );
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            postData.sidecarMedias = result as any;
+            console.log(
+              `   📸 Downloaded ${imageUrls.length} images for post ${postData.id}${shouldForceDownload ? ' (forced)' : ''}`,
+            );
+          }
+        } catch (error) {
+          console.error(
+            `   ❌ Failed to download images for post ${postData.id}:`,
+            error,
+          );
+          // Continue with post creation even if image download fails
+        }
+      }
+
+      // Create or update post FIRST - car_detail depends on this
+      const isNewPost = !existingPost || existingPost.deleted;
+      let carDetailId: bigint | null = null;
+
+      const post = await this.prisma.post.upsert({
+        where: { id: postId },
+        create: {
+          id: postId,
+          dateCreated: now,
+          dateUpdated: now,
+          caption: encodedCaption,
+          cleanedCaption,
+          createdTime: postData.createdTime || now.toISOString(),
+          sidecarMedias: postData.sidecarMedias ? postData.sidecarMedias : '[]',
+          vendor_id: BigInt(vendorId),
+          live: false,
+          likesCount: postData.likesCount || 0,
+          viewsCount: postData.viewsCount || 0,
+          car_detail_id: null, // Will be set after car_detail is created
+          origin: postData.origin || null,
+          status: 'DRAFT',
+          revalidate: false,
+        },
+        update: {
+          dateUpdated: now,
+          caption: encodedCaption,
+          cleanedCaption,
+          createdTime: postData.createdTime || now.toISOString(),
+          sidecarMedias: postData.sidecarMedias ? postData.sidecarMedias : '',
+          likesCount: postData.likesCount || 0,
+          viewsCount: postData.viewsCount || 0,
+          origin: postData.origin || null,
+          status: existingPost?.status ?? 'DRAFT',
+          revalidate: cleanedCaption !== existingPost?.cleanedCaption,
+        },
+      });
+
+      console.log(
+        `✅ ${isNewPost ? 'Created new' : 'Updated'} post ${postId} | vendor: ${vendorId} | origin: ${postData.origin || 'N/A'} | sold: ${sold} | customsPaid: ${customsPaid}`,
+      );
+
+      // Now create/link car_detail AFTER post exists
+      // For existing posts (Instagram or Encar), preserve car_detail - assume user data is complete
+      if (existingPost) {
+        // Reuse existing car_detail ID for any existing post
+        carDetailId = existingPost.car_detail_id;
+      } else if (postData.origin === 'ENCAR' && postData.cardDetails) {
+        // Encar: create car_detail from provided data (only for new posts)
         carDetailId = await this.createCarDetail(
-          aiAsCardDetails,
+          postData.cardDetails,
           sold,
+          customsPaid,
           now,
           postId,
         );
-      } else {
-        // Create empty car_detail
-        carDetailId = await this.createEmptyCarDetail(sold, now, postId);
-      }
-    } else if (postData.cardDetails) {
-      // Other sources with car details
-      carDetailId = await this.createCarDetail(
-        postData.cardDetails,
-        sold,
-        now,
-        postId,
-      );
-    }
+      } else if (postData.origin === 'INSTAGRAM' && isNewPost) {
+        // New Instagram post: create empty car_detail or use OpenAI
+        let carDetailsFromAI: CarDetailFromAI | null = null;
 
-    // Download and process images if requested
-    if (
-      downloadImages &&
-      postData.sidecarMedias &&
-      postData.sidecarMedias.length > 0
-    ) {
-      try {
-        if (!Array.isArray(postData.sidecarMedias)) {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          postData.sidecarMedias = JSON.parse(postData.sidecarMedias);
-        }
-        const imageUrls = (
-          postData.sidecarMedias as {
-            imageStandardResolutionUrl: string;
-            type: string;
-            id: string;
-          }[]
-        )
-          .filter(
-            (media) =>
-              media.type === 'image' && media.imageStandardResolutionUrl,
-          )
-          .map((media) => ({
-            imageUrls: media.imageStandardResolutionUrl,
-            name: media.id,
-          }));
-
-        if (imageUrls.length > 0) {
-          // Determine if we should force download for this post
-          let shouldForceDownload = forceDownloadImages;
-
-          // If forceDownloadImagesDays is set, only force download if post is within that period
-          if (
-            forceDownloadImages &&
-            forceDownloadImagesDays !== undefined &&
-            forceDownloadImagesDays > 0
-          ) {
-            shouldForceDownload = isWithinDays(
-              postData.createdTime,
-              forceDownloadImagesDays,
-            );
-            if (shouldForceDownload) {
-              console.log(
-                `Post ${postData.id} is within last ${forceDownloadImagesDays} days - forcing image download`,
-              );
-            } else {
-              console.log(
-                `Post ${postData.id} is older than ${forceDownloadImagesDays} days - skipping forced download`,
-              );
-            }
-          }
-
-          const result =
-            await this.imageDownloadService.downloadAndProcessImages(
-              imageUrls,
-              vendorId,
-              postData.id,
-              shouldForceDownload,
-            );
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          postData.sidecarMedias = result as any;
+        if (useOpenAI && cleanedCaption) {
           console.log(
-            `Downloaded ${imageUrls.length} images for post ${postData.id}${shouldForceDownload ? ' (forced)' : ''}`,
+            `   🤖 Generating car details with OpenAI for post ${postId}`,
           );
+          carDetailsFromAI =
+            await this.openaiService.generateCarDetails(cleanedCaption);
         }
-      } catch (error) {
-        console.error(
-          `Failed to download images for post ${postData.id}:`,
-          error,
+
+        if (carDetailsFromAI && Object.keys(carDetailsFromAI).length > 0) {
+          console.log(`   ✨ OpenAI generated car details for post ${postId}`);
+          // Create car_detail from AI-generated data
+          // Convert AI format to cardDetails format
+          const aiAsCardDetails: ImportPostData['cardDetails'] = {
+            make: carDetailsFromAI.make,
+            model: carDetailsFromAI.model,
+            variant: carDetailsFromAI.variant,
+            registration: carDetailsFromAI.registration,
+            mileage: carDetailsFromAI.mileage,
+            transmission: carDetailsFromAI.transmission,
+            fuelType: carDetailsFromAI.fuelType,
+            engine: carDetailsFromAI.engineSize,
+            bodyType: carDetailsFromAI.bodyType,
+            price: carDetailsFromAI.price,
+            drivetrain: carDetailsFromAI.drivetrain,
+          };
+          carDetailId = await this.createCarDetail(
+            aiAsCardDetails,
+            sold,
+            customsPaid,
+            now,
+            postId,
+          );
+        } else {
+          if (useOpenAI) {
+            console.log(
+              `   ⚠️  OpenAI did not generate car details for post ${postId} - creating empty`,
+            );
+          }
+          // Create empty car_detail
+          carDetailId = await this.createEmptyCarDetail(sold, customsPaid, now, postId);
+        }
+      } else if (postData.cardDetails && isNewPost) {
+        // Other sources with car details
+        carDetailId = await this.createCarDetail(
+          postData.cardDetails,
+          sold,
+          customsPaid,
+          now,
+          postId,
         );
-        // Continue with post creation even if image download fails
       }
+
+      // Update post with car_detail_id if a car_detail was created
+      if (carDetailId && isNewPost) {
+        await this.prisma.post.update({
+          where: { id: postId },
+          data: { car_detail_id: carDetailId },
+        });
+        console.log(`   ↳ Linked car_detail ${carDetailId} to post ${postId}`);
+      }
+
+      return post.id;
+    } catch (e) {
+      console.error('❌ Failed to import post:', JSON.stringify(e));
+      // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+      return Promise.reject(e);
     }
-
-    // Create or update post
-    const post = await this.prisma.post.upsert({
-      where: { id: postId },
-      create: {
-        id: postId,
-        dateCreated: now,
-        dateUpdated: now,
-        caption: encodedCaption,
-        cleanedCaption,
-        createdTime: postData.createdTime || now.toISOString(),
-        sidecarMedias: postData.sidecarMedias ? postData.sidecarMedias : '[]',
-        vendor_id: BigInt(vendorId),
-        live: false,
-        likesCount: postData.likesCount || 0,
-        viewsCount: postData.viewsCount || 0,
-        car_detail_id: carDetailId ?? null,
-        origin: postData.origin || null,
-        status: 'DRAFT',
-        revalidate: false,
-      },
-      update: {
-        dateUpdated: now,
-        caption: encodedCaption,
-        cleanedCaption,
-        createdTime: postData.createdTime || now.toISOString(),
-        sidecarMedias: postData.sidecarMedias ? postData.sidecarMedias : '',
-        likesCount: postData.likesCount || 0,
-        viewsCount: postData.viewsCount || 0,
-        car_detail_id: carDetailId ?? existingPost?.car_detail_id ?? null,
-        origin: postData.origin || null,
-        status: existingPost?.status ?? 'DRAFT',
-        revalidate: cleanedCaption !== existingPost?.cleanedCaption,
-      },
-    });
-
-    // Ensure car_detail.post_id is linked to this post (backfill if missing or mismatched)
-    if (carDetailId) {
-      await this.prisma.car_detail.updateMany({
-        where: {
-          id: carDetailId,
-          OR: [{ post_id: null }, { post_id: { not: postId } }],
-        },
-        data: { post_id: postId },
-      });
-    }
-
-    return post.id;
   }
 
   private async createEmptyCarDetail(
     sold: boolean,
+    customsPaid: boolean,
     now: Date,
     postId: bigint,
   ): Promise<bigint> {
@@ -344,9 +372,14 @@ export class PostImportService {
         dateUpdated: now,
         post_id: postId,
         sold,
+        customsPaid,
         published: false,
       },
     });
+
+    console.log(
+      `   ↳ Created empty car_detail ${carDetail.id} | sold: ${sold} | customsPaid: ${customsPaid}`,
+    );
 
     return carDetail.id;
   }
@@ -354,12 +387,13 @@ export class PostImportService {
   private async createCarDetail(
     carDetails: ImportPostData['cardDetails'],
     sold: boolean,
+    customsPaid: boolean,
     now: Date,
     postId: bigint,
   ): Promise<bigint> {
     if (!carDetails) {
       // If no car details provided, create empty
-      return this.createEmptyCarDetail(sold, now, postId);
+      return this.createEmptyCarDetail(sold, customsPaid, now, postId);
     }
 
     const carDetail = await this.prisma.car_detail.create({
@@ -382,7 +416,7 @@ export class PostImportService {
         numberOfDoors: carDetails.numberOfDoors || null,
         bodyType: carDetails.bodyType || null,
         price: carDetails.price || null,
-        customsPaid: carDetails.customsPaid || false,
+        customsPaid: customsPaid || false,
         sold,
         published: !!carDetails.make && !!carDetails.model,
         contact: carDetails.contact ? JSON.stringify(carDetails.contact) : '',
@@ -391,26 +425,24 @@ export class PostImportService {
       },
     });
 
+    console.log(
+      `   ↳ Created car_detail ${carDetail.id} | make: ${carDetails.make || 'N/A'} | model: ${carDetails.model || 'N/A'} | published: ${carDetail.published} | sold: ${sold} | customsPaid: ${customsPaid}`,
+    );
+
     return carDetail.id;
   }
 
-  private async ensureVendorExists(vendorId: bigint): Promise<void> {
+  private async ensureVendorExists(vendorId: bigint): Promise<boolean> {
     const vendor = await this.prisma.vendor.findUnique({
       where: { id: vendorId },
     });
 
     if (!vendor) {
       // Create a basic vendor record
-      await this.prisma.vendor.create({
-        data: {
-          id: vendorId,
-          dateCreated: new Date(),
-          dateUpdated: new Date(),
-          deleted: false,
-          accountExists: true,
-        },
-      });
+      return false;
     }
+
+    return true;
   }
 
   /**

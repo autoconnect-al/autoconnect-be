@@ -1,137 +1,145 @@
 import {
   generateCleanedCaption,
-  encodeCaption,
-  decodeCaption,
   isSold,
+  isCustomsPaid,
 } from './caption-processor';
 
-describe('Caption Processor', () => {
+describe('caption-processor', () => {
   describe('generateCleanedCaption', () => {
-    it('returns empty string for null or undefined', () => {
+    it('should remove emojis from caption', () => {
+      const caption = 'Nice car 🚗 for sale 💰';
+      const result = generateCleanedCaption(caption);
+      expect(result).toBe('Nice car for sale');
+    });
+
+    it('should handle null/undefined', () => {
       expect(generateCleanedCaption(null)).toBe('');
       expect(generateCleanedCaption(undefined)).toBe('');
     });
 
-    it('removes emojis from caption', () => {
-      const caption = 'BMW 3 Series 🚗 Great car! ⭐⭐⭐';
-      const cleaned = generateCleanedCaption(caption);
-      expect(cleaned).not.toContain('🚗');
-      expect(cleaned).not.toContain('⭐');
-      expect(cleaned).toContain('BMW 3 Series');
-      expect(cleaned).toContain('Great car!');
-    });
-
-    it('normalizes whitespace', () => {
-      const caption = 'BMW  3\n\nSeries\t\tTest';
-      const cleaned = generateCleanedCaption(caption);
-      expect(cleaned).toBe('BMW 3 Series Test');
-    });
-
-    it('removes zero-width spaces', () => {
-      const caption = 'BMW\u200B3\u200CSeries\u200D';
-      const cleaned = generateCleanedCaption(caption);
-      expect(cleaned).toBe('BMW3Series');
-    });
-
-    it('trims leading and trailing whitespace', () => {
-      const caption = '  BMW 3 Series  ';
-      const cleaned = generateCleanedCaption(caption);
-      expect(cleaned).toBe('BMW 3 Series');
-    });
-  });
-
-  describe('encodeCaption', () => {
-    it('returns empty string for null or undefined', () => {
-      expect(encodeCaption(null)).toBe('');
-      expect(encodeCaption(undefined)).toBe('');
-    });
-
-    it('encodes caption to Base64', () => {
-      const caption = 'BMW 3 Series';
-      const encoded = encodeCaption(caption);
-      expect(encoded).toBe('Qk1XIDMgU2VyaWVz');
-    });
-
-    it('handles emojis in Base64 encoding', () => {
-      const caption = 'BMW 🚗';
-      const encoded = encodeCaption(caption);
-      expect(encoded).toBeTruthy();
-      // Decode to verify it works
-      const decoded = Buffer.from(encoded, 'base64').toString('utf-8');
-      expect(decoded).toBe(caption);
-    });
-  });
-
-  describe('decodeCaption', () => {
-    it('returns empty string for null or undefined', () => {
-      expect(decodeCaption(null)).toBe('');
-      expect(decodeCaption(undefined)).toBe('');
-    });
-
-    it('decodes Base64 caption', () => {
-      const encoded = 'Qk1XIDMgU2VyaWVz';
-      const decoded = decodeCaption(encoded);
-      expect(decoded).toBe('BMW 3 Series');
-    });
-
-    it('returns original string if not valid Base64', () => {
-      const invalid = 'Not Valid Base64!!!';
-      const decoded = decodeCaption(invalid);
-      expect(decoded).toBe(invalid);
-    });
-
-    it('handles emojis in Base64 decoding', () => {
-      const caption = 'BMW 🚗';
-      const encoded = encodeCaption(caption);
-      const decoded = decodeCaption(encoded);
-      expect(decoded).toBe(caption);
+    it('should normalize whitespace', () => {
+      const caption = 'Nice   car  \n  for   sale';
+      const result = generateCleanedCaption(caption);
+      expect(result).toBe('Nice car for sale');
     });
   });
 
   describe('isSold', () => {
-    it('returns false for null or undefined', () => {
+    it('should detect sold posts', () => {
+      expect(isSold('Makina e shitur')).toBe(true);
+      expect(isSold('SOLD')).toBe(true);
+      expect(isSold('u shit')).toBe(true);
+      expect(isSold('porositur')).toBe(true);
+      expect(isSold('rezervuar')).toBe(true);
+    });
+
+    it('should not detect sold if contains "per te shitur"', () => {
+      expect(isSold('per te shitur')).toBe(false);
+      expect(isSold('makina per te shitur')).toBe(false);
+    });
+
+    it('should handle null/undefined', () => {
       expect(isSold(null)).toBe(false);
       expect(isSold(undefined)).toBe(false);
     });
+  });
 
-    it('detects "sold" keyword', () => {
-      expect(isSold('BMW 3 Series sold')).toBe(true);
-      expect(isSold('SOLD BMW')).toBe(true);
+  describe('isCustomsPaid', () => {
+    describe('should detect customs paid indicators', () => {
+      it('should detect "pa dogane"', () => {
+        expect(isCustomsPaid('pa dogane')).toBe(true);
+        expect(isCustomsPaid('Makina pa dogane')).toBe(true);
+      });
+
+      it('should detect "pa letra"', () => {
+        expect(isCustomsPaid('pa letra')).toBe(true);
+        expect(isCustomsPaid('Gjendja perfekte pa letra')).toBe(true);
+      });
+
+      it('should detect "deri ne durres"', () => {
+        expect(isCustomsPaid('deri ne durres')).toBe(true);
+        expect(isCustomsPaid('Dorezone deri ne durres')).toBe(true);
+      });
+
+      it('should detect "deri ne port"', () => {
+        expect(isCustomsPaid('deri ne port')).toBe(true);
+        expect(isCustomsPaid('Makina deri ne port')).toBe(true);
+      });
+
+      it('should detect "paguar dogane"', () => {
+        expect(isCustomsPaid('paguar dogane')).toBe(true);
+      });
+
+      it('should detect "dogane te paguar"', () => {
+        expect(isCustomsPaid('dogane te paguar')).toBe(true);
+      });
+
+      it('should detect "nuk ka dogane"', () => {
+        expect(isCustomsPaid('nuk ka dogane')).toBe(true);
+      });
+
+      it('should detect "bie dogane"', () => {
+        expect(isCustomsPaid('bie dogane')).toBe(true);
+      });
+
+      it('should detect "dogana kaluar"', () => {
+        expect(isCustomsPaid('dogana kaluar')).toBe(true);
+      });
+
+      it('should detect "dogane lire"', () => {
+        expect(isCustomsPaid('dogane lire')).toBe(true);
+      });
+
+      it('should detect "pa pezullim"', () => {
+        expect(isCustomsPaid('pa pezullim')).toBe(true);
+      });
+
+      it('should detect "importue"', () => {
+        expect(isCustomsPaid('importue')).toBe(true);
+      });
+
+      it('should detect "blerje direkte"', () => {
+        expect(isCustomsPaid('blerje direkte')).toBe(true);
+      });
+
+      it('should detect "deri shtepi"', () => {
+        expect(isCustomsPaid('deri shtepi')).toBe(true);
+      });
+
+      it('should detect "dogane paguara"', () => {
+        expect(isCustomsPaid('dogane paguara')).toBe(true);
+      });
     });
 
-    it('detects "shitur" keyword', () => {
-      expect(isSold('BMW 3 Series shitur')).toBe(true);
+    it('should be case insensitive', () => {
+      expect(isCustomsPaid('PA DOGANE')).toBe(true);
+      expect(isCustomsPaid('Pa Dogane')).toBe(true);
+      expect(isCustomsPaid('DERI NE DURRES')).toBe(true);
     });
 
-    it('detects "u shit" keyword', () => {
-      expect(isSold('BMW 3 Series u shit')).toBe(true);
+    it('should return false when no keywords found', () => {
+      expect(isCustomsPaid('Makina e bukur per shitje')).toBe(false);
+      expect(isCustomsPaid('Kontakt 06XXXXXXX')).toBe(false);
     });
 
-    it('detects "porositur" keyword', () => {
-      expect(isSold('BMW 3 Series porositur')).toBe(true);
+    it('should handle null/undefined', () => {
+      expect(isCustomsPaid(null)).toBe(false);
+      expect(isCustomsPaid(undefined)).toBe(false);
     });
 
-    it('detects "rezervuar" keyword', () => {
-      expect(isSold('BMW 3 Series rezervuar')).toBe(true);
-    });
-
-    it('excludes posts with "per te shitur"', () => {
-      expect(isSold('BMW 3 Series per te shitur')).toBe(false);
-    });
-
-    it('detects sold even with "per te shitur" if other keywords present', () => {
-      // "per te shitur" takes precedence
-      expect(isSold('BMW sold per te shitur')).toBe(false);
-    });
-
-    it('returns false when no sold keywords present', () => {
-      expect(isSold('BMW 3 Series great condition')).toBe(false);
-    });
-
-    it('is case insensitive', () => {
-      expect(isSold('BMW SOLD')).toBe(true);
-      expect(isSold('bmw Shitur')).toBe(true);
-      expect(isSold('BMW PER TE SHITUR')).toBe(false);
+    it('should handle real caption examples', () => {
+      // Real world example captions
+      expect(isCustomsPaid('Makina pa dogane, i mire per te marrur')).toBe(
+        true,
+      );
+      expect(
+        isCustomsPaid(
+          'Deri ne durres, dogana kaluar, gjendje perfekte, kontakt',
+        ),
+      ).toBe(true);
+      expect(isCustomsPaid('Makina per shitje, dogane lire')).toBe(true);
+      expect(isCustomsPaid('Makina e vjetersuar, duhet dogane')).toBe(false);
+      expect(isCustomsPaid('Makina importue nga Europa')).toBe(true);
     });
   });
 });

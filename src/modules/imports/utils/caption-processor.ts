@@ -100,3 +100,39 @@ export function isSold(cleanedCaption: string | null | undefined): boolean {
   const soldKeywords = ['sold', 'shitur', 'u shit', 'porositur', 'rezervuar'];
   return soldKeywords.some((keyword) => lowerCaption.includes(keyword));
 }
+
+/**
+ * Checks if customs have been paid based on keywords in cleanedCaption
+ * Keywords indicating customs paid: "pa dogane", "pa letra", "deri ne durres", "deri ne port"
+ * And variations like "te paguar", "blerje", etc.
+ * @param cleanedCaption - Cleaned caption text
+ * @returns true if post indicates customs have been paid, false otherwise
+ */
+export function isCustomsPaid(
+  cleanedCaption: string | null | undefined,
+): boolean {
+  if (!cleanedCaption) return false;
+
+  const lowerCaption = cleanedCaption.toLowerCase();
+
+  // Keywords that indicate customs have been paid or are not required
+  const customsPaidKeywords = [
+    'pa dogane', // without customs
+    'pa letra', // without letters/documents
+    'deri ne durres', // delivered in Durrës (customs cleared)
+    'deri ne port', // delivered at port (customs cleared)
+    'paguar dogane', // customs paid
+    'dogane te paguar', // customs are paid
+    'nuk ka dogane', // no customs
+    'bie dogane', // customs fallen/passed
+    'dogana kaluar', // customs passed
+    'dogane lire', // free customs
+    'pa pezullim', // without suspension
+    'importue', // imported (implies customs cleared)
+    'blerje direkte', // direct purchase (customs cleared)
+    'deri shtepi', // delivered home (customs cleared)
+    'dogane paguara', // customs paid
+  ];
+
+  return customsPaidKeywords.some((keyword) => lowerCaption.includes(keyword));
+}

@@ -8,6 +8,7 @@ import {
   PostImportService,
 } from '../services/post-import.service';
 import { isWithinThreeMonths } from '../utils/date-filter';
+import { generateCleanedCaption, isSold } from '../utils/caption-processor';
 
 type ApifyPost = {
   pk?: number;
@@ -20,7 +21,7 @@ type ApifyPost = {
     image_versions2?: { candidates?: { url?: string }[] };
   }>;
   product_type?: string;
-  date?: number;
+  date?: string;
   taken_at?: number;
   user?: { pk?: number };
   [key: string]: unknown;
@@ -89,6 +90,31 @@ export class ApifyDatasetImportService {
             return 'skipped:old';
           }
 
+          // Check if post is sold - PHP logic: NEW sold posts are skipped
+          // First check if post exists
+          const postId = BigInt(postData.id);
+          const existingPost = await this.postImportService[
+            'prisma'
+          ].post.findUnique({
+            where: { id: postId },
+            select: { id: true, deleted: true },
+          });
+
+          // If post doesn't exist (new post), check if sold
+          if (!existingPost || existingPost.deleted) {
+            const cleanedCaption = generateCleanedCaption(
+              postData.caption || '',
+            );
+            const soldStatus = isSold(cleanedCaption);
+
+            if (soldStatus) {
+              console.log(
+                `Skipping new sold post ${postData.id} - caption indicates sold`,
+              );
+              return 'skipped:sold';
+            }
+          }
+
           const vendorId = item.user?.pk || 1;
 
           // Save directly to DB
@@ -137,12 +163,32 @@ export class ApifyDatasetImportService {
   }
 
   private mapInstagramPost(post: ApifyPost): ImportPostData {
+    // Determine timestamp - try multiple fields that Apify might provide
+    // taken_at is Unix timestamp in seconds
+    // date might be milliseconds or seconds
+    let createdTimeStr: string;
+    if (post.date) {
+      // If date is in milliseconds, convert to seconds
+      const dateValue = new Date(post['date']).getTime() / 1000;
+      if (dateValue > 10000000000) {
+        // Looks like milliseconds
+        createdTimeStr = (dateValue / 1000).toString();
+      } else {
+        createdTimeStr = dateValue.toString();
+      }
+    } else {
+      // Fallback: use current time if no timestamp available
+      // This ensures the post is not filtered out by date checks
+      createdTimeStr = Math.floor(Date.now() / 1000).toString();
+      console.warn(
+        `Post ${post.pk} has no timestamp field (date/taken_at) - using current time`,
+      );
+    }
+
     // Create properly typed import data
     return {
       id: post.pk ?? 0,
-      createdTime: post.date
-        ? (new Date(post.date).getTime() / 1000).toString()
-        : '',
+      createdTime: createdTimeStr,
       caption: post.caption ?? '',
       likesCount: post.like_count,
       viewsCount: post.comment_count,

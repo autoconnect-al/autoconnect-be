@@ -201,16 +201,12 @@ describe('BulkImportService', () => {
       const invalidCSV = Buffer.from('invalid,csv,content\nwith,missing');
 
       // CSV with inconsistent column counts should throw
-      expect(() => service.parseCSV(invalidCSV)).toThrow(
-        BadRequestException,
-      );
+      expect(() => service.parseCSV(invalidCSV)).toThrow(BadRequestException);
     });
 
     it('should handle boolean values correctly', () => {
       const csvContent = Buffer.from(
-        'post_id,cd_published,cd_sold\n' +
-          '12345,true,false\n' +
-          '67890,1,0\n',
+        'post_id,cd_published,cd_sold\n' + '12345,true,false\n' + '67890,1,0\n',
       );
 
       const rows = service.parseCSV(csvContent);
@@ -272,4 +268,3 @@ describe('BulkImportService', () => {
     });
   });
 });
-
