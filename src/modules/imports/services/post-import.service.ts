@@ -111,9 +111,11 @@ export class PostImportService {
       const now = new Date();
       const postId = BigInt(postData.id);
 
-      console.log(
-        `📥 Processing post ${postId} | vendor: ${vendorId} | origin: ${postData.origin || 'N/A'}`,
-      );
+      if (process.env.SHOW_LOGS) {
+        console.log(
+          `📥 Processing post ${postId} | vendor: ${vendorId} | origin: ${postData.origin || 'N/A'}`,
+        );
+      }
 
       // Check if post exists and if it's older than 3 months
       const existingPost = await this.prisma.post.findUnique({
@@ -132,16 +134,22 @@ export class PostImportService {
       if (existingPost && !existingPost.deleted) {
         // Check if existing post is older than 3 months
         if (!isWithinThreeMonths(existingPost.createdTime)) {
-          console.log(
-            `⚠️  Post ${postId} exists but is older than 3 months - marking as deleted`,
-          );
+          if (process.env.SHOW_LOGS) {
+            console.log(
+              `⚠️  Post ${postId} exists but is older than 3 months - marking as deleted`,
+            );
+          }
           // Mark post as deleted
           await this.markPostAsDeleted(postId, existingPost.vendor_id);
-          console.log(`🗑️  Post ${postId} marked as deleted`);
+          if (process.env.SHOW_LOGS) {
+            console.log(`🗑️  Post ${postId} marked as deleted`);
+          }
           return null;
         }
       } else if (existingPost && existingPost.deleted) {
-        console.log(`⏭️  Skipping post ${postId} - already deleted`);
+        if (process.env.SHOW_LOGS) {
+          console.log(`⏭️  Skipping post ${postId} - already deleted`);
+        }
         return postId;
       }
 
@@ -199,13 +207,17 @@ export class PostImportService {
                 forceDownloadImagesDays,
               );
               if (shouldForceDownload) {
-                console.log(
-                  `Post ${postData.id} is within last ${forceDownloadImagesDays} days - forcing image download`,
-                );
+                if (process.env.SHOW_LOGS) {
+                  console.log(
+                    `Post ${postData.id} is within last ${forceDownloadImagesDays} days - forcing image download`,
+                  );
+                }
               } else {
-                console.log(
-                  `Post ${postData.id} is older than ${forceDownloadImagesDays} days - skipping forced download`,
-                );
+                if (process.env.SHOW_LOGS) {
+                  console.log(
+                    `Post ${postData.id} is older than ${forceDownloadImagesDays} days - skipping forced download`,
+                  );
+                }
               }
             }
 
@@ -218,9 +230,11 @@ export class PostImportService {
               );
             // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
             postData.sidecarMedias = result as any;
-            console.log(
-              `   📸 Downloaded ${imageUrls.length} images for post ${postData.id}${shouldForceDownload ? ' (forced)' : ''}`,
-            );
+            if (process.env.SHOW_LOGS) {
+              console.log(
+                `   📸 Downloaded ${imageUrls.length} images for post ${postData.id}${shouldForceDownload ? ' (forced)' : ''}`,
+              );
+            }
           }
         } catch (error) {
           console.error(
@@ -267,10 +281,11 @@ export class PostImportService {
           revalidate: cleanedCaption !== existingPost?.cleanedCaption,
         },
       });
-
-      console.log(
-        `✅ ${isNewPost ? 'Created new' : 'Updated'} post ${postId} | vendor: ${vendorId} | origin: ${postData.origin || 'N/A'} | sold: ${sold} | customsPaid: ${customsPaid}`,
-      );
+      if (process.env.SHOW_LOGS) {
+        console.log(
+          `✅ ${isNewPost ? 'Created new' : 'Updated'} post ${postId} | vendor: ${vendorId} | origin: ${postData.origin || 'N/A'} | sold: ${sold} | customsPaid: ${customsPaid}`,
+        );
+      }
 
       // Now create/link car_detail AFTER post exists
       // For existing posts (Instagram or Encar), preserve car_detail - assume user data is complete
@@ -291,15 +306,21 @@ export class PostImportService {
         let carDetailsFromAI: CarDetailFromAI | null = null;
 
         if (useOpenAI && cleanedCaption) {
-          console.log(
-            `   🤖 Generating car details with OpenAI for post ${postId}`,
-          );
+          if (process.env.SHOW_LOGS) {
+            console.log(
+              `   🤖 Generating car details with OpenAI for post ${postId}`,
+            );
+          }
           carDetailsFromAI =
             await this.openaiService.generateCarDetails(cleanedCaption);
         }
 
         if (carDetailsFromAI && Object.keys(carDetailsFromAI).length > 0) {
-          console.log(`   ✨ OpenAI generated car details for post ${postId}`);
+          if (process.env.SHOW_LOGS) {
+            console.log(
+              `   ✨ OpenAI generated car details for post ${postId}`,
+            );
+          }
           // Create car_detail from AI-generated data
           // Convert AI format to cardDetails format
           const aiAsCardDetails: ImportPostData['cardDetails'] = {
@@ -324,12 +345,19 @@ export class PostImportService {
           );
         } else {
           if (useOpenAI) {
-            console.log(
-              `   ⚠️  OpenAI did not generate car details for post ${postId} - creating empty`,
-            );
+            if (process.env.SHOW_LOGS) {
+              console.log(
+                `   ⚠️  OpenAI did not generate car details for post ${postId} - creating empty`,
+              );
+            }
           }
           // Create empty car_detail
-          carDetailId = await this.createEmptyCarDetail(sold, customsPaid, now, postId);
+          carDetailId = await this.createEmptyCarDetail(
+            sold,
+            customsPaid,
+            now,
+            postId,
+          );
         }
       } else if (postData.cardDetails && isNewPost) {
         // Other sources with car details
@@ -348,12 +376,18 @@ export class PostImportService {
           where: { id: postId },
           data: { car_detail_id: carDetailId },
         });
-        console.log(`   ↳ Linked car_detail ${carDetailId} to post ${postId}`);
+        if (process.env.SHOW_LOGS) {
+          console.log(
+            `   ↳ Linked car_detail ${carDetailId} to post ${postId}`,
+          );
+        }
       }
 
       return post.id;
     } catch (e) {
-      console.error('❌ Failed to import post:', JSON.stringify(e));
+      if (process.env.SHOW_LOGS) {
+        console.error('❌ Failed to import post:', JSON.stringify(e));
+      }
       // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
       return Promise.reject(e);
     }
@@ -376,10 +410,11 @@ export class PostImportService {
         published: false,
       },
     });
-
-    console.log(
-      `   ↳ Created empty car_detail ${carDetail.id} | sold: ${sold} | customsPaid: ${customsPaid}`,
-    );
+    if (process.env.SHOW_LOGS) {
+      console.log(
+        `   ↳ Created empty car_detail ${carDetail.id} | sold: ${sold} | customsPaid: ${customsPaid}`,
+      );
+    }
 
     return carDetail.id;
   }
@@ -424,10 +459,11 @@ export class PostImportService {
         post_id: postId,
       },
     });
-
-    console.log(
-      `   ↳ Created car_detail ${carDetail.id} | make: ${carDetails.make || 'N/A'} | model: ${carDetails.model || 'N/A'} | published: ${carDetail.published} | sold: ${sold} | customsPaid: ${customsPaid}`,
-    );
+    if (process.env.SHOW_LOGS) {
+      console.log(
+        `   ↳ Created car_detail ${carDetail.id} | make: ${carDetails.make || 'N/A'} | model: ${carDetails.model || 'N/A'} | published: ${carDetail.published} | sold: ${sold} | customsPaid: ${customsPaid}`,
+      );
+    }
 
     return carDetail.id;
   }
@@ -489,7 +525,9 @@ export class PostImportService {
 
       // Delete the entire post directory
       await fs.rm(postDir, { recursive: true, force: true });
-      console.log(`Deleted images directory for post ${postId}: ${postDir}`);
+      if (process.env.SHOW_LOGS) {
+        console.log(`Deleted images directory for post ${postId}: ${postDir}`);
+      }
     } catch (error) {
       // Directory doesn't exist or error deleting - log and continue
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {

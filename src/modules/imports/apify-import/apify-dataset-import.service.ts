@@ -48,7 +48,9 @@ export class ApifyDatasetImportService {
     forceDownloadImages = false,
     forceDownloadImagesDays?: number,
   ) {
-    console.log('[ApifyImport] starting import from dataset URL');
+    if (process.env.SHOW_LOGS) {
+      console.log('[ApifyImport] starting import from dataset URL');
+    }
 
     // 1) Fetch dataset items (JSON array)
     const resp = await fetch(this.apifyDatasetUrl, {
@@ -86,7 +88,9 @@ export class ApifyDatasetImportService {
 
           // Skip posts older than 3 months
           if (!isWithinThreeMonths(postData.createdTime)) {
-            console.log(`Skipping post ${postData.id} - older than 3 months`);
+            if (process.env.SHOW_LOGS) {
+              console.log(`Skipping post ${postData.id} - older than 3 months`);
+            }
             return 'skipped:old';
           }
 
@@ -108,9 +112,11 @@ export class ApifyDatasetImportService {
             const soldStatus = isSold(cleanedCaption);
 
             if (soldStatus) {
-              console.log(
-                `Skipping new sold post ${postData.id} - caption indicates sold`,
-              );
+              if (process.env.SHOW_LOGS) {
+                console.log(
+                  `Skipping new sold post ${postData.id} - caption indicates sold`,
+                );
+              }
               return 'skipped:sold';
             }
           }
@@ -135,11 +141,13 @@ export class ApifyDatasetImportService {
 
       this.totalQueuedForSave += this.batch.length;
       this.batch = [];
-      console.log(
-        '[ApifyImport] flushed batch, totalSeen=%d totalQueuedForSave=%d',
-        idsSeen.size,
-        this.totalQueuedForSave,
-      );
+      if (process.env.SHOW_LOGS) {
+        console.log(
+          '[ApifyImport] flushed batch, totalSeen=%d totalQueuedForSave=%d',
+          idsSeen.size,
+          this.totalQueuedForSave,
+        );
+      }
       return results;
     };
 
@@ -156,10 +164,11 @@ export class ApifyDatasetImportService {
     }
 
     await flush();
-
-    console.log(
-      `[ApifyImport] done. totalSeen=${idsSeen.size} totalSaved=${this.totalQueuedForSave}`,
-    );
+    if (process.env.SHOW_LOGS) {
+      console.log(
+        `[ApifyImport] done. totalSeen=${idsSeen.size} totalSaved=${this.totalQueuedForSave}`,
+      );
+    }
   }
 
   private mapInstagramPost(post: ApifyPost): ImportPostData {
@@ -180,9 +189,11 @@ export class ApifyDatasetImportService {
       // Fallback: use current time if no timestamp available
       // This ensures the post is not filtered out by date checks
       createdTimeStr = Math.floor(Date.now() / 1000).toString();
-      console.warn(
-        `Post ${post.pk} has no timestamp field (date/taken_at) - using current time`,
-      );
+      if (process.env.SHOW_LOGS) {
+        console.warn(
+          `Post ${post.pk} has no timestamp field (date/taken_at) - using current time`,
+        );
+      }
     }
 
     // Create properly typed import data
