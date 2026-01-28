@@ -282,7 +282,7 @@ export class PostImportService {
         },
       });
 
-      if (process.env.SHOW_LOGS) {
+      if (process.env.SHOW_LOGS || true) {
         console.log(
           `======================================================================================`,
         );
