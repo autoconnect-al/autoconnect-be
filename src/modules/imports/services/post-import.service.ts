@@ -281,6 +281,22 @@ export class PostImportService {
           revalidate: cleanedCaption !== existingPost?.cleanedCaption,
         },
       });
+
+      if (process.env.SHOW_LOGS) {
+        console.log(
+          `======================================================================================`,
+        );
+        console.log(
+          `   📝 Post should be revalidated: ${post.revalidate}. New cleaned caption differs from existing.`,
+        );
+        console.log(`New caption: ${cleanedCaption}`);
+        console.log(
+          `Existing caption: ${existingPost?.cleanedCaption || 'N/A'}`,
+        );
+        console.log(
+          `======================================================================================`,
+        );
+      }
       if (process.env.SHOW_LOGS) {
         console.log(
           `✅ ${isNewPost ? 'Created new' : 'Updated'} post ${postId} | vendor: ${vendorId} | origin: ${postData.origin || 'N/A'} | sold: ${sold} | customsPaid: ${customsPaid}`,

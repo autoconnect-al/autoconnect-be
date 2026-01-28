@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import sharp from 'sharp';
+import * as process from 'node:process';
 
 export interface ImageVariants {
   imageStandardResolutionUrl: string; // Path to main image (WebP, good quality)
@@ -60,9 +61,11 @@ export class ImageDownloadService {
         ]);
 
         if (filesExist) {
-          console.log(
-            `Images already exist for ${imageIdStr}, skipping download`,
-          );
+          if (process.env.SHOW_LOGS) {
+            console.log(
+              `Images already exist for ${imageIdStr}, skipping download`,
+            );
+          }
           return {
             imageStandardResolutionUrl: mainPath.replace(this.baseProdPath, ''),
             imageThumbnailUrl: thumbnailPath.replace(this.baseProdPath, ''),
@@ -70,7 +73,9 @@ export class ImageDownloadService {
           };
         }
       } else {
-        console.log(`Force downloading images for ${imageIdStr}`);
+        if (process.env.SHOW_LOGS) {
+          console.log(`Force downloading images for ${imageIdStr}`);
+        }
       }
 
       // Download the image
@@ -112,7 +117,9 @@ export class ImageDownloadService {
           metadata: metadataPath.replace(this.baseProdPath, ''),
         };
       } catch (e) {
-        console.warn('Sharp processing failed, using fallback:', e);
+        if (process.env.SHOW_LOGS) {
+          console.warn('Sharp processing failed, using fallback:', e);
+        }
         return this.saveFallbackVariants(buffer, uploadDir, imageId.toString());
       }
     } catch (error) {
@@ -163,9 +170,11 @@ export class ImageDownloadService {
       fs.writeFile(metadataPath, buffer),
     ]);
 
-    console.warn(
-      'Sharp not available - images saved without processing. Install sharp for proper image optimization.',
-    );
+    if (process.env.SHOW_LOGS) {
+      console.warn(
+        'Sharp not available - images saved without processing. Install sharp for proper image optimization.',
+      );
+    }
 
     return {
       imageStandardResolutionUrl: mainPath.replace(this.baseProdPath, ''),
