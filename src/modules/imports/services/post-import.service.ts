@@ -466,7 +466,7 @@ export class PostImportService {
 
   private async createEmptyCarDetail(
     sold: boolean,
-    customsPaid: boolean,
+    customsPaid: boolean | null,
     now: Date,
     postId: bigint,
   ): Promise<bigint> {
@@ -493,7 +493,7 @@ export class PostImportService {
   private async createCarDetail(
     carDetails: ImportPostData['cardDetails'],
     sold: boolean,
-    customsPaid: boolean,
+    customsPaid: boolean | null,
     now: Date,
     postId: bigint,
   ): Promise<bigint> {

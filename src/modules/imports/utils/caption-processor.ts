@@ -103,29 +103,54 @@ export function isSold(cleanedCaption: string | null | undefined): boolean {
 
 /**
  * Checks if customs have been paid based on keywords in cleanedCaption
- * Keywords indicating customs paid: "pa dogane", "pa letra", "deri ne durres", "deri ne port"
- * And variations like "te paguar", "blerje", etc.
+ * First checks for terms indicating customs are paid.
+ * Then checks for terms indicating customs are NOT paid.
+ * If customs paid terms are found, returns true.
+ * If customs not paid terms are found, returns false.
+ * If neither are found, returns false (unknown status).
  * @param cleanedCaption - Cleaned caption text
  * @returns true if post indicates customs have been paid, false otherwise
  */
 export function isCustomsPaid(
   cleanedCaption: string | null | undefined,
-): boolean {
+): boolean | null {
   if (!cleanedCaption) return false;
 
   const lowerCaption = cleanedCaption.toLowerCase();
 
-  // Keywords that indicate customs have been paid or are not required
-  const customsPaidKeywords = [
-    'paguar dogane', // customs paid
-    'dogane te paguar', // customs are paid
-    'dogana kaluar', // customs passed
-    'dogane lire', // free customs
-    'pa pezullim', // without suspension
-    'importue', // imported (implies customs cleared)
-    'blerje direkte', // direct purchase (customs cleared)
-    'dogane paguara', // customs paid
+  // Terms indicating customs have been paid
+  const termsForCustomsPaid = [
+    'me dogane',
+    'me dogan',
+    'me doganë',
+    'doganë të paguar',
+    'dogane te paguar',
+    'dogana e paguar',
+    'dogana paguar',
+    'letrat e paguara',
+    'letrat te paguara',
+    'letrat të paguara',
+    'gati per targa',
+    'dogan paguar',
   ];
 
-  return customsPaidKeywords.some((keyword) => lowerCaption.includes(keyword));
+  // Terms indicating customs have NOT been paid
+  const termsForCustomsNotPaid = ['pa dogane', 'pa dogan', 'pa doganë'];
+
+  // Check for customs paid terms first
+  for (const term of termsForCustomsPaid) {
+    if (lowerCaption.includes(term)) {
+      return true;
+    }
+  }
+
+  // Check for customs not paid terms
+  for (const term of termsForCustomsNotPaid) {
+    if (lowerCaption.includes(term)) {
+      return false;
+    }
+  }
+
+  // If no terms found, return false (unknown status)
+  return null;
 }
