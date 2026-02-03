@@ -22,7 +22,6 @@ type ApifyPost = {
   }>;
   product_type?: string;
   date?: string;
-  taken_at?: number;
   user?: { pk?: number };
   [key: string]: unknown;
 };

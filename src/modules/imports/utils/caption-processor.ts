@@ -117,20 +117,13 @@ export function isCustomsPaid(
 
   // Keywords that indicate customs have been paid or are not required
   const customsPaidKeywords = [
-    'pa dogane', // without customs
-    'pa letra', // without letters/documents
-    'deri ne durres', // delivered in Durrës (customs cleared)
-    'deri ne port', // delivered at port (customs cleared)
     'paguar dogane', // customs paid
     'dogane te paguar', // customs are paid
-    'nuk ka dogane', // no customs
-    'bie dogane', // customs fallen/passed
     'dogana kaluar', // customs passed
     'dogane lire', // free customs
     'pa pezullim', // without suspension
     'importue', // imported (implies customs cleared)
     'blerje direkte', // direct purchase (customs cleared)
-    'deri shtepi', // delivered home (customs cleared)
     'dogane paguara', // customs paid
   ];
 

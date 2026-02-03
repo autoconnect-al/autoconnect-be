@@ -162,6 +162,61 @@ export class PostImportService {
       const sold = isSold(cleanedCaption);
       const customsPaid = isCustomsPaid(cleanedCaption);
 
+      // If post is sold, mark it as sold and delete images immediately without any other updates
+      if (sold) {
+        if (process.env.SHOW_LOGS) {
+          console.log(
+            `🔴 Post ${postId} is marked as SOLD - marking and cleaning up images`,
+          );
+        }
+
+        // Update post status to sold
+        await this.prisma.post.upsert({
+          where: { id: postId },
+          create: {
+            id: postId,
+            dateCreated: now,
+            dateUpdated: now,
+            caption: encodedCaption,
+            cleanedCaption,
+            createdTime: postData.createdTime || now.toISOString(),
+            sidecarMedias: '[]',
+            vendor_id: BigInt(vendorId),
+            live: false,
+            likesCount: 0,
+            viewsCount: 0,
+            car_detail_id: null,
+            origin: postData.origin || null,
+            status: 'ARCHIVED',
+            revalidate: false,
+          },
+          update: {
+            status: 'ARCHIVED',
+            dateUpdated: now,
+          },
+        });
+
+        // Update car_detail if it exists to mark as sold
+        const existingCarDetail = await this.prisma.car_detail.findFirst({
+          where: { post_id: postId },
+        });
+        if (existingCarDetail) {
+          await this.prisma.car_detail.update({
+            where: { id: existingCarDetail.id },
+            data: { sold: true, dateUpdated: now },
+          });
+        }
+
+        // Delete post images
+        await this.deletePostImages(postId, BigInt(vendorId));
+
+        if (process.env.SHOW_LOGS) {
+          console.log(`✅ Post ${postId} marked as SOLD and images cleaned up`);
+        }
+
+        return postId;
+      }
+
       // Check if vendor exists, if not create it
       await this.ensureVendorExists(BigInt(vendorId));
 
