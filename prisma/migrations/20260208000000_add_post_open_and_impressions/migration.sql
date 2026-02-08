@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE `post`
+  ADD COLUMN `postOpen` INT NOT NULL DEFAULT 0,
+  ADD COLUMN `impressions` INT NOT NULL DEFAULT 0;

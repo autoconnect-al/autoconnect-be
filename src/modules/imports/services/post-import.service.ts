@@ -836,4 +836,32 @@ export class PostImportService {
   private resultIsEmpty(result: ParsedResult): boolean {
     return (result.model ?? null) === null && (result.make ?? null) === null;
   }
+
+  /**
+   * Increment a post metric (postOpen or impressions) asynchronously
+   * @param postId - The ID of the post to increment
+   * @param metric - The metric to increment ('postOpen' or 'impressions')
+   * @throws Error if metric is invalid
+   */
+  async incrementPostMetric(
+    postId: bigint,
+    metric: 'postOpen' | 'impressions',
+  ): Promise<void> {
+    if (!['postOpen', 'impressions'].includes(metric)) {
+      throw new Error(
+        `Invalid metric: ${metric}. Must be 'postOpen' or 'impressions'.`,
+      );
+    }
+
+    const updateData: Prisma.postUpdateInput = {
+      [metric]: {
+        increment: 1,
+      },
+    };
+
+    await this.prisma.post.update({
+      where: { id: postId },
+      data: updateData,
+    });
+  }
 }

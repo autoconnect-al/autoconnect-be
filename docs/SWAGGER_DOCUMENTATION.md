@@ -357,6 +357,30 @@ Example:
 
 This returns items 51-100 of the search results.
 
+## Post Model Fields
+
+The Post model now includes two new engagement tracking fields:
+
+### New Fields
+- **postOpen** (Integer, default: 0)
+  - Tracks the number of times a post has been opened/viewed
+  - Incremented via the `/api/v1/posts/:postId/increment?metric=postOpen` endpoint
+
+- **impressions** (Integer, default: 0)
+  - Tracks the number of impressions/views a post has received
+  - Incremented via the `/api/v1/posts/:postId/increment?metric=impressions` endpoint
+
+### Existing Fields
+- **id**: Unique identifier (BigInt)
+- **dateCreated**: Creation timestamp
+- **dateUpdated**: Last update timestamp
+- **caption**: Post caption/description
+- **likesCount**: Number of likes
+- **viewsCount**: Number of views
+- **vendor_id**: Associated vendor ID
+- **car_detail_id**: Associated car detail ID
+- And more...
+
 ## File Upload Guidelines
 
 ### Vendor Profile Picture

@@ -9,10 +9,11 @@ import { PostImportService } from './services/post-import.service';
 import { OpenAIService } from './services/openai.service';
 import { ImageDownloadService } from './services/image-download.service';
 import { DatabaseModule } from '../../database/database.module';
+import { PostController } from './post.controller';
 
 @Module({
   imports: [DatabaseModule],
-  controllers: [ApifyController, EncarController],
+  controllers: [ApifyController, EncarController, PostController],
   providers: [
     ApifyDatasetImportService,
     RemotePostSaverService,

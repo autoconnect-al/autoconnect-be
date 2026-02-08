@@ -112,3 +112,63 @@ describe('PostImportService.importPost', () => {
     });
   });
 });
+
+describe('PostImportService.incrementPostMetric', () => {
+  let service: PostImportService;
+  let prisma: MockPrismaService;
+
+  beforeEach(() => {
+    prisma = new MockPrismaService();
+    service = new PostImportService(
+      prisma as unknown as PrismaService,
+      new MockOpenAIService() as any,
+      new MockImageDownloadService() as any,
+    );
+  });
+
+  it('should increment postOpen metric', async () => {
+    const postId = 123n;
+    prisma.post.update.mockResolvedValue({
+      id: postId,
+      postOpen: 1,
+    });
+
+    await service.incrementPostMetric(postId, 'postOpen');
+
+    expect(prisma.post.update).toHaveBeenCalledWith({
+      where: { id: postId },
+      data: {
+        postOpen: {
+          increment: 1,
+        },
+      },
+    });
+  });
+
+  it('should increment impressions metric', async () => {
+    const postId = 456n;
+    prisma.post.update.mockResolvedValue({
+      id: postId,
+      impressions: 5,
+    });
+
+    await service.incrementPostMetric(postId, 'impressions');
+
+    expect(prisma.post.update).toHaveBeenCalledWith({
+      where: { id: postId },
+      data: {
+        impressions: {
+          increment: 1,
+        },
+      },
+    });
+  });
+
+  it('should throw error for invalid metric', async () => {
+    const postId = 123n;
+
+    await expect(
+      service.incrementPostMetric(postId, 'invalid' as any),
+    ).rejects.toThrow('Invalid metric: invalid');
+  });
+});
