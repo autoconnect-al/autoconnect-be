@@ -9,6 +9,14 @@ async function bootstrap() {
   // Critical: disable Nest’s built-in bodyParser
   const app = await NestFactory.create(AppModule, { bodyParser: false });
 
+  // Enable CORS for all routes
+  app.enableCors({
+    origin: true, // Allow all origins
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    credentials: true,
+    maxAge: 3600,
+  });
+
   // Re-enable JSON parsing for "normal" routes.
   // IMPORTANT: do not apply this to /imports/apify (our streaming endpoint).
   app.use((req: Request, res: Response, next) => {
