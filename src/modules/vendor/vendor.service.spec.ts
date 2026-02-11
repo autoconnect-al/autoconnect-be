@@ -245,4 +245,33 @@ describe('VendorService', () => {
       });
     });
   });
+
+  describe('incrementVendorMetric', () => {
+    it('should increment vendor_page_impression metric', async () => {
+      const vendorId = 123n;
+      mockPrismaService.vendor.update.mockResolvedValue({
+        id: vendorId,
+        vendor_page_impression: 1,
+      });
+
+      await service.incrementVendorMetric(vendorId, 'vendor_page_impression');
+
+      expect(mockPrismaService.vendor.update).toHaveBeenCalledWith({
+        where: { id: vendorId },
+        data: {
+          vendor_page_impression: {
+            increment: 1,
+          },
+        },
+      });
+    });
+
+    it('should throw error for invalid metric', async () => {
+      const vendorId = 123n;
+
+      await expect(
+        service.incrementVendorMetric(vendorId, 'invalid' as any),
+      ).rejects.toThrow('Invalid metric: invalid');
+    });
+  });
 });

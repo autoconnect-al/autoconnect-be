@@ -838,18 +838,18 @@ export class PostImportService {
   }
 
   /**
-   * Increment a post metric (postOpen or impressions) asynchronously
+   * Increment a post metric (postOpen, impressions, reach, clicks, or contact) asynchronously
    * @param postId - The ID of the post to increment
-   * @param metric - The metric to increment ('postOpen' or 'impressions')
+   * @param metric - The metric to increment ('postOpen', 'impressions', 'reach', 'clicks', or 'contact')
    * @throws Error if metric is invalid
    */
   async incrementPostMetric(
     postId: bigint,
-    metric: 'postOpen' | 'impressions',
+    metric: 'postOpen' | 'impressions' | 'reach' | 'clicks' | 'contact',
   ): Promise<void> {
-    if (!['postOpen', 'impressions'].includes(metric)) {
+    if (!['postOpen', 'impressions', 'reach', 'clicks', 'contact'].includes(metric)) {
       throw new Error(
-        `Invalid metric: ${metric}. Must be 'postOpen' or 'impressions'.`,
+        `Invalid metric: ${metric}. Must be 'postOpen', 'impressions', 'reach', 'clicks', or 'contact'.`,
       );
     }
 

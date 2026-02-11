@@ -24,7 +24,7 @@ export class PostController {
   ) {}
 
   /**
-   * Increment a post metric (postOpen or impressions)
+   * Increment a post metric (postOpen, impressions, reach, clicks, or contact)
    * Returns immediately and processes the increment asynchronously
    * High rate limit: 1000 requests per 60 seconds per IP
    */
@@ -33,7 +33,7 @@ export class PostController {
   @ApiOperation({
     summary: 'Increment post metric',
     description:
-      'Increments a post metric (postOpen or impressions). Returns immediately and processes asynchronously.',
+      'Increments a post metric (postOpen, impressions, reach, clicks, or contact). Returns immediately and processes asynchronously.',
   })
   @ApiParam({
     name: 'postId',
@@ -43,7 +43,7 @@ export class PostController {
   @ApiQuery({
     name: 'metric',
     type: 'string',
-    enum: ['postOpen', 'impressions'],
+    enum: ['postOpen', 'impressions', 'reach', 'clicks', 'contact'],
     description: 'The metric to increment',
     required: true,
   })
@@ -74,9 +74,13 @@ export class PostController {
     @Res() res: Response,
   ) {
     // Validate metric
-    if (!['postOpen', 'impressions'].includes(metric)) {
+    if (
+      !['postOpen', 'impressions', 'reach', 'clicks', 'contact'].includes(
+        metric,
+      )
+    ) {
       throw new BadRequestException(
-        `Invalid metric: ${metric}. Must be 'postOpen' or 'impressions'.`,
+        `Invalid metric: ${metric}. Must be 'postOpen', 'impressions', 'reach', 'clicks', or 'contact'.`,
       );
     }
 
@@ -84,6 +88,7 @@ export class PostController {
     let parsedPostId: bigint;
     try {
       parsedPostId = BigInt(postId);
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
       throw new BadRequestException('Invalid post ID format');
     }
@@ -92,6 +97,7 @@ export class PostController {
     res.status(HttpStatus.ACCEPTED).json({ ok: true, status: 'queued' });
 
     // Process increment asynchronously
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
     setImmediate(async () => {
       try {
         // Verify post exists
@@ -108,7 +114,7 @@ export class PostController {
         // Increment the metric
         await this.postImportService.incrementPostMetric(
           parsedPostId,
-          metric as 'postOpen' | 'impressions',
+          metric as 'postOpen' | 'impressions' | 'reach' | 'clicks' | 'contact',
         );
 
         console.log(

@@ -1,9 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { VendorController } from './vendor.controller';
 import { VendorService } from './vendor.service';
+import { PrismaService } from '../../database/prisma.service';
+import { BadRequestException } from '@nestjs/common';
 
 describe('VendorController', () => {
   let controller: VendorController;
+  let vendorService: VendorService;
+  let prismaService: PrismaService;
 
   const mockVendorService = {
     create: jest.fn(),
@@ -11,6 +15,13 @@ describe('VendorController', () => {
     findOne: jest.fn(),
     update: jest.fn(),
     remove: jest.fn(),
+    incrementVendorMetric: jest.fn(),
+  };
+
+  const mockPrismaService = {
+    vendor: {
+      findUnique: jest.fn(),
+    },
   };
 
   beforeEach(async () => {
@@ -21,10 +32,16 @@ describe('VendorController', () => {
           provide: VendorService,
           useValue: mockVendorService,
         },
+        {
+          provide: PrismaService,
+          useValue: mockPrismaService,
+        },
       ],
     }).compile();
 
     controller = module.get<VendorController>(VendorController);
+    vendorService = module.get<VendorService>(VendorService);
+    prismaService = module.get<PrismaService>(PrismaService);
   });
 
   afterEach(() => {
@@ -140,6 +157,39 @@ describe('VendorController', () => {
 
       expect(result).toEqual(mockResult);
       expect(mockVendorService.remove).toHaveBeenCalledWith(BigInt(1));
+    });
+  });
+
+  describe('incrementVendorMetric', () => {
+    it('should throw BadRequestException for invalid metric', async () => {
+      const response = {} as any;
+      await expect(
+        controller.incrementVendorMetric('123', 'invalid', response),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException for invalid vendor ID', async () => {
+      const response = {} as any;
+      await expect(
+        controller.incrementVendorMetric('not-a-number', 'vendor_page_impression', response),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should accept vendor_page_impression metric', async () => {
+      const mockResponse = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn(),
+      } as any;
+      (mockPrismaService.vendor.findUnique as jest.Mock).mockResolvedValue({
+        id: 123n,
+      });
+      (mockVendorService.incrementVendorMetric as jest.Mock).mockResolvedValue(
+        undefined,
+      );
+
+      await controller.incrementVendorMetric('123', 'vendor_page_impression', mockResponse);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(202);
     });
   });
 });

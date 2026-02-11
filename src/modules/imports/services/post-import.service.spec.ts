@@ -164,6 +164,63 @@ describe('PostImportService.incrementPostMetric', () => {
     });
   });
 
+  it('should increment reach metric', async () => {
+    const postId = 789n;
+    prisma.post.update.mockResolvedValue({
+      id: postId,
+      reach: 10,
+    });
+
+    await service.incrementPostMetric(postId, 'reach');
+
+    expect(prisma.post.update).toHaveBeenCalledWith({
+      where: { id: postId },
+      data: {
+        reach: {
+          increment: 1,
+        },
+      },
+    });
+  });
+
+  it('should increment clicks metric', async () => {
+    const postId = 111n;
+    prisma.post.update.mockResolvedValue({
+      id: postId,
+      clicks: 3,
+    });
+
+    await service.incrementPostMetric(postId, 'clicks');
+
+    expect(prisma.post.update).toHaveBeenCalledWith({
+      where: { id: postId },
+      data: {
+        clicks: {
+          increment: 1,
+        },
+      },
+    });
+  });
+
+  it('should increment contact metric', async () => {
+    const postId = 222n;
+    prisma.post.update.mockResolvedValue({
+      id: postId,
+      contact: 2,
+    });
+
+    await service.incrementPostMetric(postId, 'contact');
+
+    expect(prisma.post.update).toHaveBeenCalledWith({
+      where: { id: postId },
+      data: {
+        contact: {
+          increment: 1,
+        },
+      },
+    });
+  });
+
   it('should throw error for invalid metric', async () => {
     const postId = 123n;
 

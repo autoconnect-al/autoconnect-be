@@ -208,7 +208,7 @@ export class VendorService {
 
       // Extract profile picture URL
       // Note: Instagram's API structure may vary, this is a common pattern
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access,@typescript-eslint/no-unsafe-assignment
       const profilePicUrl = data?.graphql?.user?.profile_pic_url_hd;
 
       if (!profilePicUrl) {
@@ -242,5 +242,32 @@ export class VendorService {
         message: `Failed to sync from Instagram: ${error instanceof Error ? error.message : 'Unknown error'}`,
       };
     }
+  }
+
+  /**
+   * Increment a vendor metric (vendor_page_impression) asynchronously
+   * @param vendorId - The ID of the vendor to increment
+   * @param metric - The metric to increment ('vendor_page_impression')
+   * @throws Error if metric is invalid
+   */
+  async incrementVendorMetric(
+    vendorId: bigint,
+    metric: 'vendor_page_impression',
+  ): Promise<void> {
+    if (metric !== 'vendor_page_impression') {
+      throw new Error(
+        // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
+        `Invalid metric: ${metric}. Must be 'vendor_page_impression'.`,
+      );
+    }
+
+    await this.prisma.vendor.update({
+      where: { id: vendorId },
+      data: {
+        vendor_page_impression: {
+          increment: 1,
+        },
+      },
+    });
   }
 }

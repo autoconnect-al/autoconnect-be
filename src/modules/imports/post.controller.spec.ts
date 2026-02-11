@@ -50,4 +50,91 @@ describe('PostController - incrementPostMetric', () => {
       controller.incrementPostMetric('not-a-number', 'postOpen', response),
     ).rejects.toThrow(BadRequestException);
   });
+
+  describe('supported metrics', () => {
+    it('should accept postOpen metric', async () => {
+      const mockResponse = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn(),
+      } as any;
+      (prismaService.post.findUnique as jest.Mock).mockResolvedValue({
+        id: 123n,
+      });
+      (postImportService.incrementPostMetric as jest.Mock).mockResolvedValue(
+        undefined,
+      );
+
+      await controller.incrementPostMetric('123', 'postOpen', mockResponse);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(202);
+    });
+
+    it('should accept impressions metric', async () => {
+      const mockResponse = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn(),
+      } as any;
+      (prismaService.post.findUnique as jest.Mock).mockResolvedValue({
+        id: 456n,
+      });
+      (postImportService.incrementPostMetric as jest.Mock).mockResolvedValue(
+        undefined,
+      );
+
+      await controller.incrementPostMetric('456', 'impressions', mockResponse);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(202);
+    });
+
+    it('should accept reach metric', async () => {
+      const mockResponse = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn(),
+      } as any;
+      (prismaService.post.findUnique as jest.Mock).mockResolvedValue({
+        id: 789n,
+      });
+      (postImportService.incrementPostMetric as jest.Mock).mockResolvedValue(
+        undefined,
+      );
+
+      await controller.incrementPostMetric('789', 'reach', mockResponse);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(202);
+    });
+
+    it('should accept clicks metric', async () => {
+      const mockResponse = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn(),
+      } as any;
+      (prismaService.post.findUnique as jest.Mock).mockResolvedValue({
+        id: 111n,
+      });
+      (postImportService.incrementPostMetric as jest.Mock).mockResolvedValue(
+        undefined,
+      );
+
+      await controller.incrementPostMetric('111', 'clicks', mockResponse);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(202);
+    });
+
+    it('should accept contact metric', async () => {
+      const mockResponse = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn(),
+      } as any;
+      (prismaService.post.findUnique as jest.Mock).mockResolvedValue({
+        id: 222n,
+      });
+      (postImportService.incrementPostMetric as jest.Mock).mockResolvedValue(
+        undefined,
+      );
+
+      await controller.incrementPostMetric('222', 'contact', mockResponse);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(202);
+    });
+  });
 });
