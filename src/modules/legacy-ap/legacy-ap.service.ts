@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
-import { legacyError, legacySuccess, type LegacyResponse } from '../../common/legacy-response';
+import {
+  legacyError,
+  legacySuccess,
+  type LegacyResponse,
+} from '../../common/legacy-response';
 import { LocalPostOrderService } from '../legacy-group-b/local-post-order.service';
 import { LocalUserVendorService } from '../legacy-group-a/local-user-vendor.service';
 import { LegacyDataService } from '../legacy-data/legacy-data.service';
@@ -47,7 +51,10 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
   async loginWithCode(code: string): Promise<LegacyResponse> {
     const expected = process.env.CODE ?? process.env.AP_ADMIN_CODE ?? '';
     if (!expected || code !== expected) {
-      return legacyError('Could not login user. Please check your credentials.', 500);
+      return legacyError(
+        'Could not login user. Please check your credentials.',
+        500,
+      );
     }
 
     const jwt = await this.jwtService.signAsync({
@@ -71,7 +78,9 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
   }
 
   async getRole(id: string) {
-    const role = await this.prisma.role.findUnique({ where: { id: Number(id) } });
+    const role = await this.prisma.role.findUnique({
+      where: { id: Number(id) },
+    });
     if (!role || role.deleted) {
       return legacyError(`No user could be found for id: ${id}`);
     }
@@ -106,7 +115,8 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
     if (!role?.name) return legacyError('Role could not be added');
 
     const roleId = Number(id);
-    if (!Number.isInteger(roleId)) return legacyError('Role could not be added');
+    if (!Number.isInteger(roleId))
+      return legacyError('Role could not be added');
 
     const existing = await this.prisma.role.findFirst({
       where: {
@@ -154,7 +164,9 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
   }
 
   async getUserById(id: string) {
-    const user = await this.prisma.user.findUnique({ where: { id: BigInt(id) } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: BigInt(id) },
+    });
     if (!user || user.deleted) {
       return legacyError(`No user could be found for id: ${id}`);
     }
@@ -261,7 +273,9 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
       const details = row.car_detail_car_detail_post_idTopost?.[0] ?? null;
       return this.normalizeBigInts({
         ...row,
-        caption: row.caption ? Buffer.from(row.caption, 'base64').toString('utf8') : row.caption,
+        caption: row.caption
+          ? Buffer.from(row.caption, 'base64').toString('utf8')
+          : row.caption,
         details,
       });
     });
@@ -305,7 +319,9 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
     });
 
     if (!latest) {
-      return legacyError('Could not load scrape status. Maybe no scraping has been started yet');
+      return legacyError(
+        'Could not load scrape status. Maybe no scraping has been started yet',
+      );
     }
 
     return legacySuccess({
@@ -404,7 +420,9 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
 
   async addVendor(id: string) {
     const vendorId = BigInt(id);
-    const existing = await this.prisma.vendor.findUnique({ where: { id: vendorId } });
+    const existing = await this.prisma.vendor.findUnique({
+      where: { id: vendorId },
+    });
     if (!existing) {
       await this.prisma.vendor.create({
         data: {
@@ -486,7 +504,9 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
 
   async toggleVendorDeleted(id: string) {
     const vendorId = BigInt(id);
-    const vendor = await this.prisma.vendor.findUnique({ where: { id: vendorId } });
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { id: vendorId },
+    });
     if (!vendor) return legacyError('Could not mark vendor for crawl next');
 
     const deleted = !vendor.deleted;
@@ -538,7 +558,8 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
   }
 
   async generatePrompt(length: number, mode: string) {
-    const safeLength = Number.isFinite(length) && length > 0 ? Math.trunc(length) : 3700;
+    const safeLength =
+      Number.isFinite(length) && length > 0 ? Math.trunc(length) : 3700;
     const modeNormalized = mode.toLowerCase();
 
     if (modeNormalized === 'variant') {
@@ -546,7 +567,10 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
       return prompt;
     }
 
-    const modeQueryMap: Record<string, { rows: PromptRow[]; prerequisite: string }> = {
+    const modeQueryMap: Record<
+      string,
+      { rows: PromptRow[]; prerequisite: string }
+    > = {
       general: {
         rows: await this.prisma.$queryRawUnsafe<PromptRow[]>(
           `
@@ -610,7 +634,8 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
           LIMIT 500
           `,
         ),
-        prerequisite: 'I would like you to fix mileage information using caption context.',
+        prerequisite:
+          'I would like you to fix mileage information using caption context.',
       },
       price: {
         rows: await this.prisma.$queryRawUnsafe<PromptRow[]>(
@@ -632,7 +657,8 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
           LIMIT 500
           `,
         ),
-        prerequisite: 'I would like you to fix price information using caption context.',
+        prerequisite:
+          'I would like you to fix price information using caption context.',
       },
       motorcycle: {
         rows: await this.prisma.$queryRawUnsafe<PromptRow[]>(
@@ -690,12 +716,19 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
       const details = row.car_detail_car_detail_post_idTopost?.[0] ?? null;
       return this.normalizeBigInts({
         ...row,
-        caption: row.caption ? Buffer.from(row.caption, 'base64').toString('utf8') : row.caption,
+        caption: row.caption
+          ? Buffer.from(row.caption, 'base64').toString('utf8')
+          : row.caption,
         details,
       });
     });
 
-    return legacySuccess(mapped, mapped.length ? 'Found manual draft posts' : 'No manual draft posts found');
+    return legacySuccess(
+      mapped,
+      mapped.length
+        ? 'Found manual draft posts'
+        : 'No manual draft posts found',
+    );
   }
 
   async importPromptResults(resultJson: string) {
@@ -737,25 +770,37 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
         data: {
           make: make ?? carDetail.make,
           model: model ?? carDetail.model,
-          variant: this.toSafeNullableString(result.variant) ?? carDetail.variant,
+          variant:
+            this.toSafeNullableString(result.variant) ?? carDetail.variant,
           registration:
-            this.toSafeNullableString(result.registration) ?? carDetail.registration,
+            this.toSafeNullableString(result.registration) ??
+            carDetail.registration,
           mileage: this.toNullableFloat(result.mileage) ?? carDetail.mileage,
           transmission:
-            this.toSafeNullableString(result.transmission) ?? carDetail.transmission,
-          fuelType: this.toSafeNullableString(result.fuelType) ?? carDetail.fuelType,
+            this.toSafeNullableString(result.transmission) ??
+            carDetail.transmission,
+          fuelType:
+            this.toSafeNullableString(result.fuelType) ?? carDetail.fuelType,
           engineSize:
-            this.toSafeNullableString(result.engineSize) ?? carDetail.engineSize,
+            this.toSafeNullableString(result.engineSize) ??
+            carDetail.engineSize,
           drivetrain:
-            this.toSafeNullableString(result.drivetrain) ?? carDetail.drivetrain,
+            this.toSafeNullableString(result.drivetrain) ??
+            carDetail.drivetrain,
           seats: this.toNullableInt(result.seats) ?? carDetail.seats,
           numberOfDoors:
             this.toNullableInt(result.numberOfDoors) ?? carDetail.numberOfDoors,
-          bodyType: this.toSafeNullableString(result.bodyType) ?? carDetail.bodyType,
+          bodyType:
+            this.toSafeNullableString(result.bodyType) ?? carDetail.bodyType,
           price: this.toNullableFloat(result.price) ?? carDetail.price,
           sold: this.booleanFrom(result.sold, carDetail.sold ?? false),
-          customsPaid: this.booleanFrom(result.customsPaid, carDetail.customsPaid ?? false),
-          contact: result.contact ? JSON.stringify(result.contact) : carDetail.contact,
+          customsPaid: this.booleanFrom(
+            result.customsPaid,
+            carDetail.customsPaid ?? false,
+          ),
+          contact: result.contact
+            ? JSON.stringify(result.contact)
+            : carDetail.contact,
           published: true,
           type: this.toSafeString(result.type) || carDetail.type,
           dateUpdated: new Date(),
@@ -1005,7 +1050,9 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
 
     const firstMake = this.toSafeString(problematicRows[0]?.make);
     const makeModels = firstMake
-      ? await this.prisma.$queryRawUnsafe<Array<{ Model: string | null; isVariant: boolean | number | null }>>(
+      ? await this.prisma.$queryRawUnsafe<
+          Array<{ Model: string | null; isVariant: boolean | number | null }>
+        >(
           'SELECT Model, isVariant FROM car_make_model WHERE Make = ? ORDER BY id ASC',
           firstMake,
         )
@@ -1133,7 +1180,9 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
     if (typeof value !== 'string') return null;
     try {
       const parsed = JSON.parse(value);
-      return parsed && typeof parsed === 'object' ? (parsed as AnyRecord) : null;
+      return parsed && typeof parsed === 'object'
+        ? (parsed as AnyRecord)
+        : null;
     } catch {
       return null;
     }
@@ -1196,7 +1245,9 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
     return Math.floor(Date.now() / 1000);
   }
 
-  private async getRoleMap(userIds: bigint[]): Promise<Map<string, Array<{ id: number; name: string }>>> {
+  private async getRoleMap(
+    userIds: bigint[],
+  ): Promise<Map<string, Array<{ id: number; name: string }>>> {
     const map = new Map<string, Array<{ id: number; name: string }>>();
     if (userIds.length === 0) return map;
 
@@ -1222,7 +1273,10 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
     return map;
   }
 
-  private mapUser(user: AnyRecord, roleMap: Map<string, Array<{ id: number; name: string }>>) {
+  private mapUser(
+    user: AnyRecord,
+    roleMap: Map<string, Array<{ id: number; name: string }>>,
+  ) {
     const id = String(user.id ?? '');
     return {
       id,

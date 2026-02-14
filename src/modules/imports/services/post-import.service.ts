@@ -849,7 +849,11 @@ export class PostImportService {
     postId: bigint,
     metric: 'postOpen' | 'impressions' | 'reach' | 'clicks' | 'contact',
   ): Promise<void> {
-    if (!['postOpen', 'impressions', 'reach', 'clicks', 'contact'].includes(metric)) {
+    if (
+      !['postOpen', 'impressions', 'reach', 'clicks', 'contact'].includes(
+        metric,
+      )
+    ) {
       throw new Error(
         `Invalid metric: ${metric}. Must be 'postOpen', 'impressions', 'reach', 'clicks', or 'contact'.`,
       );

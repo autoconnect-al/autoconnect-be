@@ -35,13 +35,17 @@ export class RoleManagementController {
   @Post('create-role')
   @HttpCode(200)
   async createRole(@Body() body: unknown) {
-    return this.handleLegacy(this.service.createRole(this.extractBodyKey(body, 'role')));
+    return this.handleLegacy(
+      this.service.createRole(this.extractBodyKey(body, 'role')),
+    );
   }
 
   @Post('update-role/:id')
   @HttpCode(200)
   async updateRole(@Param('id') id: string, @Body() body: unknown) {
-    return this.handleLegacy(this.service.updateRole(id, this.extractBodyKey(body, 'role')));
+    return this.handleLegacy(
+      this.service.updateRole(id, this.extractBodyKey(body, 'role')),
+    );
   }
 
   @Delete('delete-role/:id')
@@ -62,7 +66,9 @@ export class RoleManagementController {
     return raw[key] ?? raw;
   }
 
-  private async handleLegacy(promise: Promise<{ success: boolean; message: string; statusCode: string }>) {
+  private async handleLegacy(
+    promise: Promise<{ success: boolean; message: string; statusCode: string }>,
+  ) {
     const response = await promise;
     if (!response.success) {
       throw new HttpException(response, Number(response.statusCode) || 500);
@@ -90,7 +96,9 @@ export class UserManagementController {
   @Post('update-user/:id')
   @HttpCode(200)
   async updateUser(@Param('id') id: string, @Body() body: unknown) {
-    return this.handleLegacy(this.service.updateUser(id, (body as AnyRecord)?.user ?? body));
+    return this.handleLegacy(
+      this.service.updateUser(id, (body as AnyRecord)?.user ?? body),
+    );
   }
 
   @Delete('delete-user/:id')
@@ -111,7 +119,9 @@ export class UserManagementController {
     return this.service.getUserByUsername(username);
   }
 
-  private async handleLegacy(promise: Promise<{ success: boolean; message: string; statusCode: string }>) {
+  private async handleLegacy(
+    promise: Promise<{ success: boolean; message: string; statusCode: string }>,
+  ) {
     const response = await promise;
     if (!response.success) {
       throw new HttpException(response, Number(response.statusCode) || 500);
@@ -139,7 +149,9 @@ export class VendorAdminController {
     return this.handleLegacy(this.service.deleteVendorByAdmin(id));
   }
 
-  private async handleLegacy(promise: Promise<{ success: boolean; message: string; statusCode: string }>) {
+  private async handleLegacy(
+    promise: Promise<{ success: boolean; message: string; statusCode: string }>,
+  ) {
     const response = await promise;
     if (!response.success) {
       throw new HttpException(response, Number(response.statusCode) || 500);
@@ -177,7 +189,9 @@ export class PostToolingController {
 
   @Get('scrape-posts/create')
   createScrape(@Query('vendorAccountName') vendorAccountName?: string) {
-    return this.handleLegacy(this.service.createScrapeStatus(vendorAccountName));
+    return this.handleLegacy(
+      this.service.createScrapeStatus(vendorAccountName),
+    );
   }
 
   @Get('scrape-posts/details')
@@ -216,7 +230,9 @@ export class PostToolingController {
     return this.handleLegacy(this.service.autoRenewPosts());
   }
 
-  private async handleLegacy(promise: Promise<{ success: boolean; message: string; statusCode: string }>) {
+  private async handleLegacy(
+    promise: Promise<{ success: boolean; message: string; statusCode: string }>,
+  ) {
     const response = await promise;
     if (!response.success) {
       throw new HttpException(response, Number(response.statusCode) || 500);
@@ -250,7 +266,9 @@ export class VendorManagementController {
   @Post('edit/:id')
   @HttpCode(200)
   editVendor(@Param('id') id: string, @Body() body: unknown) {
-    return this.handleLegacy(this.service.editVendor(id, (body as AnyRecord)?.vendor ?? body));
+    return this.handleLegacy(
+      this.service.editVendor(id, (body as AnyRecord)?.vendor ?? body),
+    );
   }
 
   @Get('next-to-crawl')
@@ -268,7 +286,9 @@ export class VendorManagementController {
     return this.handleLegacy(this.service.toggleVendorDeleted(id));
   }
 
-  private async handleLegacy(promise: Promise<{ success: boolean; message: string; statusCode: string }>) {
+  private async handleLegacy(
+    promise: Promise<{ success: boolean; message: string; statusCode: string }>,
+  ) {
     const response = await promise;
     if (!response.success) {
       throw new HttpException(response, Number(response.statusCode) || 500);
@@ -320,7 +340,11 @@ export class CarDetailsAdminController {
   @Post('import')
   @HttpCode(200)
   @UseInterceptors(AnyFilesInterceptor())
-  importResult(@Req() req: Request, @Body() body: Record<string, unknown>, @UploadedFiles() _files: Express.Multer.File[]) {
+  importResult(
+    @Req() req: Request,
+    @Body() body: Record<string, unknown>,
+    @UploadedFiles() _files: Express.Multer.File[],
+  ) {
     const text =
       (typeof body.result === 'string' ? body.result : '') ||
       (typeof (req.body as AnyRecord)?.result === 'string'
@@ -334,7 +358,9 @@ export class CarDetailsAdminController {
     return this.handleLegacy(this.service.cleanCache());
   }
 
-  private async handleLegacy(promise: Promise<{ success: boolean; message: string; statusCode: string }>) {
+  private async handleLegacy(
+    promise: Promise<{ success: boolean; message: string; statusCode: string }>,
+  ) {
     const response = await promise;
     if (!response.success) {
       throw new HttpException(response, Number(response.statusCode) || 500);

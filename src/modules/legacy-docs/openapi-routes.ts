@@ -208,7 +208,12 @@ export const legacyRoutes: LegacyRoute[] = [
     path: '/authentication/login-with-code',
     summary: 'Admin login with code',
   },
-  { method: 'get', path: '/role-management', summary: 'Role list', security: true },
+  {
+    method: 'get',
+    path: '/role-management',
+    summary: 'Role list',
+    security: true,
+  },
   {
     method: 'post',
     path: '/role-management/create-role',
@@ -233,7 +238,12 @@ export const legacyRoutes: LegacyRoute[] = [
     summary: 'Get role by id',
     security: true,
   },
-  { method: 'get', path: '/user-management', summary: 'User list', security: true },
+  {
+    method: 'get',
+    path: '/user-management',
+    summary: 'User list',
+    security: true,
+  },
   {
     method: 'post',
     path: '/user-management/create-user',
@@ -276,8 +286,16 @@ export const legacyRoutes: LegacyRoute[] = [
     summary: 'Admin vendor delete',
     security: true,
   },
-  { method: 'post', path: '/post/save-post', summary: 'Save post (AP tooling)' },
-  { method: 'get', path: '/post/posts', summary: 'Get posts by ids (AP tooling)' },
+  {
+    method: 'post',
+    path: '/post/save-post',
+    summary: 'Save post (AP tooling)',
+  },
+  {
+    method: 'get',
+    path: '/post/posts',
+    summary: 'Get posts by ids (AP tooling)',
+  },
   {
     method: 'post',
     path: '/post/update/{id}',
@@ -316,7 +334,11 @@ export const legacyRoutes: LegacyRoute[] = [
   },
   { method: 'get', path: '/post/get-most-liked', summary: 'Most liked posts' },
   { method: 'get', path: '/post/auto-renew', summary: 'Auto renew posts' },
-  { method: 'get', path: '/vendor-management/all', summary: 'Vendor list (AP)' },
+  {
+    method: 'get',
+    path: '/vendor-management/all',
+    summary: 'Vendor list (AP)',
+  },
   {
     method: 'post',
     path: '/vendor-management/add/{id}',
@@ -412,7 +434,11 @@ export const legacyRoutes: LegacyRoute[] = [
     summary: 'Article update (AP)',
   },
   { method: 'get', path: '/article/{id}', summary: 'Article read (AP)' },
-  { method: 'get', path: '/sitemap/generate', summary: 'Generate sitemap (AP)' },
+  {
+    method: 'get',
+    path: '/sitemap/generate',
+    summary: 'Generate sitemap (AP)',
+  },
   {
     method: 'get',
     path: '/api/v1/orders/send-remind-emails',

@@ -8,9 +8,11 @@ export class LegacyJwtAdminGuard extends LegacyJwtGuard {
     const allowed = super.canActivate(context);
     if (!allowed) return false;
 
-    const request = context.switchToHttp().getRequest<Request & {
-      legacyJwtPayload?: Record<string, unknown>;
-    }>();
+    const request = context.switchToHttp().getRequest<
+      Request & {
+        legacyJwtPayload?: Record<string, unknown>;
+      }
+    >();
 
     const roles = request.legacyJwtPayload?.roles;
     const roleList = Array.isArray(roles)

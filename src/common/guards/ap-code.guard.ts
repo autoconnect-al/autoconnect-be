@@ -1,4 +1,9 @@
-import { CanActivate, ExecutionContext, HttpException, Injectable } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  HttpException,
+  Injectable,
+} from '@nestjs/common';
 import type { Request } from 'express';
 
 @Injectable()
@@ -7,7 +12,10 @@ export class ApCodeGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<Request>();
     const provided = this.getCode(request.query?.code);
     const expected =
-      process.env.CODE ?? process.env.AP_ADMIN_CODE ?? process.env.DOCS_ACCESS_CODE ?? '';
+      process.env.CODE ??
+      process.env.AP_ADMIN_CODE ??
+      process.env.DOCS_ACCESS_CODE ??
+      '';
 
     if (!expected || provided !== expected) {
       throw new HttpException(

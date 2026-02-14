@@ -1,4 +1,9 @@
-import { CanActivate, ExecutionContext, HttpException, Injectable } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  HttpException,
+  Injectable,
+} from '@nestjs/common';
 import type { Request } from 'express';
 import {
   extractLegacyBearerToken,
@@ -14,7 +19,9 @@ export class LegacyJwtGuard implements CanActivate {
       this.unauthorized();
     }
 
-    (request as Request & { legacyJwtPayload?: Record<string, unknown> }).legacyJwtPayload = payload;
+    (
+      request as Request & { legacyJwtPayload?: Record<string, unknown> }
+    ).legacyJwtPayload = payload;
     return true;
   }
 
