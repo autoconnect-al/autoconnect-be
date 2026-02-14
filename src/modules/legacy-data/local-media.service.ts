@@ -69,14 +69,14 @@ export class LocalMediaService {
 
   private normalizeInput(raw: unknown): UploadImageInput {
     const input = this.asRecord(raw);
-    const nestedRaw = this.parseMaybeJson(input.imageData);
-    const source =
-      nestedRaw && typeof nestedRaw === 'object' && !Array.isArray(nestedRaw)
-        ? (nestedRaw as AnyRecord)
-        : input;
+    const source = this.extractLikelyPayload(input);
+    const file =
+      this.asString(source.file) ||
+      this.asString(source.image) ||
+      this.asString(source.content);
 
     return {
-      file: this.asString(source.file),
+      file,
       id: this.asString(source.id) || this.generateId(12),
       filename: this.asString(source.filename),
     };
@@ -169,7 +169,42 @@ export class LocalMediaService {
   }
 
   private asString(value: unknown): string {
-    return typeof value === 'string' ? value : '';
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      return String(value);
+    }
+    if (Array.isArray(value) && typeof value[0] === 'string') {
+      return value[0];
+    }
+    return '';
+  }
+
+  private extractLikelyPayload(input: AnyRecord): AnyRecord {
+    if (this.looksLikeUploadPayload(input)) return input;
+
+    const nested = this.parseMaybeJson(input.imageData);
+    if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+      const candidate = nested as AnyRecord;
+      if (this.looksLikeUploadPayload(candidate)) return candidate;
+    }
+
+    for (const value of Object.values(input)) {
+      const parsed = this.parseMaybeJson(value);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const candidate = parsed as AnyRecord;
+        if (this.looksLikeUploadPayload(candidate)) return candidate;
+      }
+    }
+
+    return input;
+  }
+
+  private looksLikeUploadPayload(input: AnyRecord): boolean {
+    return Boolean(
+      this.asString(input.file) ||
+        this.asString(input.image) ||
+        this.asString(input.content),
+    );
   }
 
   private generateId(length: number): string {
