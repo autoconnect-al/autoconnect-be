@@ -1,0 +1,26 @@
+{
+  "name": "Strict orders create error parity",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/orders",
+    "body": {
+      "post_id": "1",
+      "cart": [
+        {
+          "id": 1
+        }
+      ]
+    }
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "values": true,
+    "keys": [
+      "success",
+      "message",
+      "statusCode"
+    ],
+    "ignorePaths": []
+  }
+}

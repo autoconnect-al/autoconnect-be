@@ -1,0 +1,12 @@
+{
+  "name": "Smoke GET /sitemap/data",
+  "request": {
+    "method": "GET",
+    "path": "/sitemap/data"
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "values": false
+  }
+}

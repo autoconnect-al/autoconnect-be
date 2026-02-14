@@ -1,0 +1,25 @@
+{
+  "name": "Smoke POST /admin/vendor/contact",
+  "request": {
+    "method": "POST",
+    "path": "/admin/vendor/contact",
+    "body": {
+      "contact": {
+        "phone_number": "",
+        "email": "",
+        "whatsapp": ""
+      },
+      "biography": "",
+      "profilePicture": ""
+    },
+    "headers": {
+      "Content-Type": "application/json",
+      "X-Http-Authorization": "Bearer invalid-token"
+    }
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "values": false
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "Strict admin/posts unauthorized parity",
+  "request": {
+    "method": "GET",
+    "path": "/admin/posts",
+    "headers": {
+      "X-Http-Authorization": "Bearer invalid-token"
+    }
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "values": true,
+    "keys": [
+      "success",
+      "message",
+      "statusCode"
+    ],
+    "ignorePaths": []
+  }
+}

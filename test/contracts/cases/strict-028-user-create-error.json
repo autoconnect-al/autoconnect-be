@@ -1,0 +1,30 @@
+{
+  "name": "Strict user/create-user parity",
+  "request": {
+    "method": "POST",
+    "path": "/user/create-user",
+    "body": {
+      "user": {
+        "name": "Parity User",
+        "username": "parity-user",
+        "email": "parity-user@example.com",
+        "password": "Password123",
+        "rewritePassword": "Password123",
+        "phone": "",
+        "whatsapp": "",
+        "location": ""
+      }
+    }
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "values": true,
+    "keys": [
+      "success",
+      "message",
+      "statusCode"
+    ],
+    "ignorePaths": []
+  }
+}

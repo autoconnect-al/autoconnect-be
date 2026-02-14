@@ -1,0 +1,18 @@
+{
+  "name": "AP code-gate parity GET /post/scrape-posts/cleanPosts",
+  "request": {
+    "method": "GET",
+    "path": "/post/scrape-posts/cleanPosts"
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "values": true,
+    "keys": [
+      "success",
+      "message",
+      "statusCode"
+    ],
+    "ignorePaths": []
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "Smoke GET /favourites/check",
+  "request": {
+    "method": "GET",
+    "path": "/favourites/check?favourites=1,2,3"
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "values": false
+  }
+}

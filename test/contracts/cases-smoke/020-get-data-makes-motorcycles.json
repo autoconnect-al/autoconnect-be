@@ -1,0 +1,12 @@
+{
+  "name": "Smoke GET /data/makes/motorcycles",
+  "request": {
+    "method": "GET",
+    "path": "/data/makes/motorcycles"
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "values": false
+  }
+}

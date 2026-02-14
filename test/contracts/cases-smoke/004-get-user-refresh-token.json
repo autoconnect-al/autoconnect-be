@@ -1,0 +1,12 @@
+{
+  "name": "Smoke GET /user/refresh-token",
+  "request": {
+    "method": "GET",
+    "path": "/user/refresh-token"
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "values": false
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "Smoke POST /car-details/result-count",
+  "request": {
+    "method": "POST",
+    "path": "/car-details/result-count",
+    "body": {
+      "searchTerms": [],
+      "page": 0,
+      "maxResults": 12,
+      "promoPage": 0,
+      "type": "car"
+    },
+    "headers": {
+      "Content-Type": "application/json"
+    }
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "values": false
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "Strict car-details/post/caption parity",
+  "request": {
+    "method": "GET",
+    "path": "/car-details/post/caption/1"
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "values": true,
+    "keys": [
+      "success",
+      "message",
+      "statusCode"
+    ],
+    "ignorePaths": []
+  }
+}

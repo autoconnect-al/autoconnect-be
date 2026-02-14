@@ -1,0 +1,22 @@
+{
+  "name": "AP admin guard parity POST /role-management/create-role",
+  "request": {
+    "method": "POST",
+    "path": "/role-management/create-role",
+    "headers": {
+      "X-Http-Authorization": "Bearer invalid-token"
+    },
+    "body": {}
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "values": true,
+    "keys": [
+      "success",
+      "message",
+      "statusCode"
+    ],
+    "ignorePaths": []
+  }
+}

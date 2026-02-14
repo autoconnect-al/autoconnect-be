@@ -1,0 +1,12 @@
+{
+  "name": "Smoke GET /data/articles/{lang}/{id}",
+  "request": {
+    "method": "GET",
+    "path": "/data/articles/en/1?page=1&app=autoconnect"
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "values": false
+  }
+}

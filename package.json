@@ -17,7 +17,20 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "prisma:pull": "npx prisma db pull",
+    "prisma:generate": "npx prisma generate",
+    "contract:diff": "node scripts/contract-diff.js",
+    "contract:cases:smoke": "node scripts/generate-smoke-contract-cases.js",
+    "contract:diff:smoke": "node scripts/generate-smoke-contract-cases.js && CONTRACT_CASES_DIR=test/contracts/cases-smoke node scripts/contract-diff.js",
+    "contract:cases:strict": "node scripts/generate-strict-contract-cases.js",
+    "contract:cases:ap": "node scripts/generate-ap-contract-cases.js",
+    "contract:diff:ap:auth": "CONTRACT_CASES_DIR=test/contracts/cases-ap-auth node scripts/contract-diff.js",
+    "contract:diff:ap:admin": "CONTRACT_CASES_DIR=test/contracts/cases-ap-admin node scripts/contract-diff.js",
+    "contract:diff:ap:tooling": "CONTRACT_CASES_DIR=test/contracts/cases-ap-tooling node scripts/contract-diff.js",
+    "contract:matrix:ap": "node scripts/generate-ap-endpoint-matrix.js",
+    "verify:critical": "node scripts/verify-critical-endpoints.js",
+    "verify:fe:strict": "node scripts/verify-fe-strict-parity.js"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.4",

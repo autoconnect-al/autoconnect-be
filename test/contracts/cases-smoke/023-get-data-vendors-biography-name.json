@@ -1,0 +1,12 @@
+{
+  "name": "Smoke GET /data/vendors/biography/{name}",
+  "request": {
+    "method": "GET",
+    "path": "/data/vendors/biography/autokorea.al"
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "values": false
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "Smoke POST /data/create-post",
+  "request": {
+    "method": "POST",
+    "path": "/data/create-post",
+    "body": {
+      "vendorId": "1",
+      "post": {
+        "id": "1",
+        "type": "car",
+        "make": "BMW",
+        "model": "X5",
+        "price": 10000
+      }
+    },
+    "headers": {
+      "Content-Type": "application/json"
+    }
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "values": false
+  }
+}

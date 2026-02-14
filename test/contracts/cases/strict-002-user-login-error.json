@@ -1,0 +1,22 @@
+{
+  "name": "Strict user/login error parity",
+  "request": {
+    "method": "POST",
+    "path": "/user/login",
+    "body": {
+      "email": "x",
+      "password": "y"
+    }
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "values": true,
+    "keys": [
+      "success",
+      "message",
+      "statusCode"
+    ],
+    "ignorePaths": []
+  }
+}

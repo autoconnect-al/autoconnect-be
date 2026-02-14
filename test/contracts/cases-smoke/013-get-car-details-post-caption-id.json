@@ -1,0 +1,12 @@
+{
+  "name": "Smoke GET /car-details/post/caption/{id}",
+  "request": {
+    "method": "GET",
+    "path": "/car-details/post/caption/1"
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "values": false
+  }
+}

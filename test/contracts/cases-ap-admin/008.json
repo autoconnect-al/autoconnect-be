@@ -1,0 +1,22 @@
+{
+  "name": "AP admin guard parity POST /user-management/update-user/1",
+  "request": {
+    "method": "POST",
+    "path": "/user-management/update-user/1",
+    "headers": {
+      "X-Http-Authorization": "Bearer invalid-token"
+    },
+    "body": {}
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "values": true,
+    "keys": [
+      "success",
+      "message",
+      "statusCode"
+    ],
+    "ignorePaths": []
+  }
+}

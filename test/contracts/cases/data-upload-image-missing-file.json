@@ -1,0 +1,14 @@
+{
+  "name": "Data upload image missing file",
+  "request": {
+    "method": "POST",
+    "path": "/data/upload-image",
+    "body": {}
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "keys": ["success", "result", "message", "statusCode"],
+    "ignorePaths": []
+  }
+}

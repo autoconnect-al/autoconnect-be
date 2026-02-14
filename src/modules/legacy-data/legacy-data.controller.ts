@@ -1,0 +1,195 @@
+import {
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  Body,
+  HttpCode,
+  HttpException,
+  Headers,
+} from '@nestjs/common';
+import { LegacyDataService } from './legacy-data.service';
+import { LocalPostOrderService } from '../legacy-group-b/local-post-order.service';
+import { LocalMediaService } from './local-media.service';
+import {
+  extractLegacyBearerToken,
+  verifyAndDecodeLegacyJwtPayload,
+} from '../../common/legacy-auth.util';
+
+@Controller('data')
+export class LegacyDataController {
+  constructor(
+    private readonly service: LegacyDataService,
+    private readonly localPostOrderService: LocalPostOrderService,
+    private readonly localMediaService: LocalMediaService,
+  ) {}
+
+  private throwLegacy(
+    message: string,
+    statusCode: string,
+    httpStatus?: number,
+  ) {
+    throw new HttpException(
+      {
+        success: false,
+        message,
+        statusCode,
+      },
+      httpStatus ?? (Number(statusCode) || 500),
+    );
+  }
+
+  @Get('makes')
+  getMakes() {
+    return this.service.makes('car');
+  }
+
+  @Get('models/:make')
+  getModels(@Param('make') make: string, @Query('full') full?: string) {
+    return this.service.models(make, 'car', full === 'true');
+  }
+
+  @Get('makes/motorcycles')
+  getMotorcycleMakes() {
+    return this.service.makes('motorcycle');
+  }
+
+  @Get('models/motorcycles/:make')
+  getMotorcycleModels(
+    @Param('make') make: string,
+    @Query('full') full?: string,
+  ) {
+    return this.service.models(make, 'motorcycle', full === 'true');
+  }
+
+  @Get('vendors/:name')
+  getVendor(@Param('name') name: string) {
+    if (name.includes('.')) {
+      this.throwLegacy('ERROR: Route does not exist', '404', 404);
+    }
+    return this.service.vendor(name);
+  }
+
+  @Get('vendors/biography/:name')
+  getVendorBiography(@Param('name') name: string) {
+    if (name.includes('.')) {
+      this.throwLegacy('ERROR: Route does not exist', '404', 404);
+    }
+    return this.service.vendorBiography(name);
+  }
+
+  @Get('article/:lang/:id')
+  getArticle(
+    @Param('lang') lang: string,
+    @Param('id') id: string,
+    @Query('app') app?: string,
+  ) {
+    return this.service.article(lang, id, app);
+  }
+
+  @Get('articles/:lang/:id')
+  getArticles(
+    @Param('lang') lang: string,
+    @Param('id') id: string,
+    @Query('page') page?: string,
+    @Query('app') app?: string,
+  ) {
+    const pageValue = page ? Math.max(Number(page) - 1, 0) : 0;
+    return this.service.articles(
+      lang,
+      id,
+      Number.isNaN(pageValue) ? 0 : pageValue,
+      app,
+    );
+  }
+
+  @Get('articles/:lang/:id/total')
+  getTotal(
+    @Param('lang') lang: string,
+    @Param('id') id: string,
+    @Query('app') app?: string,
+  ) {
+    return this.service.articlesTotal(lang, id, app);
+  }
+
+  @Get('latest/articles/:lang')
+  getLatest(@Param('lang') lang: string, @Query('app') app?: string) {
+    return this.service.latestArticles(lang, app);
+  }
+
+  @Get('related/articles/:lang/:category')
+  getRelated(
+    @Param('lang') lang: string,
+    @Param('category') category: string,
+    @Query('app') app?: string,
+    @Query('excludeId') excludeId?: string,
+  ) {
+    return this.service.relatedArticles(lang, category, app, excludeId);
+  }
+
+  @Get('metadata/articles/:lang/:id')
+  getMetadata(
+    @Param('lang') lang: string,
+    @Param('id') id: string,
+    @Query('app') app?: string,
+  ) {
+    return this.service.metadata(lang, id, app);
+  }
+
+  @Post('create-post')
+  @HttpCode(200)
+  async createPost(@Body() body: unknown) {
+    const response = await this.localPostOrderService.createPost(body);
+    if (!response.success)
+      this.throwLegacy('ERROR: Something went wrong', '500', 500);
+    return response;
+  }
+
+  @Post('update-post')
+  @HttpCode(200)
+  async updatePost(@Body() body: unknown) {
+    const response = await this.localPostOrderService.updatePost(body);
+    if (!response.success)
+      this.throwLegacy('ERROR: Something went wrong', '500', 500);
+    return response;
+  }
+
+  @Post('create-user-post')
+  @HttpCode(200)
+  async createUserPost(
+    @Body() body: unknown,
+    @Headers() headers: Record<string, unknown>,
+  ) {
+    let jwtEmail: string | undefined;
+
+    try {
+      const token = extractLegacyBearerToken(headers);
+      if (token) {
+        const payload = verifyAndDecodeLegacyJwtPayload(token);
+        if (!payload) {
+          this.throwLegacy('JWT token is not valid.', '401', 401);
+        }
+        const emailFromToken =
+          typeof payload?.email === 'string' ? payload.email : '';
+        if (emailFromToken) jwtEmail = emailFromToken;
+      }
+    } catch {
+      this.throwLegacy('JWT token is not valid.', '401', 401);
+    }
+
+    const response = await this.localPostOrderService.createUserAndPost(
+      body,
+      jwtEmail,
+    );
+    if (!response.success)
+      this.throwLegacy('ERROR: Something went wrong', '500', 500);
+    return response;
+  }
+
+  @Post('upload-image')
+  @HttpCode(200)
+  uploadImage(@Body() body: unknown) {
+    return this.localMediaService.uploadImage(body);
+  }
+}

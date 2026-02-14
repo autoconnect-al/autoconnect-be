@@ -1,0 +1,19 @@
+{
+  "name": "Smoke POST /authentication/login",
+  "request": {
+    "method": "POST",
+    "path": "/authentication/login",
+    "body": {
+      "email": "parity@example.com",
+      "password": "invalid-password"
+    },
+    "headers": {
+      "Content-Type": "application/json"
+    }
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "values": false
+  }
+}

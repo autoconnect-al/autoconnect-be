@@ -1,38 +1,29 @@
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { HealthController } from './health/health.controller';
 import { ConfigModule } from '@nestjs/config';
-import { ThrottlerModule } from '@nestjs/throttler';
-import { AuthModule } from './modules/auth/auth.module';
-import { SearchModule } from './modules/search/search.module';
-import { IngestModule } from './modules/imports/apify-import.module';
 import { DatabaseModule } from './database/database.module';
-import { VendorModule } from './modules/vendor/vendor.module';
-import { BulkImportModule } from './modules/bulk-import/bulk-import.module';
-
-void ConfigModule.forRoot({
-  isGlobal: true,
-});
+import { LegacyAuthModule } from './modules/legacy-auth/legacy-auth.module';
+import { LegacySearchModule } from './modules/legacy-search/legacy-search.module';
+import { LegacyDataModule } from './modules/legacy-data/legacy-data.module';
+import { LegacyFavouritesModule } from './modules/legacy-favourites/legacy-favourites.module';
+import { LegacyAdminModule } from './modules/legacy-admin/legacy-admin.module';
+import { LegacySitemapModule } from './modules/legacy-sitemap/legacy-sitemap.module';
+import { LegacyDocsModule } from './modules/legacy-docs/legacy-docs.module';
+import { LegacyPaymentsModule } from './modules/legacy-payments/legacy-payments.module';
+import { LegacyApModule } from './modules/legacy-ap/legacy-ap.module';
 
 @Module({
   imports: [
-    ThrottlerModule.forRoot({
-      throttlers: [
-        {
-          ttl: 60, // seconds
-          limit: 10, // max 10 requests per ttl
-        },
-      ],
-    }),
-    AuthModule,
-    SearchModule,
-    IngestModule,
+    ConfigModule.forRoot({ isGlobal: true }),
     DatabaseModule,
-    VendorModule,
-    BulkImportModule,
+    LegacyAuthModule,
+    LegacySearchModule,
+    LegacyDataModule,
+    LegacyFavouritesModule,
+    LegacyAdminModule,
+    LegacySitemapModule,
+    LegacyDocsModule,
+    LegacyPaymentsModule,
+    LegacyApModule,
   ],
-  controllers: [AppController, HealthController],
-  providers: [AppService],
 })
 export class AppModule {}
