@@ -5,7 +5,15 @@ import express from 'express';
 import { join } from 'path';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
+
+  app.use(express.json({ limit: '10mb' }));
+  app.use(
+    express.urlencoded({
+      extended: true,
+      limit: '10mb',
+    }),
+  );
 
   app.enableCors({
     origin: true,
