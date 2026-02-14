@@ -52,6 +52,16 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
     });
   }
 
+  private log(event: string, payload: Record<string, unknown>) {
+    console.log(
+      JSON.stringify({
+        scope: 'local-user-vendor-service',
+        event,
+        ...payload,
+      }),
+    );
+  }
+
   async createUser(raw: unknown): Promise<LegacyResponse> {
     try {
       const request = this.extractUser(raw);
@@ -125,7 +135,15 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
       const usernameOrEmail =
         this.toSafeString(input.username) || this.toSafeString(input.email);
       const password = this.toSafeString(input.password);
+      this.log('login.start', {
+        hasUsernameOrEmail: Boolean(usernameOrEmail),
+        hasPassword: Boolean(password),
+      });
       if (!usernameOrEmail || !password) {
+        this.log('login.invalid_credentials_shape', {
+          hasUsernameOrEmail: Boolean(usernameOrEmail),
+          hasPassword: Boolean(password),
+        });
         return legacyError(
           'Could not login user. Please check your credentials.',
           500,
@@ -141,6 +159,9 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
       });
 
       if (!user) {
+        this.log('login.user_not_found', {
+          usernameOrEmail,
+        });
         return legacyError(
           'Could not login user. Please check your credentials.',
           500,
@@ -150,6 +171,10 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
       const unixcrypt = await import('unixcrypt');
       const hashedInput = unixcrypt.encrypt(password, user.password);
       if (hashedInput !== user.password) {
+        this.log('login.password_mismatch', {
+          userId: String(user.id),
+          username: user.username,
+        });
         return legacyError(
           'Could not login user. Please check your credentials.',
           500,
@@ -167,9 +192,24 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
         email: user.email,
         username: user.username,
       });
+      this.log('login.success', {
+        userId: String(user.id),
+        username: user.username,
+      });
 
       return legacySuccess(jwt);
-    } catch {
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unknown login error';
+      const stack = error instanceof Error ? error.stack : undefined;
+      console.error(
+        JSON.stringify({
+          scope: 'local-user-vendor-service',
+          event: 'login.exception',
+          message,
+          stack,
+        }),
+      );
       return legacyError(
         'Could not login user. Please check your credentials.',
         500,

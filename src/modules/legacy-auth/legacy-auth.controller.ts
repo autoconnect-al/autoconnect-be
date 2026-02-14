@@ -15,6 +15,16 @@ import type { LegacyResponse } from '../../common/legacy-response';
 export class LegacyAuthController {
   constructor(private readonly service: LegacyAuthService) {}
 
+  private log(event: string, payload: Record<string, unknown>) {
+    console.log(
+      JSON.stringify({
+        scope: 'auth-controller',
+        event,
+        ...payload,
+      }),
+    );
+  }
+
   private throwLegacy(response: LegacyResponse, httpStatus: number) {
     throw new HttpException(
       {
@@ -30,14 +40,29 @@ export class LegacyAuthController {
   @HttpCode(200)
   async authenticationLogin(@Body() body: unknown) {
     const payload = (body ?? {}) as Record<string, unknown>;
+    this.log('login.request', {
+      endpoint: 'authentication/login',
+      hasUsername: typeof payload.username === 'string',
+      hasEmail: typeof payload.email === 'string',
+      hasPassword: typeof payload.password === 'string',
+    });
     if (
       typeof payload.username !== 'string' ||
       typeof payload.password !== 'string'
     ) {
+      this.log('login.invalid_payload', {
+        endpoint: 'authentication/login',
+      });
       const response = this.service.loginNotImplemented();
       this.throwLegacy(response, 500);
     }
     const response = await this.service.loginLocal(body);
+    this.log('login.response', {
+      endpoint: 'authentication/login',
+      success: response.success,
+      statusCode: response.statusCode,
+      message: response.message,
+    });
     if (!response.success) {
       this.throwLegacy(response, Number(response.statusCode) || 500);
     }
@@ -48,14 +73,29 @@ export class LegacyAuthController {
   @HttpCode(200)
   async userLogin(@Body() body: unknown) {
     const payload = (body ?? {}) as Record<string, unknown>;
+    this.log('login.request', {
+      endpoint: 'user/login',
+      hasUsername: typeof payload.username === 'string',
+      hasEmail: typeof payload.email === 'string',
+      hasPassword: typeof payload.password === 'string',
+    });
     if (
       typeof payload.username !== 'string' ||
       typeof payload.password !== 'string'
     ) {
+      this.log('login.invalid_payload', {
+        endpoint: 'user/login',
+      });
       const response = this.service.loginNotImplemented();
       this.throwLegacy(response, 500);
     }
     const response = await this.service.loginLocal(body);
+    this.log('login.response', {
+      endpoint: 'user/login',
+      success: response.success,
+      statusCode: response.statusCode,
+      message: response.message,
+    });
     if (!response.success) {
       this.throwLegacy(response, Number(response.statusCode) || 500);
     }

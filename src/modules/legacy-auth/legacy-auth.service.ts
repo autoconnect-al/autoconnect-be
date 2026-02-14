@@ -47,7 +47,22 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
   }
 
   async loginLocal(body: unknown) {
-    return this.localUserVendorService.login(body);
+    try {
+      return await this.localUserVendorService.login(body);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unknown auth service error';
+      const stack = error instanceof Error ? error.stack : undefined;
+      console.error(
+        JSON.stringify({
+          scope: 'legacy-auth-service',
+          event: 'login.exception',
+          message,
+          stack,
+        }),
+      );
+      return legacyError('Could not login user. Please check your credentials.', 500);
+    }
   }
 
   async refreshTokenLocal(headers: Record<string, unknown>) {
