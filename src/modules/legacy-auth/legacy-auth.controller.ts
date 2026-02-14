@@ -7,7 +7,9 @@ import {
   HttpException,
   Post,
   Query,
+  UseInterceptors,
 } from '@nestjs/common';
+import { AnyFilesInterceptor } from '@nestjs/platform-express';
 import { LegacyAuthService } from './legacy-auth.service';
 import type { LegacyResponse } from '../../common/legacy-response';
 
@@ -38,18 +40,23 @@ export class LegacyAuthController {
 
   @Post('authentication/login')
   @HttpCode(200)
-  async authenticationLogin(@Body() body: unknown) {
+  @UseInterceptors(AnyFilesInterceptor())
+  async authenticationLogin(
+    @Body() body: unknown,
+    @Headers('content-type') contentType?: string,
+  ) {
     const payload = (body ?? {}) as Record<string, unknown>;
+    const hasUsername = typeof payload.username === 'string';
+    const hasEmail = typeof payload.email === 'string';
+    const hasPassword = typeof payload.password === 'string';
     this.log('login.request', {
       endpoint: 'authentication/login',
-      hasUsername: typeof payload.username === 'string',
-      hasEmail: typeof payload.email === 'string',
-      hasPassword: typeof payload.password === 'string',
+      contentType: contentType ?? '',
+      hasUsername,
+      hasEmail,
+      hasPassword,
     });
-    if (
-      typeof payload.username !== 'string' ||
-      typeof payload.password !== 'string'
-    ) {
+    if ((!hasUsername && !hasEmail) || !hasPassword) {
       this.log('login.invalid_payload', {
         endpoint: 'authentication/login',
       });
@@ -71,18 +78,23 @@ export class LegacyAuthController {
 
   @Post('user/login')
   @HttpCode(200)
-  async userLogin(@Body() body: unknown) {
+  @UseInterceptors(AnyFilesInterceptor())
+  async userLogin(
+    @Body() body: unknown,
+    @Headers('content-type') contentType?: string,
+  ) {
     const payload = (body ?? {}) as Record<string, unknown>;
+    const hasUsername = typeof payload.username === 'string';
+    const hasEmail = typeof payload.email === 'string';
+    const hasPassword = typeof payload.password === 'string';
     this.log('login.request', {
       endpoint: 'user/login',
-      hasUsername: typeof payload.username === 'string',
-      hasEmail: typeof payload.email === 'string',
-      hasPassword: typeof payload.password === 'string',
+      contentType: contentType ?? '',
+      hasUsername,
+      hasEmail,
+      hasPassword,
     });
-    if (
-      typeof payload.username !== 'string' ||
-      typeof payload.password !== 'string'
-    ) {
+    if ((!hasUsername && !hasEmail) || !hasPassword) {
       this.log('login.invalid_payload', {
         endpoint: 'user/login',
       });
