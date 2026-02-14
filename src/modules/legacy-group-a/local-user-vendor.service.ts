@@ -168,18 +168,26 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
         );
       }
 
-      const unixcrypt = await import('unixcrypt');
-      const hashedInput = unixcrypt.encrypt(password, user.password);
-      if (hashedInput !== user.password) {
+      const verification = await this.verifyPasswordWithLegacyFallbacks(
+        password,
+        user.password,
+      );
+      if (!verification.ok) {
         this.log('login.password_mismatch', {
           userId: String(user.id),
           username: user.username,
+          strategyTried: verification.strategy,
         });
         return legacyError(
           'Could not login user. Please check your credentials.',
           500,
         );
       }
+      this.log('login.password_verified', {
+        userId: String(user.id),
+        username: user.username,
+        strategy: verification.strategy,
+      });
 
       const jwt = await this.jwtService.signAsync({
         iat: Math.floor(Date.now() / 1000),
@@ -215,6 +223,44 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
         500,
       );
     }
+  }
+
+  private async verifyPasswordWithLegacyFallbacks(
+    plainPassword: string,
+    storedPassword: string,
+  ): Promise<{ ok: boolean; strategy: string }> {
+    // Legacy crypt($6$...) compatibility.
+    try {
+      const unixcrypt = await import('unixcrypt');
+      const hashedInput = unixcrypt.encrypt(plainPassword, storedPassword);
+      if (hashedInput === storedPassword) {
+        return { ok: true, strategy: 'unixcrypt' };
+      }
+    } catch {
+      // Continue to next strategy.
+    }
+
+    // Bcrypt compatibility for historical $2y$/$2a$/$2b$ hashes.
+    if (
+      storedPassword.startsWith('$2y$') ||
+      storedPassword.startsWith('$2a$') ||
+      storedPassword.startsWith('$2b$')
+    ) {
+      try {
+        const bcrypt = await import('bcrypt');
+        const normalizedHash = storedPassword.startsWith('$2y$')
+          ? `$2b$${storedPassword.slice(4)}`
+          : storedPassword;
+        const ok = await bcrypt.compare(plainPassword, normalizedHash);
+        if (ok) {
+          return { ok: true, strategy: 'bcrypt' };
+        }
+      } catch {
+        // Continue to next strategy.
+      }
+    }
+
+    return { ok: false, strategy: 'all_failed' };
   }
 
   async resetPassword(raw: unknown): Promise<LegacyResponse> {
