@@ -10,6 +10,7 @@ import { LegacySitemapModule } from './modules/legacy-sitemap/legacy-sitemap.mod
 import { LegacyDocsModule } from './modules/legacy-docs/legacy-docs.module';
 import { LegacyPaymentsModule } from './modules/legacy-payments/legacy-payments.module';
 import { LegacyApModule } from './modules/legacy-ap/legacy-ap.module';
+import { IngestModule } from './modules/imports/apify-import.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { LegacyApModule } from './modules/legacy-ap/legacy-ap.module';
     LegacyDocsModule,
     LegacyPaymentsModule,
     LegacyApModule,
+    IngestModule,
   ],
 })
 export class AppModule {}
