@@ -8,7 +8,9 @@ import {
   HttpCode,
   HttpException,
   Headers,
+  UseInterceptors,
 } from '@nestjs/common';
+import { AnyFilesInterceptor } from '@nestjs/platform-express';
 import { LegacyDataService } from './legacy-data.service';
 import { LocalPostOrderService } from '../legacy-group-b/local-post-order.service';
 import { LocalMediaService } from './local-media.service';
@@ -189,6 +191,7 @@ export class LegacyDataController {
 
   @Post('upload-image')
   @HttpCode(200)
+  @UseInterceptors(AnyFilesInterceptor())
   uploadImage(@Body() body: unknown) {
     return this.localMediaService.uploadImage(body);
   }

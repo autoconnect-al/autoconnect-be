@@ -55,7 +55,7 @@ export class LocalMediaService {
 
   private normalizeInput(raw: unknown): UploadImageInput {
     const input = this.asRecord(raw);
-    const nestedRaw = input.imageData;
+    const nestedRaw = this.parseMaybeJson(input.imageData);
     const source =
       nestedRaw && typeof nestedRaw === 'object' && !Array.isArray(nestedRaw)
         ? (nestedRaw as AnyRecord)
@@ -113,10 +113,31 @@ export class LocalMediaService {
   }
 
   private asRecord(value: unknown): AnyRecord {
+    const parsed = this.parseMaybeJson(value);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as AnyRecord;
+    }
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       return value as AnyRecord;
     }
     return {};
+  }
+
+  private parseMaybeJson(value: unknown): unknown {
+    if (typeof value !== 'string') return value;
+    const text = value.trim();
+    if (!text) return value;
+    if (
+      (text.startsWith('{') && text.endsWith('}')) ||
+      (text.startsWith('[') && text.endsWith(']'))
+    ) {
+      try {
+        return JSON.parse(text);
+      } catch {
+        return value;
+      }
+    }
+    return value;
   }
 
   private asString(value: unknown): string {
