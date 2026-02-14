@@ -134,10 +134,10 @@ export class LegacySearchService {
       .map((name) => `'${name.replace(/'/g, "''")}'`)
       .join(',');
 
-    const clauses: string[] = [
-      'mostWantedTo IS NOT NULL',
-      'mostWantedTo > UNIX_TIMESTAMP()',
-    ];
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const clauses: string[] = ['sold = 0', "(deleted = '0' OR deleted = 0)"];
+    const params: unknown[] = [sevenDaysAgo];
+    clauses.push('dateCreated > ?');
     if (excludeIdList) {
       clauses.push(`id NOT IN (${excludeIdList})`);
     }
@@ -145,8 +145,12 @@ export class LegacySearchService {
       clauses.push(`accountName NOT IN (${excludeAccountList})`);
     }
 
-    const query = `SELECT id, make, model, price, accountName FROM search WHERE ${clauses.join(' AND ')} ORDER BY mostWantedTo DESC LIMIT 24`;
-    const rows = await this.prisma.$queryRawUnsafe<unknown[]>(query);
+    const query = `SELECT id, make, model, price, accountName, sidecarMedias, contact, vendorContact
+      FROM search
+      WHERE ${clauses.join(' AND ')}
+      ORDER BY mostWantedTo DESC
+      LIMIT 4`;
+    const rows = await this.prisma.$queryRawUnsafe<unknown[]>(query, ...params);
     return legacySuccess(this.normalizeBigInts(rows));
   }
 
