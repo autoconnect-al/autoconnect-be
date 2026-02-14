@@ -7,6 +7,7 @@ import {
   legacySuccess,
   type LegacyResponse,
 } from '../../common/legacy-response';
+import { getMediaRootPath } from '../../common/media-path.util';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -18,7 +19,7 @@ type UploadImageInput = {
 
 @Injectable()
 export class LocalMediaService {
-  private readonly mediaRoot = resolve(process.cwd(), 'media');
+  private readonly mediaRoot = getMediaRootPath();
   private readonly mediaTmpRoot = resolve(this.mediaRoot, 'tmp');
 
   async uploadImage(

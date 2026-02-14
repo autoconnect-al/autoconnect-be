@@ -10,12 +10,14 @@ import { JwtService } from '@nestjs/jwt';
 import { mkdir, readFile } from 'fs/promises';
 import { isAbsolute, join, resolve } from 'path';
 import sharp from 'sharp';
+import { getMediaRootPath } from '../../common/media-path.util';
 
 type AnyRecord = Record<string, unknown>;
 
 @Injectable()
 export class LocalPostOrderService {
   private readonly jwtService: JwtService;
+  private readonly mediaRoot = getMediaRootPath();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -684,8 +686,7 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
     if (sidecarInput.length === 0) return [];
 
     const vendorFolder = resolve(
-      process.cwd(),
-      'media',
+      this.mediaRoot,
       vendorId.toString(),
       postId,
     );
@@ -716,8 +717,18 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
         postId,
         `${mediaId}_thumbnail.webp`,
       );
-      const standardPath = resolve(process.cwd(), standardRelativePath);
-      const thumbnailPath = resolve(process.cwd(), thumbnailRelativePath);
+      const standardPath = resolve(
+        this.mediaRoot,
+        vendorId.toString(),
+        postId,
+        `${mediaId}_standard.webp`,
+      );
+      const thumbnailPath = resolve(
+        this.mediaRoot,
+        vendorId.toString(),
+        postId,
+        `${mediaId}_thumbnail.webp`,
+      );
 
       const sourceBuffer = await this.readMediaBuffer(sourceUrl);
       if (!sourceBuffer) continue;
@@ -768,12 +779,7 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
 
     const relativeTmpPrefix = '/media/tmp/';
     const sourcePath = sourceUrl.includes(relativeTmpPrefix)
-      ? resolve(
-          process.cwd(),
-          'media',
-          'tmp',
-          sourceUrl.split(relativeTmpPrefix)[1] ?? '',
-        )
+      ? resolve(this.mediaRoot, 'tmp', sourceUrl.split(relativeTmpPrefix)[1] ?? '')
       : isAbsolute(sourceUrl)
         ? sourceUrl
         : resolve(process.cwd(), sourceUrl.replace(/^\/+/, ''));

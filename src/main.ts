@@ -2,7 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import express from 'express';
-import { join } from 'path';
+import { getMediaRootPath } from './common/media-path.util';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bodyParser: false });
@@ -40,7 +40,7 @@ async function bootstrap() {
     next();
   });
 
-  app.use('/media', express.static(join(process.cwd(), 'media')));
+  app.use('/media', express.static(getMediaRootPath()));
 
   app.useGlobalPipes(
     new ValidationPipe({
