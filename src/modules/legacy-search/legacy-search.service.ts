@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { legacyError, legacySuccess } from '../../common/legacy-response';
+import { decodeCaption } from '../imports/utils/caption-processor';
 
 type FilterTerm = {
   key: string;
@@ -498,9 +499,13 @@ export class LegacySearchService {
 
   private normalizeBigInts<T>(input: T): T {
     return JSON.parse(
-      JSON.stringify(input, (_, value) =>
-        typeof value === 'bigint' ? value.toString() : value,
-      ),
+      JSON.stringify(input, (key, value) => {
+        if (typeof value === 'bigint') return value.toString();
+        if (key === 'caption' && typeof value === 'string') {
+          return decodeCaption(value);
+        }
+        return value;
+      }),
     ) as T;
   }
 }

@@ -11,6 +11,7 @@ import { LegacyDataService } from '../legacy-data/legacy-data.service';
 import { LegacySitemapService } from '../legacy-sitemap/legacy-sitemap.service';
 import { JwtService } from '@nestjs/jwt';
 import { Resend } from 'resend';
+import { decodeCaption } from '../imports/utils/caption-processor';
 
 type AnyRecord = Record<string, unknown>;
 type PromptRow = Record<string, unknown>;
@@ -1352,9 +1353,13 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
 
   private normalizeBigInts<T>(input: T): T {
     return JSON.parse(
-      JSON.stringify(input, (_, value) =>
-        typeof value === 'bigint' ? value.toString() : value,
-      ),
+      JSON.stringify(input, (key, value) => {
+        if (typeof value === 'bigint') return value.toString();
+        if (key === 'caption' && typeof value === 'string') {
+          return decodeCaption(value);
+        }
+        return value;
+      }),
     ) as T;
   }
 }
