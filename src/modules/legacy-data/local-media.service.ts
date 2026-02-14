@@ -24,6 +24,20 @@ export class LocalMediaService {
   async uploadImage(
     raw: unknown,
   ): Promise<LegacyResponse | Record<string, unknown>> {
+    const rawType = typeof raw;
+    const rawKeys =
+      raw && typeof raw === 'object' && !Array.isArray(raw)
+        ? Object.keys(raw as Record<string, unknown>).slice(0, 5)
+        : [];
+    console.log(
+      JSON.stringify({
+        scope: 'local-media-service',
+        event: 'upload-image.input-shape',
+        rawType,
+        rawKeys,
+      }),
+    );
+
     const image = this.normalizeInput(raw);
     if (!image.file) {
       return {
@@ -118,9 +132,23 @@ export class LocalMediaService {
       return parsed as AnyRecord;
     }
     if (value && typeof value === 'object' && !Array.isArray(value)) {
-      return value as AnyRecord;
+      return this.normalizeLegacyUrlEncodedJsonObject(value as AnyRecord);
     }
     return {};
+  }
+
+  private normalizeLegacyUrlEncodedJsonObject(input: AnyRecord): AnyRecord {
+    const entries = Object.entries(input);
+    if (entries.length !== 1) return input;
+
+    const [key, value] = entries[0];
+    if (typeof value !== 'string' || value.length !== 0) return input;
+
+    const parsed = this.parseMaybeJson(key);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as AnyRecord;
+    }
+    return input;
   }
 
   private parseMaybeJson(value: unknown): unknown {
