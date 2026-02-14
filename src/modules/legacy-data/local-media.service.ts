@@ -142,12 +142,27 @@ export class LocalMediaService {
     if (entries.length !== 1) return input;
 
     const [key, value] = entries[0];
-    if (typeof value !== 'string' || value.length !== 0) return input;
+    if (typeof value !== 'string') return input;
 
-    const parsed = this.parseMaybeJson(key);
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return parsed as AnyRecord;
+    const keyText = key.trim();
+    if (
+      !(keyText.startsWith('{') && keyText.endsWith('}')) &&
+      !(keyText.startsWith('[') && keyText.endsWith(']')) &&
+      !keyText.startsWith('{')
+    ) {
+      return input;
     }
+
+    const candidates =
+      value.length === 0 ? [key] : [key, `${key}=${value}`, `${key}==${value}`];
+
+    for (const candidate of candidates) {
+      const parsed = this.parseMaybeJson(candidate);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as AnyRecord;
+      }
+    }
+
     return input;
   }
 
@@ -202,8 +217,8 @@ export class LocalMediaService {
   private looksLikeUploadPayload(input: AnyRecord): boolean {
     return Boolean(
       this.asString(input.file) ||
-        this.asString(input.image) ||
-        this.asString(input.content),
+      this.asString(input.image) ||
+      this.asString(input.content),
     );
   }
 
