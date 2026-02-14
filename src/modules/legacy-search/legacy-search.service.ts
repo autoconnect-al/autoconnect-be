@@ -120,12 +120,6 @@ export class LegacySearchService {
   }
 
   async mostWanted(excludeIds?: string, excludedAccounts?: string) {
-    if (!excludeIds && !excludedAccounts) {
-      return legacyError(
-        'An error occurred while searching for most wanted cars',
-        500,
-      );
-    }
     const excludeIdList = (excludeIds ?? '')
       .split(',')
       .map((v) => v.trim())
