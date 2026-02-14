@@ -42,12 +42,18 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
     });
   }
 
-  async createPost(raw: unknown): Promise<LegacyResponse> {
-    return this.savePostInternal(raw, false);
+  async createPost(
+    raw: unknown,
+    emailFromJwt?: string,
+  ): Promise<LegacyResponse> {
+    return this.savePostInternal(raw, false, emailFromJwt);
   }
 
-  async updatePost(raw: unknown): Promise<LegacyResponse> {
-    return this.savePostInternal(raw, true);
+  async updatePost(
+    raw: unknown,
+    emailFromJwt?: string,
+  ): Promise<LegacyResponse> {
+    return this.savePostInternal(raw, true, emailFromJwt);
   }
 
   async createUserAndPost(
@@ -58,7 +64,7 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
       const input = (raw ?? {}) as AnyRecord;
       const post = ((input.post ?? {}) as AnyRecord) || {};
       const email =
-        this.toSafeString(post.email) || this.toSafeString(emailFromJwt);
+        this.toSafeString(emailFromJwt) || this.toSafeString(post.email);
       if (!email) {
         return legacyError('User email is required.', 400);
       }
@@ -344,6 +350,7 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
   private async savePostInternal(
     raw: unknown,
     isUpdate: boolean,
+    emailFromJwt?: string,
   ): Promise<LegacyResponse> {
     try {
       const payload = (raw ?? {}) as AnyRecord;
@@ -352,10 +359,27 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
         return legacyError('Post data are required.', 400);
       }
 
+      const jwtEmail = this.toSafeString(emailFromJwt);
+      let vendorIdFromJwt: bigint | null = null;
+      if (jwtEmail) {
+        const jwtUser = await this.prisma.user.findFirst({
+          where: { email: jwtEmail },
+          select: { id: true },
+        });
+        if (!jwtUser) {
+          return legacyError('User email is required.', 400);
+        }
+        vendorIdFromJwt = jwtUser.id;
+      }
+
       const vendorIdRaw =
         this.toSafeString(payload.vendorId) ||
         this.toSafeString(postInput.vendorId);
-      const vendorId = vendorIdRaw ? BigInt(vendorIdRaw) : BigInt(14261202907);
+      const vendorId = vendorIdFromJwt
+        ? vendorIdFromJwt
+        : vendorIdRaw
+          ? BigInt(vendorIdRaw)
+          : BigInt(14261202907);
 
       const vendor = await this.prisma.vendor.findUnique({
         where: { id: vendorId },

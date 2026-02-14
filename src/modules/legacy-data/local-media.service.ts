@@ -127,10 +127,13 @@ export class LocalMediaService {
   }
 
   private asRecord(value: unknown): AnyRecord {
-    const parsed = this.parseMaybeJson(value);
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return parsed as AnyRecord;
+    if (typeof value === 'string') {
+      const parsed = this.parseMaybeJson(value);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as AnyRecord;
+      }
     }
+
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       return this.normalizeLegacyUrlEncodedJsonObject(value as AnyRecord);
     }

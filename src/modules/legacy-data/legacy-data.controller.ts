@@ -141,8 +141,12 @@ export class LegacyDataController {
 
   @Post('create-post')
   @HttpCode(200)
-  async createPost(@Body() body: unknown) {
-    const response = await this.localPostOrderService.createPost(body);
+  async createPost(
+    @Body() body: unknown,
+    @Headers() headers: Record<string, unknown>,
+  ) {
+    const jwtEmail = this.extractJwtEmail(headers);
+    const response = await this.localPostOrderService.createPost(body, jwtEmail);
     if (!response.success)
       this.throwLegacy('ERROR: Something went wrong', '500', 500);
     return response;
@@ -150,8 +154,12 @@ export class LegacyDataController {
 
   @Post('update-post')
   @HttpCode(200)
-  async updatePost(@Body() body: unknown) {
-    const response = await this.localPostOrderService.updatePost(body);
+  async updatePost(
+    @Body() body: unknown,
+    @Headers() headers: Record<string, unknown>,
+  ) {
+    const jwtEmail = this.extractJwtEmail(headers);
+    const response = await this.localPostOrderService.updatePost(body, jwtEmail);
     if (!response.success)
       this.throwLegacy('ERROR: Something went wrong', '500', 500);
     return response;
@@ -163,22 +171,7 @@ export class LegacyDataController {
     @Body() body: unknown,
     @Headers() headers: Record<string, unknown>,
   ) {
-    let jwtEmail: string | undefined;
-
-    try {
-      const token = extractLegacyBearerToken(headers);
-      if (token) {
-        const payload = verifyAndDecodeLegacyJwtPayload(token);
-        if (!payload) {
-          this.throwLegacy('JWT token is not valid.', '401', 401);
-        }
-        const emailFromToken =
-          typeof payload?.email === 'string' ? payload.email : '';
-        if (emailFromToken) jwtEmail = emailFromToken;
-      }
-    } catch {
-      this.throwLegacy('JWT token is not valid.', '401', 401);
-    }
+    const jwtEmail = this.extractJwtEmail(headers);
 
     const response = await this.localPostOrderService.createUserAndPost(
       body,
@@ -194,5 +187,25 @@ export class LegacyDataController {
   @UseInterceptors(AnyFilesInterceptor())
   uploadImage(@Body() body: unknown) {
     return this.localMediaService.uploadImage(body);
+  }
+
+  private extractJwtEmail(
+    headers: Record<string, unknown>,
+  ): string | undefined {
+    try {
+      const token = extractLegacyBearerToken(headers);
+      if (!token) return undefined;
+
+      const payload = verifyAndDecodeLegacyJwtPayload(token);
+      if (!payload) {
+        this.throwLegacy('JWT token is not valid.', '401', 401);
+      }
+
+      const emailFromToken =
+        typeof payload?.email === 'string' ? payload.email.trim() : '';
+      return emailFromToken || undefined;
+    } catch {
+      this.throwLegacy('JWT token is not valid.', '401', 401);
+    }
   }
 }
