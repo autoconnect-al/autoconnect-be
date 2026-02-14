@@ -150,7 +150,9 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
         data: { deleted: true, dateUpdated: new Date() },
       });
       await this.prisma.car_detail.updateMany({
-        where: { post_id: BigInt(postId) },
+        where: {
+          OR: [{ post_id: BigInt(postId) }, { id: BigInt(postId) }],
+        },
         data: { deleted: true, dateUpdated: new Date() },
       });
       await this.prisma.search.updateMany({
