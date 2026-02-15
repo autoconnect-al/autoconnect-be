@@ -97,7 +97,14 @@ export function isSold(cleanedCaption: string | null | undefined): boolean {
   }
 
   // Check for sold keywords
-  const soldKeywords = ['sold', 'shitur', 'u shit', 'porositur', 'rezervuar'];
+  const soldKeywords = [
+    'sold',
+    'shitur',
+    'u shit',
+    'porositur',
+    'rezervuar',
+    's h i t u r',
+  ];
   return soldKeywords.some((keyword) => lowerCaption.includes(keyword));
 }
 

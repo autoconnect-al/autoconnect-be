@@ -192,20 +192,19 @@ export class PostImportService {
           },
           update: {
             status: 'ARCHIVED',
+            live: false,
+            revalidate: false,
             dateUpdated: now,
           },
         });
 
-        // Update car_detail if it exists to mark as sold
-        const existingCarDetail = await this.prisma.car_detail.findFirst({
-          where: { post_id: postId },
+        // Mark sold across car_detail/search rows for this post id
+        await this.prisma.car_detail.updateMany({
+          where: {
+            OR: [{ post_id: postId }, { id: postId }],
+          },
+          data: { sold: true, dateUpdated: now },
         });
-        if (existingCarDetail) {
-          await this.prisma.car_detail.update({
-            where: { id: existingCarDetail.id },
-            data: { sold: true, dateUpdated: now },
-          });
-        }
 
         // Delete post images
         await this.deletePostImages(postId, BigInt(vendorId));
@@ -371,10 +370,6 @@ export class PostImportService {
             data: { customsPaid, dateUpdated: now },
           });
         }
-        await this.prisma.search.updateMany({
-          where: { id: postId },
-          data: { customsPaid },
-        });
       }
 
       // Now create/link car_detail AFTER post exists
