@@ -170,51 +170,47 @@ export class PostImportService {
           );
         }
 
-        // Update post status to sold
-        await this.prisma.post.upsert({
-          where: { id: postId },
-          create: {
-            id: postId,
-            dateCreated: now,
-            dateUpdated: now,
-            caption: encodedCaption,
-            cleanedCaption,
-            createdTime: postData.createdTime || now.toISOString(),
-            sidecarMedias: '[]',
-            vendor_id: BigInt(vendorId),
-            live: false,
-            likesCount: 0,
-            viewsCount: 0,
-            car_detail_id: null,
-            origin: postData.origin || null,
-            status: 'ARCHIVED',
-            revalidate: false,
-          },
-          update: {
-            status: 'ARCHIVED',
-            dateUpdated: now,
-          },
-        });
+        if (existingPost) {
+          await this.markPostAsDeleted(postId, existingPost.vendor_id);
+        }
 
         // Update car_detail if it exists to mark as sold
         const existingCarDetail = await this.prisma.car_detail.findFirst({
           where: { post_id: postId },
         });
-        if (existingCarDetail) {
+        if (existingCarDetail && !existingCarDetail.sold) {
           await this.prisma.car_detail.update({
             where: { id: existingCarDetail.id },
-            data: { sold: true, dateUpdated: now },
+            data: { sold: true, deleted: true, dateUpdated: now },
           });
         }
-
-        // Delete post images
-        await this.deletePostImages(postId, BigInt(vendorId));
 
         if (process.env.SHOW_LOGS) {
           console.log(`✅ Post ${postId} marked as SOLD and images cleaned up`);
         }
 
         return postId;
+      }
+
+      const existingCarDetail = await this.prisma.car_detail.findFirst({
+        where: { post_id: postId },
+      });
+
+      if (existingCarDetail && existingCarDetail.sold) {
+        if (process.env.SHOW_LOGS) {
+          console.log(
+            `🔴 Post ${postId} has an associated car_detail that is marked as SOLD - marking post as deleted and cleaning up images`,
+          );
+          // update post and set it as deleted
+          await this.prisma.post.update({
+            where: { id: postId },
+            data: { deleted: true, dateUpdated: now },
+          });
+          await this.prisma.car_detail.update({
+            where: { id: existingCarDetail.id },
+            data: { deleted: true, dateUpdated: now },
+          });
+        }
       }
 
       // Check if vendor exists, if not create it

@@ -670,7 +670,8 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
 
       const model = this.toSafeNullableString(result.model);
       const make = this.toSafeNullableString(result.make);
-      if (!model && !make) {
+      const sold = this.booleanFrom(result.sold, false);
+      if ((!model && !make) || sold) {
         await this.prisma.post.update({
           where: { id: BigInt(id) },
           data: { deleted: true, dateUpdated: new Date() },
