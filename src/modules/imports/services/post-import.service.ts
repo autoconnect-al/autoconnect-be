@@ -313,7 +313,9 @@ export class PostImportService {
           caption: encodedCaption,
           cleanedCaption,
           createdTime: postData.createdTime || now.toISOString(),
-          sidecarMedias: postData.sidecarMedias ? postData.sidecarMedias : '[]',
+          sidecarMedias: postData.sidecarMedias
+            ? JSON.stringify(postData.sidecarMedias)
+            : '[]',
           vendor_id: BigInt(vendorId),
           live: false,
           likesCount: postData.likesCount || 0,
@@ -328,7 +330,9 @@ export class PostImportService {
           caption: encodedCaption,
           cleanedCaption,
           createdTime: postData.createdTime || now.toISOString(),
-          sidecarMedias: postData.sidecarMedias ? postData.sidecarMedias : '',
+          sidecarMedias: postData.sidecarMedias
+            ? JSON.stringify(postData.sidecarMedias)
+            : '',
           likesCount: postData.likesCount || 0,
           viewsCount: postData.viewsCount || 0,
           origin: postData.origin || null,
