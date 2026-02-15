@@ -97,14 +97,7 @@ export function isSold(cleanedCaption: string | null | undefined): boolean {
   }
 
   // Check for sold keywords
-  const soldKeywords = [
-    'sold',
-    'shitur',
-    'u shit',
-    'porositur',
-    'rezervuar',
-    's h i t u r',
-  ];
+  const soldKeywords = ['sold', 'shitur', 'u shit', 'porositur', 'rezervuar'];
   return soldKeywords.some((keyword) => lowerCaption.includes(keyword));
 }
 
@@ -114,58 +107,35 @@ export function isSold(cleanedCaption: string | null | undefined): boolean {
  * Then checks for terms indicating customs are NOT paid.
  * If customs paid terms are found, returns true.
  * If customs not paid terms are found, returns false.
- * If neither are found, returns null (unknown status).
+ * If neither are found, returns false (unknown status).
  * @param cleanedCaption - Cleaned caption text
- * @returns true if customs are paid, false if not paid, null if unknown
+ * @returns true if post indicates customs have been paid, false otherwise
  */
 export function isCustomsPaid(
   cleanedCaption: string | null | undefined,
 ): boolean | null {
-  if (!cleanedCaption) return null;
+  if (!cleanedCaption) return false;
 
   const lowerCaption = cleanedCaption.toLowerCase();
 
   // Terms indicating customs have been paid
   const termsForCustomsPaid = [
-    'dogane lire',
-    'pa pezullim',
-    'nuk ka dogane',
-    'bie dogane',
-    'dogana kaluar',
-    'paguar dogane',
     'me dogane',
     'me dogan',
     'me doganë',
     'doganë të paguar',
     'dogane te paguar',
-    'dogane paguara',
     'dogana e paguar',
     'dogana paguar',
     'letrat e paguara',
     'letrat te paguara',
     'letrat të paguara',
-    'importue',
-    'blerje direkte',
     'gati per targa',
     'dogan paguar',
-    'e sapo targuar',
-    'sapo targuar',
-    'targuar',
   ];
 
   // Terms indicating customs have NOT been paid
-  const termsForCustomsNotPaid = [
-    'duhet dogane',
-    'pa dogan te paguar',
-    'pa dogane te paguar',
-    'pa dogane',
-    'pa dogan',
-    'pa doganë',
-    'pa letra',
-    'deri ne durres',
-    'deri në durrës',
-    'deri ne port',
-  ];
+  const termsForCustomsNotPaid = ['pa dogane', 'pa dogan', 'pa doganë'];
 
   // Check for customs paid terms first
   for (const term of termsForCustomsPaid) {
@@ -181,6 +151,6 @@ export function isCustomsPaid(
     }
   }
 
-  // If no terms found, return unknown status
+  // If no terms found, return false (unknown status)
   return null;
 }

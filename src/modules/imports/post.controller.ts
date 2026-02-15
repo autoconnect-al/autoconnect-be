@@ -13,7 +13,10 @@ import { PostImportService } from './services/post-import.service';
 import { Throttle } from '@nestjs/throttler';
 import { PrismaService } from '../../database/prisma.service';
 
-@Controller(['posts', 'api/v1/posts'])
+@Controller({
+  path: 'posts',
+  version: '1',
+})
 export class PostController {
   constructor(
     private readonly postImportService: PostImportService,

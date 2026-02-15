@@ -192,19 +192,20 @@ export class PostImportService {
           },
           update: {
             status: 'ARCHIVED',
-            live: false,
-            revalidate: false,
             dateUpdated: now,
           },
         });
 
-        // Mark sold across car_detail/search rows for this post id
-        await this.prisma.car_detail.updateMany({
-          where: {
-            OR: [{ post_id: postId }, { id: postId }],
-          },
-          data: { sold: true, dateUpdated: now },
+        // Update car_detail if it exists to mark as sold
+        const existingCarDetail = await this.prisma.car_detail.findFirst({
+          where: { post_id: postId },
         });
+        if (existingCarDetail) {
+          await this.prisma.car_detail.update({
+            where: { id: existingCarDetail.id },
+            data: { sold: true, dateUpdated: now },
+          });
+        }
 
         // Delete post images
         await this.deletePostImages(postId, BigInt(vendorId));
@@ -312,9 +313,7 @@ export class PostImportService {
           caption: encodedCaption,
           cleanedCaption,
           createdTime: postData.createdTime || now.toISOString(),
-          sidecarMedias: postData.sidecarMedias
-            ? JSON.stringify(postData.sidecarMedias)
-            : '[]',
+          sidecarMedias: postData.sidecarMedias ? postData.sidecarMedias : '[]',
           vendor_id: BigInt(vendorId),
           live: false,
           likesCount: postData.likesCount || 0,
@@ -329,9 +328,7 @@ export class PostImportService {
           caption: encodedCaption,
           cleanedCaption,
           createdTime: postData.createdTime || now.toISOString(),
-          sidecarMedias: postData.sidecarMedias
-            ? JSON.stringify(postData.sidecarMedias)
-            : '',
+          sidecarMedias: postData.sidecarMedias ? postData.sidecarMedias : '',
           likesCount: postData.likesCount || 0,
           viewsCount: postData.viewsCount || 0,
           origin: postData.origin || null,

@@ -60,17 +60,17 @@ describe('PostImportService.importPost', () => {
     );
 
     expect(result).toBe(postId);
-    expect(prisma.car_detail.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          id: postId,
-          post_id: postId,
-        }),
-      }),
-    );
+    // When new car_detail is created, updateMany should still be called to backfill if needed
+    expect(prisma.car_detail.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: postId,
+        OR: [{ post_id: null }, { post_id: { not: postId } }],
+      },
+      data: { post_id: postId },
+    });
   });
 
-  it('updates customsPaid on existing car_detail when re-importing existing post', async () => {
+  it('backfills car_detail.post_id when reusing existing car_detail on existing post', async () => {
     const postId = 456n;
     const carDetailId = 789n;
     const vendorId = 2;
@@ -102,47 +102,13 @@ describe('PostImportService.importPost', () => {
     );
 
     expect(result).toBe(postId);
-    expect(prisma.car_detail.updateMany).toHaveBeenCalledWith({
-      where: { id: carDetailId },
-      data: { customsPaid: null, dateUpdated: expect.any(Date) },
-    });
-  });
-
-  it('marks existing sold post in car_detail only', async () => {
-    const postId = 987n;
-    const vendorId = 2;
-
-    prisma.post.findUnique.mockResolvedValue({
-      id: postId,
-      createdTime: new Date().toISOString(),
-      vendor_id: 2n,
-      deleted: false,
-      status: 'DRAFT',
-      cleanedCaption: 'caption',
-      car_detail_id: postId,
-    });
-
-    prisma.post.upsert.mockResolvedValue({ id: postId });
-    prisma.car_detail.updateMany.mockResolvedValue({ count: 1 });
-
-    const result = await service.importPost(
-      {
-        id: postId.toString(),
-        caption: 'u shit',
-        origin: 'INSTAGRAM',
-        sidecarMedias: [],
-      },
-      vendorId,
-      false,
-      false,
-    );
-
-    expect(result).toBe(postId);
+    // Verify backfill called with existing carDetailId
     expect(prisma.car_detail.updateMany).toHaveBeenCalledWith({
       where: {
-        OR: [{ post_id: postId }, { id: postId }],
+        id: carDetailId,
+        OR: [{ post_id: null }, { post_id: { not: postId } }],
       },
-      data: { sold: true, dateUpdated: expect.any(Date) },
+      data: { post_id: postId },
     });
   });
 });

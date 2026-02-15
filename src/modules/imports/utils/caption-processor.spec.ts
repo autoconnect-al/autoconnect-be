@@ -109,11 +109,6 @@ describe('caption-processor', () => {
       it('should detect "dogane paguara"', () => {
         expect(isCustomsPaid('dogane paguara')).toBe(true);
       });
-
-      it('should detect "sapo targuar"', () => {
-        expect(isCustomsPaid('E SAPO TARGUAR')).toBe(true);
-        expect(isCustomsPaid('Makina sapo targuar')).toBe(true);
-      });
     });
 
     it('should be case insensitive', () => {
@@ -122,14 +117,14 @@ describe('caption-processor', () => {
       expect(isCustomsPaid('DERI NE DURRES')).toBe(true);
     });
 
-    it('should return null when no keywords found', () => {
-      expect(isCustomsPaid('Makina e bukur per shitje')).toBeNull();
-      expect(isCustomsPaid('Kontakt 06XXXXXXX')).toBeNull();
+    it('should return false when no keywords found', () => {
+      expect(isCustomsPaid('Makina e bukur per shitje')).toBe(false);
+      expect(isCustomsPaid('Kontakt 06XXXXXXX')).toBe(false);
     });
 
     it('should handle null/undefined', () => {
-      expect(isCustomsPaid(null)).toBeNull();
-      expect(isCustomsPaid(undefined)).toBeNull();
+      expect(isCustomsPaid(null)).toBe(false);
+      expect(isCustomsPaid(undefined)).toBe(false);
     });
 
     it('should handle real caption examples', () => {
