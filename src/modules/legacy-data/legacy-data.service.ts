@@ -55,7 +55,7 @@ export class LegacyDataService {
   async vendor(name: string) {
     const cleanedName = name.replace(/-/g, '.');
     const rows = await this.prisma.$queryRawUnsafe<unknown[]>(
-      'SELECT * FROM vendor WHERE accountName = ? AND deleted = 0 LIMIT 1',
+      'SELECT * FROM vendor WHERE accountName = ? AND deleted = 0 AND initialised = 1 AND accountExists = 1 LIMIT 1',
       cleanedName,
     );
     return legacySuccess(this.normalizeBigInts(rows[0] ?? null));
@@ -66,16 +66,20 @@ export class LegacyDataService {
     const rows = await this.prisma.$queryRawUnsafe<
       Array<{ biography: string | null; profilePicture: string | null }>
     >(
-      'SELECT biography, profilePicture FROM vendor WHERE accountName = ? AND deleted = 0 LIMIT 1',
+      'SELECT biography, profilePicture FROM vendor WHERE accountName = ? AND deleted = 0 AND initialised = 1 AND accountExists = 1 LIMIT 1',
       cleanedName,
     );
-    return legacySuccess(rows[0] ?? null);
+    if (!rows[0]) return legacySuccess(null);
+    return legacySuccess({
+      biography: this.normalizeBiography(rows[0].biography ?? ''),
+      profilePicture: rows[0].profilePicture,
+    });
   }
 
   async article(lang: string, id: string, app = 'autoconnect') {
     const rows = await this.prisma.$queryRawUnsafe<unknown[]>(
-      'SELECT * FROM article WHERE id = ? AND (appName = ? OR appName IS NULL) AND deleted = 0 LIMIT 1',
-      `${lang}-${id}`,
+      'SELECT * FROM article WHERE id = ? AND appName = ? AND deleted = 0 LIMIT 1',
+      id,
       app,
     );
     if (!rows[0]) {
@@ -94,10 +98,10 @@ export class LegacyDataService {
     page = 0,
     app = 'autoconnect',
   ) {
-    const offset = Math.max(page, 0) * 10;
+    const offset = Math.max(page, 0) * 9;
     const rows = await this.prisma.$queryRawUnsafe<unknown[]>(
-      'SELECT * FROM article WHERE category = ? AND (appName = ? OR appName IS NULL) AND deleted = 0 ORDER BY dateUpdated DESC LIMIT 10 OFFSET ?',
-      `${lang}-${category}`,
+      'SELECT * FROM article WHERE category = ? AND appName = ? AND deleted = 0 ORDER BY dateCreated DESC LIMIT 9 OFFSET ?',
+      category,
       app,
       offset,
     );
@@ -108,11 +112,11 @@ export class LegacyDataService {
     const rows = await this.prisma.$queryRawUnsafe<
       Array<{ total: bigint | number }>
     >(
-      'SELECT COUNT(*) as total FROM article WHERE category = ? AND (appName = ? OR appName IS NULL) AND deleted = 0',
-      `${lang}-${category}`,
+      'SELECT COUNT(*) as total FROM article WHERE category = ? AND appName = ? AND deleted = 0',
+      category,
       app,
     );
-    return legacySuccess(Math.ceil(Number(rows[0]?.total ?? 0) / 10));
+    return legacySuccess(Math.ceil(Number(rows[0]?.total ?? 0) / 9));
   }
 
   async latestArticles(lang: string, app = 'autoconnect') {
@@ -142,17 +146,17 @@ export class LegacyDataService {
     excludeId?: string,
   ) {
     const excludeClause = excludeId ? 'AND id <> ?' : '';
-    const query = `SELECT * FROM article WHERE category = ? AND (appName = ? OR appName IS NULL) AND deleted = 0 ${excludeClause} ORDER BY dateUpdated DESC LIMIT 6`;
+    const query = `SELECT * FROM article WHERE category = ? AND appName = ? AND deleted = 0 ${excludeClause} ORDER BY dateCreated DESC LIMIT 3`;
     const rows = excludeId
       ? await this.prisma.$queryRawUnsafe<unknown[]>(
           query,
-          `${lang}-${category}`,
+          category,
           app,
           excludeId,
         )
       : await this.prisma.$queryRawUnsafe<unknown[]>(
           query,
-          `${lang}-${category}`,
+          category,
           app,
         );
     return legacySuccess(rows);
@@ -167,8 +171,8 @@ export class LegacyDataService {
         category: string;
       }>
     >(
-      'SELECT id, title, image, category FROM article WHERE id = ? AND (appName = ? OR appName IS NULL) AND deleted = 0 LIMIT 1',
-      `${lang}-${id}`,
+      'SELECT id, title, image, category FROM article WHERE id = ? AND appName = ? AND deleted = 0 LIMIT 1',
+      id,
       app,
     );
     if (!rows[0]) {
@@ -204,5 +208,17 @@ export class LegacyDataService {
     } catch {
       return JSON.stringify([]);
     }
+  }
+
+  private normalizeBiography(input: string): string {
+    return input
+      .replace(/ ,/g, ',')
+      .replace(/ !/g, '! ')
+      .replace(/ - /g, '-')
+      .replace(/ : /g, ':')
+      .replace(/: /g, ':')
+      .replace(/ :/g, ':')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 }

@@ -67,17 +67,11 @@ export class LegacyDataController {
 
   @Get('vendors/:name')
   getVendor(@Param('name') name: string) {
-    if (name.includes('.')) {
-      this.throwLegacy('ERROR: Route does not exist', '404', 404);
-    }
     return this.service.vendor(name);
   }
 
   @Get('vendors/biography/:name')
   getVendorBiography(@Param('name') name: string) {
-    if (name.includes('.')) {
-      this.throwLegacy('ERROR: Route does not exist', '404', 404);
-    }
     return this.service.vendorBiography(name);
   }
 

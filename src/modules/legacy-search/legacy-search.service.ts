@@ -20,6 +20,8 @@ type SearchFilter = {
 
 @Injectable()
 export class LegacySearchService {
+  private readonly skipQuickSearchFix = new Set(['benz', 'mercedes']);
+
   constructor(private readonly prisma: PrismaService) {}
 
   async search(filterRaw: string | undefined) {
@@ -202,7 +204,8 @@ export class LegacySearchService {
     const excludedClause = excluded ? `AND id NOT IN (${excluded})` : '';
     const params: unknown[] = [make, model, id, type];
     const rows = await this.prisma.$queryRawUnsafe<unknown[]>(
-      `SELECT id, make, model, price FROM search WHERE make = ? AND model = ? AND id <> ? AND sold = 0 AND deleted = '0' AND type = ? ${excludedClause} ORDER BY dateUpdated DESC LIMIT 4`,
+      `SELECT id, make, model, price, sidecarMedias, accountName, profilePicture, vendorId, type, contact, vendorContact
+       FROM search WHERE make = ? AND model = ? AND id <> ? AND sold = 0 AND deleted = '0' AND type = ? ${excludedClause} ORDER BY dateUpdated DESC LIMIT 4`,
       ...params,
     );
     return legacySuccess(this.normalizeBigInts(rows));
@@ -244,7 +247,8 @@ export class LegacySearchService {
     }
 
     const rows = await this.prisma.$queryRawUnsafe<unknown[]>(
-      `SELECT id, make, model, price FROM search WHERE ${where} ORDER BY dateUpdated DESC LIMIT 4`,
+      `SELECT id, make, model, price, sidecarMedias, accountName, profilePicture, vendorId, type, contact, vendorContact
+       FROM search WHERE ${where} ORDER BY dateUpdated DESC LIMIT 4`,
       ...params,
     );
     return legacySuccess(this.normalizeBigInts(rows));
@@ -394,6 +398,9 @@ export class LegacySearchService {
     const terms = this.termMap(filter.searchTerms ?? []);
     const clauses: string[] = [`sold = 0`, `deleted = '0'`];
     const params: unknown[] = [];
+    const keyword = this.toStr(filter.keyword ?? '').toLowerCase();
+    const vendorAccountName = this.toStr(terms.get('vendorAccountName') ?? '');
+    const isVendorSearch = Boolean(vendorAccountName);
     const type = this.toStr(filter.type ?? '');
     clauses.push('type = ?');
     params.push(type || 'car');
@@ -432,8 +439,172 @@ export class LegacySearchService {
       'emissionGroup',
       terms.get('emissionGroup'),
     );
+    if (vendorAccountName) {
+      clauses.push('accountName = ?');
+      params.push(vendorAccountName);
+    }
+
+    this.applyKeywordClauses(clauses, params, keyword, isVendorSearch);
+    this.applyGeneralSearchClauses(
+      clauses,
+      params,
+      this.toStr(filter.generalSearch ?? ''),
+    );
 
     return { whereSql: `WHERE ${clauses.join(' AND ')}`, params };
+  }
+
+  private applyKeywordClauses(
+    clauses: string[],
+    params: unknown[],
+    keyword: string,
+    isVendorSearch: boolean,
+  ) {
+    if (!keyword) {
+      if (!isVendorSearch) {
+        clauses.push('(vendorId != 1 OR vendorId IS NULL)');
+      }
+      return;
+    }
+
+    if (keyword === 'encar') {
+      clauses.push('vendorId = 1');
+    } else {
+      clauses.push('(vendorId != 1 OR vendorId IS NULL)');
+    }
+
+    if (keyword === 'okazion,oferte') {
+      clauses.push('price > 1');
+      clauses.push('minPrice > 1');
+      clauses.push('maxPrice > 1');
+      clauses.push('((price - minPrice) / (maxPrice - price) < 0.25)');
+      return;
+    }
+
+    if (keyword === 'retro') {
+      clauses.push('(cleanedCaption LIKE ? OR registration < ?)');
+      params.push('%retro%', String(new Date().getFullYear() - 30));
+      return;
+    }
+
+    if (keyword === 'korea') {
+      clauses.push('(cleanedCaption LIKE ? OR accountName LIKE ?)');
+      params.push('%korea%', '%korea%');
+      return;
+    }
+
+    if (keyword !== 'elektrike') {
+      const options = keyword
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
+      if (options.length > 0) {
+        clauses.push(
+          `(${options.map(() => 'cleanedCaption LIKE ?').join(' OR ')})`,
+        );
+        for (const option of options) {
+          params.push(`%${option}%`);
+        }
+      }
+    }
+  }
+
+  private applyGeneralSearchClauses(
+    clauses: string[],
+    params: unknown[],
+    generalSearch: string,
+  ) {
+    const normalizedInput = generalSearch.replace(/,/g, ' ').trim();
+    if (!normalizedInput) return;
+    if (normalizedInput.length > 75) return;
+
+    const tokens = this.normalizeGeneralSearchTokens(normalizedInput).slice(
+      0,
+      10,
+    );
+    if (tokens.length === 0) return;
+
+    for (const token of tokens) {
+      clauses.push(
+        '(cleanedCaption LIKE ? OR make LIKE ? OR model LIKE ? OR variant LIKE ? OR registration LIKE ? OR fuelType LIKE ?)',
+      );
+      const value = `%${token}%`;
+      params.push(value, value, value, value, value, value);
+    }
+  }
+
+  private normalizeGeneralSearchTokens(input: string): string[] {
+    let tokens = input
+      .split(' ')
+      .map((token) => token.trim().toLowerCase())
+      .filter(Boolean);
+
+    tokens = tokens.map((token) => {
+      if (token === 'benc') return 'benz';
+      if (token === 'mercedez') return 'mercedes';
+      if (token === 'seri' || token === 'seria' || token === 'serija') {
+        return 'series';
+      }
+      if (token === 'klas' || token === 'klasa' || token === 'clas') {
+        return 'class';
+      }
+      return token;
+    });
+
+    for (let i = 0; i < tokens.length - 1; i++) {
+      if (tokens[i] === 't' && tokens[i + 1] === 'max') {
+        tokens[i] = 'tmax';
+        tokens.splice(i + 1, 1);
+      }
+    }
+
+    for (let i = 0; i < tokens.length - 1; i++) {
+      if (tokens[i] === 'series') {
+        const tmp = tokens[i];
+        tokens[i] = tokens[i + 1];
+        tokens[i + 1] = tmp;
+      }
+    }
+
+    for (let i = 0; i < tokens.length - 1; i++) {
+      const current = tokens[i];
+      const next = tokens[i + 1];
+      if (
+        current.length === 1 &&
+        !this.isNumeric(current) &&
+        !this.skipQuickSearchFix.has(current)
+      ) {
+        tokens[i] = this.isNumeric(next)
+          ? `${current} ${next}`
+          : `${current}-${next}`;
+        tokens.splice(i + 1, 1);
+        i--;
+      }
+    }
+
+    for (let i = 1; i < tokens.length; i++) {
+      const current = tokens[i];
+      const prev = tokens[i - 1];
+      if (
+        this.isNumeric(current) &&
+        !this.isNumeric(prev) &&
+        !prev.includes('-') &&
+        !this.skipQuickSearchFix.has(prev) &&
+        !current.includes('.')
+      ) {
+        tokens[i - 1] =
+          prev === 'golf' ? `${prev} ${current}` : `${prev}-${current}`;
+        tokens.splice(i, 1);
+        i--;
+      }
+    }
+
+    return tokens;
+  }
+
+  private isNumeric(value: string): boolean {
+    if (!value) return false;
+    return !Number.isNaN(Number(value));
   }
 
   private addInClause(
