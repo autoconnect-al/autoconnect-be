@@ -148,13 +148,13 @@ export class LegacySearchService {
       clauses.push(`accountName NOT IN (${excludeAccountList})`);
     }
 
-    const query = `SELECT id, make, model, price, accountName, sidecarMedias, contact, vendorContact
+    const query = `SELECT id, make, model, variant, registration, mileage, price, transmission, fuelType, engineSize, drivetrain, seats, numberOfDoors, bodyType, customsPaid, canExchange, options, emissionGroup, type, accountName, sidecarMedias, contact, vendorContact, profilePicture, vendorId
       FROM search
       WHERE ${clauses.join(' AND ')}
       ORDER BY mostWantedTo DESC
       LIMIT 4`;
     const rows = await this.prisma.$queryRawUnsafe<unknown[]>(query, ...params);
-    return legacySuccess(this.normalizeBigInts(rows));
+    return legacySuccess(this.normalizeBigInts(this.withCarDetail(rows)));
   }
 
   async getCarDetails(id: string) {
@@ -204,11 +204,11 @@ export class LegacySearchService {
     const excludedClause = excluded ? `AND id NOT IN (${excluded})` : '';
     const params: unknown[] = [make, model, id, type];
     const rows = await this.prisma.$queryRawUnsafe<unknown[]>(
-      `SELECT id, make, model, price, sidecarMedias, accountName, profilePicture, vendorId, type, contact, vendorContact
+      `SELECT id, make, model, variant, registration, mileage, price, transmission, fuelType, engineSize, drivetrain, seats, numberOfDoors, bodyType, customsPaid, canExchange, options, emissionGroup, type, sidecarMedias, accountName, profilePicture, vendorId, contact, vendorContact
        FROM search WHERE make = ? AND model = ? AND id <> ? AND sold = 0 AND deleted = '0' AND type = ? ${excludedClause} ORDER BY dateUpdated DESC LIMIT 4`,
       ...params,
     );
-    return legacySuccess(this.normalizeBigInts(rows));
+    return legacySuccess(this.normalizeBigInts(this.withCarDetail(rows)));
   }
 
   async relatedByFilter(
@@ -247,11 +247,11 @@ export class LegacySearchService {
     }
 
     const rows = await this.prisma.$queryRawUnsafe<unknown[]>(
-      `SELECT id, make, model, price, sidecarMedias, accountName, profilePicture, vendorId, type, contact, vendorContact
+      `SELECT id, make, model, variant, registration, mileage, price, transmission, fuelType, engineSize, drivetrain, seats, numberOfDoors, bodyType, customsPaid, canExchange, options, emissionGroup, type, sidecarMedias, accountName, profilePicture, vendorId, contact, vendorContact
        FROM search WHERE ${where} ORDER BY dateUpdated DESC LIMIT 4`,
       ...params,
     );
-    return legacySuccess(this.normalizeBigInts(rows));
+    return legacySuccess(this.normalizeBigInts(this.withCarDetail(rows)));
   }
 
   private parseFilter(filterRaw: string | undefined): SearchFilter | null {
@@ -439,6 +439,7 @@ export class LegacySearchService {
       'emissionGroup',
       terms.get('emissionGroup'),
     );
+    this.addCustomsPaidClause(clauses, params, terms.get('customsPaid'));
     if (vendorAccountName) {
       clauses.push('accountName = ?');
       params.push(vendorAccountName);
@@ -653,6 +654,25 @@ export class LegacySearchService {
     }
   }
 
+  private addCustomsPaidClause(
+    clauses: string[],
+    params: unknown[],
+    raw: unknown,
+  ) {
+    const value = this.toStr(raw ?? '');
+    if (!value) return;
+    if (value === '1' || value.toLowerCase() === 'true') {
+      clauses.push('(customsPaid = 1 OR customsPaid IS NULL)');
+      return;
+    }
+    if (value === '0' || value.toLowerCase() === 'false') {
+      clauses.push('customsPaid = 0');
+      return;
+    }
+    clauses.push('customsPaid = ?');
+    params.push(value);
+  }
+
   private termMap(searchTerms: FilterTerm[]) {
     const map = new Map<string, unknown>();
     for (const term of searchTerms) {
@@ -678,5 +698,36 @@ export class LegacySearchService {
         return value;
       }),
     ) as T;
+  }
+
+  private withCarDetail(rows: unknown[]): unknown[] {
+    return rows.map((row) => {
+      if (!row || typeof row !== 'object') return row;
+      const item = row as Record<string, unknown>;
+      return {
+        ...item,
+        car_detail: {
+          make: item.make,
+          model: item.model,
+          variant: item.variant,
+          registration: item.registration,
+          mileage: item.mileage,
+          transmission: item.transmission,
+          fuelType: item.fuelType,
+          engineSize: item.engineSize,
+          drivetrain: item.drivetrain,
+          seats: item.seats,
+          numberOfDoors: item.numberOfDoors,
+          bodyType: item.bodyType,
+          customsPaid: item.customsPaid,
+          canExchange: item.canExchange,
+          options: item.options,
+          emissionGroup: item.emissionGroup,
+          type: item.type,
+          contact: item.contact,
+          price: item.price,
+        },
+      };
+    });
   }
 }

@@ -58,6 +58,18 @@ describe('LegacySearchService', () => {
     expect(built.params).toEqual(expect.arrayContaining(['autokorea.al']));
   });
 
+  it('buildWhere should apply customsPaid=true as true-or-null', () => {
+    const prisma = { $queryRawUnsafe: jest.fn() } as any;
+    const service = new LegacySearchService(prisma);
+
+    const built = (service as any).buildWhere({
+      type: 'car',
+      searchTerms: [{ key: 'customsPaid', value: '1' }],
+    });
+
+    expect(built.whereSql).toContain('(customsPaid = 1 OR customsPaid IS NULL)');
+  });
+
   it('relatedById should select sidecarMedias for related cards', async () => {
     const prisma = {
       $queryRawUnsafe: jest
@@ -72,6 +84,57 @@ describe('LegacySearchService', () => {
     const secondQuery = prisma.$queryRawUnsafe.mock.calls[1][0] as string;
     expect(secondQuery).toContain('sidecarMedias');
     expect(secondQuery).toContain('profilePicture');
+  });
+
+  it('relatedById should include car_detail object in response rows', async () => {
+    const prisma = {
+      $queryRawUnsafe: jest
+        .fn()
+        .mockResolvedValueOnce([{ make: 'BMW', model: 'X5' }])
+        .mockResolvedValueOnce([
+          {
+            id: 2,
+            make: 'BMW',
+            model: 'X5',
+            price: 12000,
+            customsPaid: 1,
+          },
+        ]),
+    } as any;
+    const service = new LegacySearchService(prisma);
+
+    const response = await service.relatedById('1', 'car');
+    const first = (response.result as Array<Record<string, unknown>>)[0];
+    expect(first.car_detail).toMatchObject({
+      make: 'BMW',
+      model: 'X5',
+      price: 12000,
+      customsPaid: 1,
+    });
+  });
+
+  it('mostWanted should include car_detail object in response rows', async () => {
+    const prisma = {
+      $queryRawUnsafe: jest.fn().mockResolvedValue([
+        {
+          id: 2,
+          make: 'Audi',
+          model: 'A6',
+          price: 20000,
+          customsPaid: 0,
+        },
+      ]),
+    } as any;
+    const service = new LegacySearchService(prisma);
+
+    const response = await service.mostWanted();
+    const first = (response.result as Array<Record<string, unknown>>)[0];
+    expect(first.car_detail).toMatchObject({
+      make: 'Audi',
+      model: 'A6',
+      price: 20000,
+      customsPaid: 0,
+    });
   });
 
   it('getCarDetails should decode base64 caption to text', async () => {
