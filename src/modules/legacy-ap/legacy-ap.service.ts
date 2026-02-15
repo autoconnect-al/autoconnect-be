@@ -620,6 +620,7 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
           WHERE (cd.published = 0 OR cd.published IS NULL OR p.revalidate = 1)
             AND (cd.sold = 0 OR cd.sold IS NULL)
             AND (cd.deleted = 0 OR cd.deleted IS NULL)
+            AND (p.deleted = 0 OR p.deleted IS NULL)
             AND LOWER(COALESCE(p.origin, '')) IN ('manual', 'instagram', 'encar')
           ORDER BY p.dateCreated DESC
           LIMIT 500
@@ -728,14 +729,17 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
     };
 
     const bucket = modeQueryMap[modeNormalized] ?? modeQueryMap.general;
-    const compactList = this.buildPromptList(bucket.rows, safeLength);
+    const { list: compactList, count: includedCount } = this.buildPromptList(
+      bucket.rows,
+      safeLength,
+    );
     const fullPrompt = compactList
       ? `${bucket.prerequisite} Here is another list: ${compactList}`
       : '';
 
     return {
       prompt: fullPrompt,
-      size: bucket.rows.length,
+      size: includedCount,
     };
   }
 
@@ -1119,7 +1123,10 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
         engineSize: row.engineSize,
       }));
 
-    const listPrompt = this.buildPromptList(payloadRows, length);
+    const { list: listPrompt, count: includedCount } = this.buildPromptList(
+      payloadRows,
+      length,
+    );
     const variantPart = variants.length
       ? ` Try to map the variant to one of these: [${variants.join(', ')}].`
       : '';
@@ -1127,12 +1134,15 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
     const prompt = `Hello. I want you to process a list of JSON objects. Keep the same structure but map model to one of these: [${baseModels.join(', ')}].${variantPart} Fill bodyType, fuelType and engineSize based on model/variant. Here is another list: ${listPrompt}`;
     return {
       prompt,
-      size: problematicRows.length,
+      size: includedCount,
     };
   }
 
-  private buildPromptList(rows: PromptRow[], maxLength: number): string {
-    if (!rows.length) return '';
+  private buildPromptList(
+    rows: PromptRow[],
+    maxLength: number,
+  ): { list: string; count: number } {
+    if (!rows.length) return { list: '', count: 0 };
     const chunks: string[] = [];
     for (const row of rows) {
       chunks.push(JSON.stringify(this.normalizeBigInts(row)));
@@ -1142,7 +1152,7 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
         break;
       }
     }
-    return `[${chunks.join(', ')}]`;
+    return { list: `[${chunks.join(', ')}]`, count: chunks.length };
   }
 
   private toObject(value: unknown): AnyRecord {

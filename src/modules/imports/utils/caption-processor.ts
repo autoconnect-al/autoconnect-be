@@ -156,6 +156,7 @@ export function isCustomsPaid(
     'pa doganë',
     'pa letra',
     'deri ne durres',
+    'deri në durrës',
     'deri ne port',
   ];
 
