@@ -1153,6 +1153,7 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
         AND (cd.sold = 0 OR cd.sold IS NULL)
         AND (cd.deleted = 0 OR cd.deleted IS NULL)
         AND (p.origin = 'manual' OR p.origin = 'instagram')
+        AND (p.deleted = 0 OR p.deleted IS NULL)
       ORDER BY p.dateCreated DESC
       `,
     );
