@@ -304,7 +304,7 @@ export class CarDetailsAdminController {
 
   @Get('generate-prompt')
   generatePrompt(@Query('length') length?: string) {
-    return this.service.generatePrompt(Number(length ?? 3700), 'general');
+    return this.service.generatePrompt(Number(length ?? 14000), 'general');
   }
 
   @Get('generate-prompt-fix-variant')
