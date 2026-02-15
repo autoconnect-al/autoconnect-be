@@ -117,14 +117,14 @@ describe('caption-processor', () => {
       expect(isCustomsPaid('DERI NE DURRES')).toBe(true);
     });
 
-    it('should return false when no keywords found', () => {
-      expect(isCustomsPaid('Makina e bukur per shitje')).toBe(false);
-      expect(isCustomsPaid('Kontakt 06XXXXXXX')).toBe(false);
+    it('should return null when no keywords found', () => {
+      expect(isCustomsPaid('Makina e bukur per shitje')).toBeNull();
+      expect(isCustomsPaid('Kontakt 06XXXXXXX')).toBeNull();
     });
 
     it('should handle null/undefined', () => {
-      expect(isCustomsPaid(null)).toBe(false);
-      expect(isCustomsPaid(undefined)).toBe(false);
+      expect(isCustomsPaid(null)).toBeNull();
+      expect(isCustomsPaid(undefined)).toBeNull();
     });
 
     it('should handle real caption examples', () => {

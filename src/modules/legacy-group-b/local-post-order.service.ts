@@ -497,7 +497,7 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
           emissionGroup: this.toNullableString(detailsSource.emissionGroup),
           type: this.toNullableString(detailsSource.type) ?? 'car',
           contact: JSON.stringify(this.extractContact(detailsSource)),
-          customsPaid: this.booleanFrom(detailsSource.customsPaid, false),
+          customsPaid: this.nullableBooleanFrom(detailsSource.customsPaid),
           published: this.booleanFrom(detailsSource.published, false),
         },
         create: {
@@ -523,7 +523,7 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
           emissionGroup: this.toNullableString(detailsSource.emissionGroup),
           type: this.toNullableString(detailsSource.type) ?? 'car',
           contact: JSON.stringify(this.extractContact(detailsSource)),
-          customsPaid: this.booleanFrom(detailsSource.customsPaid, false),
+          customsPaid: this.nullableBooleanFrom(detailsSource.customsPaid),
           published: this.booleanFrom(detailsSource.published, false),
         },
       });
@@ -559,7 +559,7 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
           bodyType: this.toNullableString(detailsSource.bodyType),
           emissionGroup: this.toNullableString(detailsSource.emissionGroup),
           contact: JSON.stringify(this.extractContact(detailsSource)),
-          customsPaid: this.booleanFrom(detailsSource.customsPaid, false),
+          customsPaid: this.nullableBooleanFrom(detailsSource.customsPaid),
           sold,
           type: this.toNullableString(detailsSource.type) ?? 'car',
         },
@@ -593,7 +593,7 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
           bodyType: this.toNullableString(detailsSource.bodyType),
           emissionGroup: this.toNullableString(detailsSource.emissionGroup),
           contact: JSON.stringify(this.extractContact(detailsSource)),
-          customsPaid: this.booleanFrom(detailsSource.customsPaid, false),
+          customsPaid: this.nullableBooleanFrom(detailsSource.customsPaid),
           sold,
           type: this.toNullableString(detailsSource.type) ?? 'car',
         },
@@ -663,6 +663,18 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
       if (['false', '0', 'no'].includes(v)) return false;
     }
     return fallback;
+  }
+
+  private nullableBooleanFrom(value: unknown): boolean | null {
+    if (value === null || value === undefined || value === '') return null;
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value !== 0;
+    if (typeof value === 'string') {
+      const v = value.toLowerCase();
+      if (['true', '1', 'yes'].includes(v)) return true;
+      if (['false', '0', 'no'].includes(v)) return false;
+    }
+    return null;
   }
 
   private generateRandomCode(length: number, onlyNumbers = false): string {

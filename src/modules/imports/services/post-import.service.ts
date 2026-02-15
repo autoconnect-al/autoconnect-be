@@ -526,7 +526,7 @@ export class PostImportService {
         numberOfDoors: carDetails.numberOfDoors || null,
         bodyType: carDetails.bodyType || null,
         price: carDetails.price || null,
-        customsPaid: customsPaid || false,
+        customsPaid: customsPaid ?? null,
         sold,
         published: !!carDetails.make && !!carDetails.model,
         contact: carDetails.contact ? JSON.stringify(carDetails.contact) : '',
