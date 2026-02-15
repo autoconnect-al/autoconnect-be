@@ -746,7 +746,7 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
       });
     }
 
-    await this.rebuildSearchFromPosts();
+    // await this.rebuildSearchFromPosts();
     return legacySuccess(null, 'Updated car detail');
   }
 
