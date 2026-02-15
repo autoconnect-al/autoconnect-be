@@ -640,7 +640,6 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
             AND cd.sold = 0
             AND cd.type = 'car'
             AND p.deleted = 0
-            AND p.live = 1
             AND LOWER(COALESCE(p.origin, '')) <> 'manual'
             AND p.createdTime >= UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 3 MONTH))
             AND (
@@ -665,7 +664,6 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
             AND cd.deleted = 0
             AND cd.published = 1
             AND p.deleted = 0
-            AND p.live = 1
             AND cd.sold = 0
             AND LOWER(COALESCE(p.origin, '')) <> 'manual'
             AND cd.mileage > 0
@@ -688,7 +686,6 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
             AND cd.deleted = 0
             AND cd.published = 1
             AND p.deleted = 0
-            AND p.live = 1
             AND cd.sold = 0
             AND p.vendor_id <> 1
             AND LOWER(COALESCE(p.origin, '')) <> 'manual'
@@ -710,7 +707,6 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
           WHERE cd.deleted = 0
             AND cd.published = 1
             AND p.deleted = 0
-            AND p.live = 1
             AND cd.type = 'motorcycle'
             AND LOWER(COALESCE(p.origin, '')) <> 'manual'
             AND p.createdTime >= UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 3 MONTH))
@@ -1074,7 +1070,6 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
       LEFT JOIN post p ON p.id = cd.post_id
       WHERE p.createdTime >= UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 3 MONTH))
         AND p.deleted = 0
-        AND p.live = 1
         AND cd.deleted = 0
         AND cd.published = 1
         AND cd.sold = 0
