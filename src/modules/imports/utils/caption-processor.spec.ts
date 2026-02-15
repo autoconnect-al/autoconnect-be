@@ -109,6 +109,11 @@ describe('caption-processor', () => {
       it('should detect "dogane paguara"', () => {
         expect(isCustomsPaid('dogane paguara')).toBe(true);
       });
+
+      it('should detect "sapo targuar"', () => {
+        expect(isCustomsPaid('E SAPO TARGUAR')).toBe(true);
+        expect(isCustomsPaid('Makina sapo targuar')).toBe(true);
+      });
     });
 
     it('should be case insensitive', () => {

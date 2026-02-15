@@ -362,6 +362,21 @@ export class PostImportService {
         );
       }
 
+      // Keep customsPaid in sync for existing posts.
+      // This allows re-imports to overwrite previous values, including setting null.
+      if (existingPost) {
+        if (existingPost.car_detail_id) {
+          await this.prisma.car_detail.updateMany({
+            where: { id: existingPost.car_detail_id },
+            data: { customsPaid, dateUpdated: now },
+          });
+        }
+        await this.prisma.search.updateMany({
+          where: { id: postId },
+          data: { customsPaid },
+        });
+      }
+
       // Now create/link car_detail AFTER post exists
       // For existing posts (Instagram or Encar), preserve car_detail - assume user data is complete
       if (existingPost) {
