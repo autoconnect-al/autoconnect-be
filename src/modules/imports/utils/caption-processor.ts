@@ -120,13 +120,6 @@ export function isCustomsPaid(
 
   // Terms indicating customs have been paid
   const termsForCustomsPaid = [
-    'pa dogane',
-    'pa dogan',
-    'pa doganë',
-    'pa letra',
-    'deri ne durres',
-    'deri ne port',
-    'deri shtepi',
     'dogane lire',
     'pa pezullim',
     'nuk ka dogane',
@@ -158,6 +151,12 @@ export function isCustomsPaid(
     'duhet dogane',
     'pa dogan te paguar',
     'pa dogane te paguar',
+    'pa dogane',
+    'pa dogan',
+    'pa doganë',
+    'pa letra',
+    'deri ne durres',
+    'deri ne port',
   ];
 
   // Check for customs paid terms first
