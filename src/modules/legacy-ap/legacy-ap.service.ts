@@ -625,7 +625,9 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
     const rows = await this.prisma.post.findMany({
       where: {
         deleted: false,
-        OR: [{ origin: 'MANUAL' }, { status: 'DRAFT' }],
+        origin: 'MANUAL',
+        status: 'DRAFT',
+        // OR: [{ origin: 'MANUAL' }, { status: 'DRAFT' }],
       },
       include: {
         car_detail_car_detail_post_idTopost: true,
