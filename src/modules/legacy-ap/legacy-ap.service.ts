@@ -1307,48 +1307,110 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
       const details = post.car_detail_car_detail_post_idTopost?.[0];
       if (!details || details.deleted) continue;
 
-      await this.prisma.search.create({
-        data: {
-          id: post.id,
-          dateCreated: post.dateCreated,
-          dateUpdated: new Date(),
-          deleted: details.sold ? '1' : '0',
-          caption: post.caption,
-          cleanedCaption: post.cleanedCaption ?? '',
-          createdTime: post.createdTime ? BigInt(post.createdTime) : null,
-          sidecarMedias: post.sidecarMedias,
-          likesCount: post.likesCount,
-          viewsCount: post.viewsCount,
-          accountName: post.vendor.accountName,
-          vendorId: post.vendor_id,
-          profilePicture: post.vendor.profilePicture,
-          make: details.make,
-          model: details.model,
-          variant: details.variant,
-          registration: details.registration,
-          mileage: details.mileage ? Math.trunc(details.mileage) : null,
-          price: details.price ? Math.trunc(details.price) : null,
-          transmission: details.transmission,
-          fuelType: details.fuelType,
-          engineSize: details.engineSize,
-          drivetrain: details.drivetrain,
-          seats: details.seats,
-          numberOfDoors: details.numberOfDoors,
-          bodyType: details.bodyType,
-          emissionGroup: details.emissionGroup,
-          contact: details.contact,
-          customsPaid: details.customsPaid,
-          sold: details.sold,
-          type: details.type,
-          promotionTo: post.promotionTo,
-          highlightedTo: post.highlightedTo,
-          renewTo: post.renewTo,
-          renewInterval: post.renewInterval,
-          renewedTime: post.renewedTime,
-          mostWantedTo: post.mostWantedTo,
-        },
-      });
+      try {
+        await this.prisma.search.create({
+          data: {
+            id: post.id,
+            dateCreated: post.dateCreated,
+            dateUpdated: new Date(),
+            deleted: details.sold ? '1' : '0',
+            caption: post.caption,
+            cleanedCaption: post.cleanedCaption ?? '',
+            createdTime: this.toNullableBigInt(post.createdTime),
+            sidecarMedias: post.sidecarMedias,
+            likesCount: post.likesCount,
+            viewsCount: post.viewsCount,
+            accountName: post.vendor.accountName,
+            vendorId: post.vendor_id,
+            profilePicture: post.vendor.profilePicture,
+            make: details.make,
+            model: details.model,
+            variant: details.variant,
+            registration: details.registration,
+            mileage: details.mileage ? Math.trunc(details.mileage) : null,
+            price: details.price ? Math.trunc(details.price) : null,
+            transmission: details.transmission,
+            fuelType: details.fuelType,
+            engineSize: details.engineSize,
+            drivetrain: details.drivetrain,
+            seats: details.seats,
+            numberOfDoors: details.numberOfDoors,
+            bodyType: details.bodyType,
+            emissionGroup: details.emissionGroup,
+            contact: details.contact,
+            customsPaid: details.customsPaid,
+            sold: details.sold,
+            type: details.type,
+            promotionTo: post.promotionTo,
+            highlightedTo: post.highlightedTo,
+            renewTo: post.renewTo,
+            renewInterval: post.renewInterval,
+            renewedTime: post.renewedTime,
+            mostWantedTo: post.mostWantedTo,
+          },
+        });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Unknown rebuild error';
+        console.error(
+          JSON.stringify({
+            scope: 'legacy-ap-service',
+            event: 'rebuild-search.create-failed',
+            postId: String(post.id),
+            message,
+          }),
+        );
+      }
     }
+  }
+
+  private toNullableBigInt(value: unknown): bigint | null {
+    const asTimestampSeconds = this.toUnixSeconds(value);
+    if (asTimestampSeconds === null) return null;
+    try {
+      return BigInt(asTimestampSeconds);
+    } catch {
+      return null;
+    }
+  }
+
+  private toUnixSeconds(value: unknown): number | null {
+    if (value === null || value === undefined) return null;
+
+    if (typeof value === 'bigint') {
+      const asNumber = Number(value);
+      if (!Number.isFinite(asNumber)) return null;
+      return this.normalizeEpochSeconds(asNumber);
+    }
+
+    if (typeof value === 'number') {
+      if (!Number.isFinite(value)) return null;
+      return this.normalizeEpochSeconds(value);
+    }
+
+    const text = this.toSafeString(value);
+    if (!text) return null;
+
+    // Numeric string (seconds/ms)
+    if (/^\d+(\.\d+)?$/.test(text)) {
+      const parsed = Number(text);
+      if (!Number.isFinite(parsed)) return null;
+      return this.normalizeEpochSeconds(parsed);
+    }
+
+    // ISO date string or any Date.parse-compatible string
+    const parsedMs = Date.parse(text);
+    if (!Number.isFinite(parsedMs)) return null;
+    return this.normalizeEpochSeconds(parsedMs);
+  }
+
+  private normalizeEpochSeconds(value: number): number | null {
+    if (!Number.isFinite(value) || value <= 0) return null;
+
+    // Treat large epochs as milliseconds and normalize to seconds.
+    const seconds = value > 1e12 ? Math.trunc(value / 1000) : Math.trunc(value);
+    if (!Number.isFinite(seconds) || seconds <= 0) return null;
+    return seconds;
   }
 
   private normalizeBigInts<T>(input: T): T {

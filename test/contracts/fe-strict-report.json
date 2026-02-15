@@ -1,30 +1,26 @@
 {
-  "startedAt": "2026-02-14T07:57:42.250Z",
-  "finishedAt": "2026-02-14T07:57:42.806Z",
+  "startedAt": "2026-02-15T13:40:38.683Z",
+  "finishedAt": "2026-02-15T13:40:44.758Z",
   "urls": {
     "phpBaseUrl": "http://127.0.0.1:8000",
     "nestBaseUrl": "http://127.0.0.1:3000"
   },
   "points": {
     "1_search_success_strict": {
-      "pass": true,
-      "details": {
-        "totalCases": 10
-      }
+      "pass": false,
+      "error": "search strict mismatches: [{\"idx\":1,\"errors\":[\"nest envelope missing\"]},{\"idx\":2,\"errors\":[\"nest envelope missing\"]},{\"idx\":3,\"errors\":[\"nest envelope missing\"]},{\"idx\":4,\"errors\":[\"nest envelope missing\"]},{\"idx\":5,\"errors\":[\"nest envelope missing\"]},{\"idx\":6,\"errors\":[\"nest envelope missing\"]},{\"idx\":7,\"errors\":[\"nest envelope missing\"]},{\"idx\":8,\"errors\":[\"nest envelope missing\"]},{\"idx\":9,\"errors\":[\"nest envelope missing\"]},{\"idx\":10,\"errors\":[\"nest envelope missing\"]}]"
     },
     "2_result_count_strict": {
-      "pass": true,
-      "details": {
-        "totalCases": 6
-      }
+      "pass": false,
+      "error": "result-count strict mismatches: [{\"idx\":1,\"errors\":[\"nest envelope missing\"]},{\"idx\":2,\"errors\":[\"nest envelope missing\"]},{\"idx\":3,\"errors\":[\"nest envelope missing\"]},{\"idx\":4,\"errors\":[\"nest envelope missing\"]},{\"idx\":5,\"errors\":[\"nest envelope missing\"]},{\"idx\":6,\"errors\":[\"nest envelope missing\"]}]"
     },
     "3_models_full_true": {
       "pass": false,
-      "error": "models full=true mismatches: [{\"path\":\"/data/models/Volkswagen?full=true\",\"errors\":[\"status mismatch php=200 nest=0\",\"envelope mismatch php={\\\"hasSuccess\\\":true,\\\"hasResult\\\":true,\\\"hasMessage\\\":true,\\\"hasStatusCode\\\":true} nest={\\\"hasSuccess\\\":true,\\\"hasResult\\\":false,\\\"hasMessage\\\":true,\\\"hasStatusCode\\\":true}\",\"nest success!=true\",\"deep result mismatch\"]},{\"path\":\"/data/models/motorcycles/Suzuki?full=true\",\"errors\":[\"status mismatch php=200 nest=0\",\"envelope mismatch php={\\\"hasSuccess\\\":true,\\\"hasResult\\\":true,\\\"hasMessage\\\":true,\\\"hasStatusCode\\\":true} nest={\\\"hasSuccess\\\":true,\\\"hasResult\\\":false,\\\"hasMessage\\\":true,\\\"hasStatusCode\\\":true}\",\"nest success!=true\",\"deep result mismatch\"]}]"
+      "error": "models full=true mismatches: [{\"path\":\"/data/models/Volkswagen?full=true\",\"errors\":[\"nest result is not an array\"]},{\"path\":\"/data/models/motorcycles/Suzuki?full=true\",\"errors\":[\"nest result is not an array\"]}]"
     },
     "4_related_post_variants": {
       "pass": false,
-      "error": "related post variant mismatches: [{\"path\":\"/car-details/related-post/3828745152815910499?type=car&excludedIds=3828706900208780071%2C3829358857588330925\",\"errors\":[\"status mismatch php=200 nest=0\",\"envelope mismatch php={\\\"hasSuccess\\\":true,\\\"hasResult\\\":true,\\\"hasMessage\\\":true,\\\"hasStatusCode\\\":true} nest={\\\"hasSuccess\\\":true,\\\"hasResult\\\":false,\\\"hasMessage\\\":true,\\\"hasStatusCode\\\":true}\",\"nest success!=true\"]},{\"path\":\"/car-details/related-post/3828745152815910499?type=motorcycle&excludedIds=\",\"errors\":[\"status mismatch php=200 nest=0\",\"envelope mismatch php={\\\"hasSuccess\\\":true,\\\"hasResult\\\":true,\\\"hasMessage\\\":true,\\\"hasStatusCode\\\":true} nest={\\\"hasSuccess\\\":true,\\\"hasResult\\\":false,\\\"hasMessage\\\":true,\\\"hasStatusCode\\\":true}\",\"nest success!=true\"]},{\"path\":\"/car-details/related-post-filter?type=car&excludedIds=3828706900208780071%2C3829358857588330925\",\"errors\":[\"status mismatch php=200 nest=0\",\"envelope mismatch php={\\\"hasSuccess\\\":true,\\\"hasResult\\\":true,\\\"hasMessage\\\":true,\\\"hasStatusCode\\\":true} nest={\\\"hasSuccess\\\":true,\\\"hasResult\\\":false,\\\"hasMessage\\\":true,\\\"hasStatusCode\\\":true}\",\"nest success!=true\"]}]"
+      "error": "related post variant mismatches: [{\"path\":\"/car-details/related-post/3828745152815910499?type=car&excludedIds=3828706900208780071%2C3829358857588330925\",\"errors\":[\"nest envelope missing\"]},{\"path\":\"/car-details/related-post/3828745152815910499?type=motorcycle&excludedIds=\",\"errors\":[\"nest envelope missing\"]},{\"path\":\"/car-details/related-post-filter?type=car&excludedIds=3828706900208780071%2C3829358857588330925\",\"errors\":[\"nest envelope missing\"]}]"
     },
     "5_refresh_token_success": {
       "pass": false,
@@ -52,21 +48,29 @@
     },
     "11_price_calculate_success_strict": {
       "pass": false,
-      "error": "price-calculate mismatches: [\"status mismatch php=200 nest=0\",\"envelope mismatch php={\\\"hasSuccess\\\":true,\\\"hasResult\\\":true,\\\"hasMessage\\\":true,\\\"hasStatusCode\\\":true} nest={\\\"hasSuccess\\\":true,\\\"hasResult\\\":false,\\\"hasMessage\\\":true,\\\"hasStatusCode\\\":true}\",\"nest success!=true\",\"deep result mismatch\"]"
+      "error": "price-calculate mismatches: [\"status mismatch php=0 nest=404\",\"envelope mismatch php={\\\"hasSuccess\\\":true,\\\"hasResult\\\":false,\\\"hasMessage\\\":true,\\\"hasStatusCode\\\":true} nest=null\",\"php success!=true\",\"nest success!=true\"]"
     },
     "12_post_caption_success_strict": {
       "pass": false,
-      "error": "post/caption mismatches: [\"status mismatch php=200 nest=0\",\"envelope mismatch php={\\\"hasSuccess\\\":true,\\\"hasResult\\\":true,\\\"hasMessage\\\":true,\\\"hasStatusCode\\\":true} nest={\\\"hasSuccess\\\":true,\\\"hasResult\\\":false,\\\"hasMessage\\\":true,\\\"hasStatusCode\\\":true}\",\"nest success!=true\",\"deep result mismatch\"]"
+      "error": "post/caption mismatches: [\"status mismatch php=0 nest=200\",\"envelope mismatch php={\\\"hasSuccess\\\":true,\\\"hasResult\\\":false,\\\"hasMessage\\\":true,\\\"hasStatusCode\\\":true} nest=null\",\"php success!=true\",\"nest success!=true\"]"
     }
   },
   "failures": [
     {
+      "name": "1_search_success_strict",
+      "error": "search strict mismatches: [{\"idx\":1,\"errors\":[\"nest envelope missing\"]},{\"idx\":2,\"errors\":[\"nest envelope missing\"]},{\"idx\":3,\"errors\":[\"nest envelope missing\"]},{\"idx\":4,\"errors\":[\"nest envelope missing\"]},{\"idx\":5,\"errors\":[\"nest envelope missing\"]},{\"idx\":6,\"errors\":[\"nest envelope missing\"]},{\"idx\":7,\"errors\":[\"nest envelope missing\"]},{\"idx\":8,\"errors\":[\"nest envelope missing\"]},{\"idx\":9,\"errors\":[\"nest envelope missing\"]},{\"idx\":10,\"errors\":[\"nest envelope missing\"]}]"
+    },
+    {
+      "name": "2_result_count_strict",
+      "error": "result-count strict mismatches: [{\"idx\":1,\"errors\":[\"nest envelope missing\"]},{\"idx\":2,\"errors\":[\"nest envelope missing\"]},{\"idx\":3,\"errors\":[\"nest envelope missing\"]},{\"idx\":4,\"errors\":[\"nest envelope missing\"]},{\"idx\":5,\"errors\":[\"nest envelope missing\"]},{\"idx\":6,\"errors\":[\"nest envelope missing\"]}]"
+    },
+    {
       "name": "3_models_full_true",
-      "error": "models full=true mismatches: [{\"path\":\"/data/models/Volkswagen?full=true\",\"errors\":[\"status mismatch php=200 nest=0\",\"envelope mismatch php={\\\"hasSuccess\\\":true,\\\"hasResult\\\":true,\\\"hasMessage\\\":true,\\\"hasStatusCode\\\":true} nest={\\\"hasSuccess\\\":true,\\\"hasResult\\\":false,\\\"hasMessage\\\":true,\\\"hasStatusCode\\\":true}\",\"nest success!=true\",\"deep result mismatch\"]},{\"path\":\"/data/models/motorcycles/Suzuki?full=true\",\"errors\":[\"status mismatch php=200 nest=0\",\"envelope mismatch php={\\\"hasSuccess\\\":true,\\\"hasResult\\\":true,\\\"hasMessage\\\":true,\\\"hasStatusCode\\\":true} nest={\\\"hasSuccess\\\":true,\\\"hasResult\\\":false,\\\"hasMessage\\\":true,\\\"hasStatusCode\\\":true}\",\"nest success!=true\",\"deep result mismatch\"]}]"
+      "error": "models full=true mismatches: [{\"path\":\"/data/models/Volkswagen?full=true\",\"errors\":[\"nest result is not an array\"]},{\"path\":\"/data/models/motorcycles/Suzuki?full=true\",\"errors\":[\"nest result is not an array\"]}]"
     },
     {
       "name": "4_related_post_variants",
-      "error": "related post variant mismatches: [{\"path\":\"/car-details/related-post/3828745152815910499?type=car&excludedIds=3828706900208780071%2C3829358857588330925\",\"errors\":[\"status mismatch php=200 nest=0\",\"envelope mismatch php={\\\"hasSuccess\\\":true,\\\"hasResult\\\":true,\\\"hasMessage\\\":true,\\\"hasStatusCode\\\":true} nest={\\\"hasSuccess\\\":true,\\\"hasResult\\\":false,\\\"hasMessage\\\":true,\\\"hasStatusCode\\\":true}\",\"nest success!=true\"]},{\"path\":\"/car-details/related-post/3828745152815910499?type=motorcycle&excludedIds=\",\"errors\":[\"status mismatch php=200 nest=0\",\"envelope mismatch php={\\\"hasSuccess\\\":true,\\\"hasResult\\\":true,\\\"hasMessage\\\":true,\\\"hasStatusCode\\\":true} nest={\\\"hasSuccess\\\":true,\\\"hasResult\\\":false,\\\"hasMessage\\\":true,\\\"hasStatusCode\\\":true}\",\"nest success!=true\"]},{\"path\":\"/car-details/related-post-filter?type=car&excludedIds=3828706900208780071%2C3829358857588330925\",\"errors\":[\"status mismatch php=200 nest=0\",\"envelope mismatch php={\\\"hasSuccess\\\":true,\\\"hasResult\\\":true,\\\"hasMessage\\\":true,\\\"hasStatusCode\\\":true} nest={\\\"hasSuccess\\\":true,\\\"hasResult\\\":false,\\\"hasMessage\\\":true,\\\"hasStatusCode\\\":true}\",\"nest success!=true\"]}]"
+      "error": "related post variant mismatches: [{\"path\":\"/car-details/related-post/3828745152815910499?type=car&excludedIds=3828706900208780071%2C3829358857588330925\",\"errors\":[\"nest envelope missing\"]},{\"path\":\"/car-details/related-post/3828745152815910499?type=motorcycle&excludedIds=\",\"errors\":[\"nest envelope missing\"]},{\"path\":\"/car-details/related-post-filter?type=car&excludedIds=3828706900208780071%2C3829358857588330925\",\"errors\":[\"nest envelope missing\"]}]"
     },
     {
       "name": "5_refresh_token_success",
@@ -94,11 +98,11 @@
     },
     {
       "name": "11_price_calculate_success_strict",
-      "error": "price-calculate mismatches: [\"status mismatch php=200 nest=0\",\"envelope mismatch php={\\\"hasSuccess\\\":true,\\\"hasResult\\\":true,\\\"hasMessage\\\":true,\\\"hasStatusCode\\\":true} nest={\\\"hasSuccess\\\":true,\\\"hasResult\\\":false,\\\"hasMessage\\\":true,\\\"hasStatusCode\\\":true}\",\"nest success!=true\",\"deep result mismatch\"]"
+      "error": "price-calculate mismatches: [\"status mismatch php=0 nest=404\",\"envelope mismatch php={\\\"hasSuccess\\\":true,\\\"hasResult\\\":false,\\\"hasMessage\\\":true,\\\"hasStatusCode\\\":true} nest=null\",\"php success!=true\",\"nest success!=true\"]"
     },
     {
       "name": "12_post_caption_success_strict",
-      "error": "post/caption mismatches: [\"status mismatch php=200 nest=0\",\"envelope mismatch php={\\\"hasSuccess\\\":true,\\\"hasResult\\\":true,\\\"hasMessage\\\":true,\\\"hasStatusCode\\\":true} nest={\\\"hasSuccess\\\":true,\\\"hasResult\\\":false,\\\"hasMessage\\\":true,\\\"hasStatusCode\\\":true}\",\"nest success!=true\",\"deep result mismatch\"]"
+      "error": "post/caption mismatches: [\"status mismatch php=0 nest=200\",\"envelope mismatch php={\\\"hasSuccess\\\":true,\\\"hasResult\\\":false,\\\"hasMessage\\\":true,\\\"hasStatusCode\\\":true} nest=null\",\"php success!=true\",\"nest success!=true\"]"
     }
   ]
 }

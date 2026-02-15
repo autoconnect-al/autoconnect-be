@@ -71,7 +71,7 @@ describe('LegacyDataService', () => {
     const response = await service.vendorBiography('autokorea.al');
 
     expect(response.result).toEqual({
-      biography: 'Hello, world ! Nice-text:test',
+      biography: 'Hello, world! Nice-text:test',
       profilePicture: 'pic.jpg',
     });
   });
