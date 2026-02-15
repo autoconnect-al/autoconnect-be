@@ -252,11 +252,19 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
     return this.localPostOrderService.updatePost(merged);
   }
 
-  async getPostsByIds(ids: string) {
+  async getPostsByIds(ids?: string) {
+    if (ids === undefined || ids === null) {
+      return legacyError(
+        "ERROR: Something went wrong! TreguMakinave\\Service\\PostService::getByIds(): Argument #1 ($ids) must be of type string, null given, called in /var/www/backend_admin/controller/AdminPostController.php on line 31",
+        500,
+      );
+    }
+
     const list = ids
       .split(',')
       .map((value) => value.trim())
       .filter(Boolean)
+      .filter((value) => /^\d+$/.test(value))
       .map((value) => BigInt(value));
 
     if (list.length === 0) return legacySuccess([]);
@@ -266,6 +274,7 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
         id: { in: list },
       },
       include: {
+        vendor: true,
         car_detail_car_detail_post_idTopost: true,
       },
     });
@@ -273,11 +282,41 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
     const mapped = rows.map((row) => {
       const details = row.car_detail_car_detail_post_idTopost?.[0] ?? null;
       return this.normalizeBigInts({
-        ...row,
+        id: row.id,
         caption: row.caption
           ? Buffer.from(row.caption, 'base64').toString('utf8')
           : row.caption,
-        details,
+        cleanedCaption: row.cleanedCaption,
+        sidecarMedias: row.sidecarMedias,
+        createdTime: row.createdTime,
+        likesCount: row.likesCount,
+        viewsCount: row.viewsCount,
+        status: row.status,
+        origin: row.origin,
+        make: details?.make ?? null,
+        model: details?.model ?? null,
+        variant: details?.variant ?? null,
+        price: details?.price ?? null,
+        mileage: details?.mileage ?? null,
+        fuelType: details?.fuelType ?? null,
+        sold: details?.sold ?? null,
+        contact: details?.contact ?? null,
+        transmission: details?.transmission ?? null,
+        drivetrain: details?.drivetrain ?? null,
+        seats: details?.seats ?? null,
+        numberOfDoors: details?.numberOfDoors ?? null,
+        bodyType: details?.bodyType ?? null,
+        customsPaid: details?.customsPaid ?? null,
+        type: details?.type ?? null,
+        vendorId: row.vendor?.id ?? row.vendor_id,
+        accountName: row.vendor?.accountName ?? null,
+        profilePicture: row.vendor?.profilePicture ?? null,
+        biography: row.vendor?.biography ?? null,
+        vendorContact: row.vendor?.contact ?? null,
+        priceVerified: details?.priceVerified ?? null,
+        mileageVerified: details?.mileageVerified ?? null,
+        fuelVerified: details?.fuelVerified ?? null,
+        revalidate: row.revalidate,
       });
     });
     return legacySuccess(mapped);

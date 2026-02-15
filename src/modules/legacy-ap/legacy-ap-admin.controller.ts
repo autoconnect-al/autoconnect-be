@@ -173,7 +173,7 @@ export class PostToolingController {
 
   @Get('posts')
   async getPosts(@Query('ids') ids?: string) {
-    return this.service.getPostsByIds(ids ?? '');
+    return this.handleLegacy(this.service.getPostsByIds(ids));
   }
 
   @Post('update/:id')
