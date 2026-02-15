@@ -254,7 +254,7 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
   async getPostsByIds(ids?: string) {
     if (ids === undefined || ids === null) {
       return legacyError(
-        "ERROR: Something went wrong! TreguMakinave\\Service\\PostService::getByIds(): Argument #1 ($ids) must be of type string, null given, called in /var/www/backend_admin/controller/AdminPostController.php on line 31",
+        'ERROR: Something went wrong! TreguMakinave\\Service\\PostService::getByIds(): Argument #1 ($ids) must be of type string, null given, called in /var/www/backend_admin/controller/AdminPostController.php on line 31',
         500,
       );
     }
@@ -627,7 +627,6 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
         deleted: false,
         origin: 'MANUAL',
         status: 'DRAFT',
-        // OR: [{ origin: 'MANUAL' }, { status: 'DRAFT' }],
       },
       include: {
         car_detail_car_detail_post_idTopost: true,
@@ -753,7 +752,11 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
   }
 
   async cleanCache() {
-    const apiKey = this.toSafeString(process.env.NEXTJS_CACHE_API_KEY);
+    const apiKey = this.toSafeString(
+      process.env.NEXTJS_CACHE_API_KEY ??
+        process.env.NEXT_CACHE_API_KEY ??
+        process.env.CACHE_API_KEY,
+    );
     if (!apiKey) {
       return legacyError('Failed to clean cache');
     }
@@ -780,9 +783,6 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
     try {
       const response = await fetch(url.toString(), { method: 'GET' });
       const text = await response.text();
-      if (!response.ok) {
-        return legacyError('Failed to clean cache');
-      }
       let parsed: unknown = text;
       try {
         parsed = JSON.parse(text);
@@ -1160,11 +1160,14 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
       `,
     );
     const captions = rows.map(
-      (row) => `" id: ${String(row.id)} - ${this.toSafeString(row.cleanedCaption)}"`,
+      (row) =>
+        `" id: ${String(row.id)} - ${this.toSafeString(row.cleanedCaption)}"`,
     );
     const firstPrompt = this.buildFirstPromptChunk(captions, length);
     return {
-      prompt: rows.length ? `${prerequisite}Here is another list: ${firstPrompt}` : '',
+      prompt: rows.length
+        ? `${prerequisite}Here is another list: ${firstPrompt}`
+        : '',
       size: rows.length,
     };
   }
@@ -1345,7 +1348,9 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
     );
     const firstPrompt = this.buildFirstPromptChunk(captions, length);
     return {
-      prompt: rows.length ? `${prerequisite}Here is another list: ${firstPrompt}` : '',
+      prompt: rows.length
+        ? `${prerequisite}Here is another list: ${firstPrompt}`
+        : '',
       size: rows.length,
     };
   }
@@ -1436,7 +1441,9 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
     );
     const firstPrompt = this.buildFirstPromptChunk(captions, length);
     return {
-      prompt: rows.length ? `${prerequisite}Here is another list: ${firstPrompt}` : '',
+      prompt: rows.length
+        ? `${prerequisite}Here is another list: ${firstPrompt}`
+        : '',
       size: rows.length,
     };
   }
@@ -1528,7 +1535,9 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
     );
     const firstPrompt = this.buildFirstPromptChunk(captions, length);
     return {
-      prompt: rows.length ? `${prerequisite}Here is another list: ${firstPrompt}` : '',
+      prompt: rows.length
+        ? `${prerequisite}Here is another list: ${firstPrompt}`
+        : '',
       size: rows.length,
     };
   }
@@ -1593,7 +1602,9 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
     );
     const firstPrompt = this.buildFirstPromptChunk(captions, length);
     return {
-      prompt: rows.length ? `${prerequisite}Here is another list: ${firstPrompt}` : '',
+      prompt: rows.length
+        ? `${prerequisite}Here is another list: ${firstPrompt}`
+        : '',
       size: rows.length,
     };
   }
@@ -1832,9 +1843,13 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
             sidecarMedias: post.sidecarMedias,
             likesCount: post.likesCount,
             viewsCount: post.viewsCount,
-            accountName: post.vendor.accountName,
+            accountName: post.vendor.accountExists
+              ? post.vendor.accountName
+              : null,
             vendorId: post.vendor_id,
-            profilePicture: post.vendor.profilePicture,
+            profilePicture: post.vendor.accountExists
+              ? post.vendor.profilePicture
+              : null,
             make: details.make,
             model: details.model,
             variant: details.variant,
