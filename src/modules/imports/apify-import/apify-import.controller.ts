@@ -12,8 +12,7 @@ import { ApifyDatasetImportService } from './apify-dataset-import.service';
 import { AdminGuard } from '../../../common/guards/admin.guard';
 
 @Controller({
-  path: 'apify',
-  version: '1',
+  path: ['apify', 'api/v1/apify'],
 })
 @UseGuards(AdminGuard)
 export class ApifyController {

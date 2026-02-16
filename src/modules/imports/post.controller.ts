@@ -1,6 +1,7 @@
 import {
   Controller,
   Post,
+  Get,
   Param,
   Query,
   HttpStatus,
@@ -14,8 +15,7 @@ import { Throttle } from '@nestjs/throttler';
 import { PrismaService } from '../../database/prisma.service';
 
 @Controller({
-  path: 'posts',
-  version: '1',
+  path: ['posts', 'api/v1/posts'],
 })
 export class PostController {
   constructor(
@@ -29,6 +29,7 @@ export class PostController {
    * High rate limit: 1000 requests per 60 seconds per IP
    */
   @Post(':postId/increment')
+  @Get(':postId/increment')
   @Throttle({ default: { limit: 1000, ttl: 60 } })
   @ApiOperation({
     summary: 'Increment post metric',
