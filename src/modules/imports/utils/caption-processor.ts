@@ -97,7 +97,14 @@ export function isSold(cleanedCaption: string | null | undefined): boolean {
   }
 
   // Check for sold keywords
-  const soldKeywords = ['sold', 'shitur', 'u shit', 'porositur', 'rezervuar'];
+  const soldKeywords = [
+    'sold',
+    'shitur',
+    'u shit',
+    'porositur',
+    'rezervuar',
+    's h i t u r',
+  ];
   return soldKeywords.some((keyword) => lowerCaption.includes(keyword));
 }
 
@@ -135,7 +142,17 @@ export function isCustomsPaid(
   ];
 
   // Terms indicating customs have NOT been paid
-  const termsForCustomsNotPaid = ['pa dogane', 'pa dogan', 'pa doganë'];
+  const termsForCustomsNotPaid = [
+    'pa dogane',
+    'pa dogan',
+    'pa doganë',
+    'deri ne durres',
+    'deri ne durrës',
+    'deri ne durrs',
+    'deri ne port',
+    'deri ne porte',
+    'deri ne portë',
+  ];
 
   // Check for customs paid terms first
   for (const term of termsForCustomsPaid) {
