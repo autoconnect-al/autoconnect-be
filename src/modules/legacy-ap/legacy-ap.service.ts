@@ -1875,7 +1875,8 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
             highlightedTo: post.highlightedTo,
             renewTo: post.renewTo,
             renewInterval: post.renewInterval,
-            renewedTime: post.renewedTime,
+            renewedTime:
+              post.renewedTime ?? Number.parseInt(post.createdTime ?? '0', 10),
             mostWantedTo: post.mostWantedTo,
           },
         });
