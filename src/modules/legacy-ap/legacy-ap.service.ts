@@ -1816,12 +1816,15 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
 
   private async rebuildSearchFromPosts(): Promise<void> {
     const posts = await this.prisma.post.findMany({
-      where: { deleted: false },
+      where: {
+        deleted: false,
+        dateCreated: { gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) }, // Last 90 days
+      },
       include: {
         vendor: true,
         car_detail_car_detail_post_idTopost: true,
       },
-      take: 5000,
+      take: 10000,
     });
 
     await this.prisma.search.deleteMany({});
