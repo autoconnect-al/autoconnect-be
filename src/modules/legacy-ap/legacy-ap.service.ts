@@ -1070,7 +1070,7 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
       for (const item of problems) {
         buffer.push(
           JSON.stringify({
-            id: Number(item.id),
+            id: BigInt(item.id),
             make: this.toSafeString(item.make),
             model: this.toSafeString(item.model),
             variant: this.toSafeString(item.variant),
