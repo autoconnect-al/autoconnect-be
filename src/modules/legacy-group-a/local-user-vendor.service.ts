@@ -122,7 +122,7 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
         },
       });
 
-      await this.sendRegistrationEmail(request.email);
+      await this.sendRegistrationEmail(request.email, request.password);
       return legacySuccess(true);
     } catch {
       return legacyError('ERROR: Something went wrong', 500);
@@ -637,7 +637,10 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
     return result;
   }
 
-  private async sendRegistrationEmail(email: string): Promise<void> {
+  private async sendRegistrationEmail(
+    email: string,
+    password: string,
+  ): Promise<void> {
     const apiKey = process.env.RESEND_API_KEY;
     if (!apiKey) return;
 
@@ -654,6 +657,10 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
           ne llogarine tuaj duke klikuar <a href="https://autoconnect.al/login">kete link</a>.
           <br/>
           Emaili juaj eshte: <strong>${email}</strong>
+          <br/>
+          Passwordi juaj eshte: <strong>${password}</strong>
+          <br/>
+          Ju rekomandojme te ndryshoni passwordin tuaj pas pare se ky email.
         </p>
         <br/>
         <p>
