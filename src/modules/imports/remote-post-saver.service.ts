@@ -32,9 +32,11 @@ export class RemotePostSaverService {
   private readonly PostModel = require('./types/instagram').PostModel;
 
   async getJwt(): Promise<string> {
-    const resp = await fetch(
-      `${this.basePath}/authentication/login-with-code?code=${this.code}`,
-    );
+    const resp = await fetch(`${this.basePath}/authentication/login-with-code`, {
+      headers: {
+        'X-Admin-Code': this.code,
+      },
+    });
     if (!resp.ok) {
       throw new Error(`Login failed: ${resp.status} ${resp.statusText}`);
     }
@@ -42,7 +44,7 @@ export class RemotePostSaverService {
     if (!data?.result) throw new Error('Login succeeded but no JWT returned');
     return data.result;
     // This matches your script’s behavior:
-    // GET `${basePath}/authentication/login-with-code?code=${code}` then jwt = result
+    // GET `${basePath}/authentication/login-with-code` + X-Admin-Code header then jwt = result
   }
 
   async savePost(post: Post, jwt: string): Promise<string> {
@@ -86,17 +88,15 @@ export class RemotePostSaverService {
     };
 
     // Same request as script (note header name):
-    const response = await fetch(
-      `${this.basePath}/post/save-post?code=${this.code}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Http-Authorization': 'Bearer ' + jwt,
-        },
-        body: JSON.stringify(body),
+    const response = await fetch(`${this.basePath}/post/save-post`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Http-Authorization': 'Bearer ' + jwt,
+        'X-Admin-Code': this.code,
       },
-    ).catch((e) => {
+      body: JSON.stringify(body),
+    }).catch((e) => {
       // script catches errors per request
       console.error(e);
     });

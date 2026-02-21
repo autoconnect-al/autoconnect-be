@@ -26,6 +26,7 @@ Priority levels:
 ### Critical / Must do
 
 #### 0.1 Remove hardcoded secrets and credential fallbacks
+- **Status**: ✅ Done (2026-02-21)
 - **Issue**
   - Hardcoded secret defaults exist for JWT and external credentials.
   - Locations include:
@@ -53,8 +54,14 @@ Priority levels:
   - App fails at boot if any required secret missing.
   - Codebase grep returns no PEM private key blocks in `.ts` files.
   - Previously issued JWTs signed with fallback secret are rejected.
+- **Implementation progress**
+  - Added startup env validation in `/Users/reipano/Personal/vehicle-api/src/app.module.ts`.
+  - Enforced required env in Prisma via `/Users/reipano/Personal/vehicle-api/src/database/prisma.service.ts` (`requireEnv('DATABASE_URL')`).
+  - Removed query-secret fallback chain from `/Users/reipano/Personal/vehicle-api/src/common/guards/ap-code.guard.ts`.
+  - Kept credential reads explicit (`AP_ADMIN_CODE`, `ADMIN_CODE`, `JWT_SECRET`, `INSTAGRAM_*`) with no hardcoded secret fallback.
 
 #### 0.2 Replace query-string admin auth with proper bearer auth
+- **Status**: ✅ Done (2026-02-21)
 - **Issue**
   - Admin/API code is accepted via `?code=` query in multiple paths.
   - Files:
@@ -74,8 +81,16 @@ Priority levels:
   - Protected endpoints reject requests using query `code` only.
   - Protected endpoints accept valid bearer token.
   - Logs no longer contain secrets in URL.
+- **Implementation progress**
+  - Updated `/Users/reipano/Personal/vehicle-api/src/common/guards/ap-code.guard.ts` to accept only:
+    - `Authorization: Bearer <admin_jwt>` with `ADMIN` role, or
+    - `X-Admin-Code`.
+  - Updated `/Users/reipano/Personal/vehicle-api/src/common/guards/admin.guard.ts` to the same header/JWT model (no query auth).
+  - Updated `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/legacy-ap-auth.controller.ts` to read `X-Admin-Code` header (not query).
+  - Updated `/Users/reipano/Personal/vehicle-api/src/modules/imports/remote-post-saver.service.ts` to send `X-Admin-Code` and stop using `?code=` in guarded routes.
 
 #### 0.3 Validate required runtime config at boot
+- **Status**: ✅ Done (2026-02-21)
 - **Issue**
   - Example: Prisma uses empty string fallback for DB URL.
   - File: `/Users/reipano/Personal/vehicle-api/src/database/prisma.service.ts`
@@ -87,10 +102,15 @@ Priority levels:
   3. Add startup health check endpoint (optional) returning config sanity status.
 - **Acceptance checks**
   - `DATABASE_URL` missing => boot fails deterministically.
+- **Implementation progress**
+  - Added `ConfigModule.forRoot({ isGlobal: true, validate })` in `/Users/reipano/Personal/vehicle-api/src/app.module.ts`.
+  - Validation now fails startup (outside `NODE_ENV=test`) when required env vars are missing.
+  - Prisma constructor now fails immediately if `DATABASE_URL` is empty/missing.
 
 ### Important
 
 #### 0.4 Standardize error model and HTTP status mapping
+- **Status**: ✅ Done (2026-02-21)
 - **Issue**
   - Many auth/validation failures return `500` with generic message.
 - **Risk**
@@ -107,10 +127,19 @@ Priority levels:
   3. Keep legacy response body shape if required by frontend.
 - **Acceptance checks**
   - Contract tests assert proper status classes per endpoint.
+- **Implementation progress**
+  - Changed invalid/missing admin auth flows from `500` to `401` in:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/legacy-ap-auth.controller.ts`
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/legacy-ap.service.ts`
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-auth/legacy-auth.service.ts`
+  - Changed invalid login payload from `500` to `400` in:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-auth/legacy-auth.controller.ts`
+  - Kept legacy response body shape (`success/message/statusCode`) while correcting HTTP semantics.
 
 ### Good to have
 
 #### 0.5 Replace raw `console.*` with structured logger service
+- **Status**: ⏳ Pending
 - **Issue**
   - Logging is inconsistent and noisy.
 - **Implementation**
@@ -729,4 +758,3 @@ Use this checklist as strict task prompts:
 - [ ] Add payment capture idempotency and transition checks.
 - [ ] Standardize HTTP status mapping and legacy error body consistency.
 - [ ] Add tests covering all above regressions.
-

@@ -41,7 +41,7 @@ export class LegacyApService {
     if (code !== adminLoginCode) {
       return legacyError(
         'Could not login user. Please check your credentials.',
-        500,
+        401,
       );
     }
 

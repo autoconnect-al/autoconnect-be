@@ -1,4 +1,4 @@
-import { Controller, Get, HttpException, Query } from '@nestjs/common';
+import { Controller, Get, Headers, HttpException } from '@nestjs/common';
 import { LegacyApService } from './legacy-ap.service';
 
 @Controller('authentication')
@@ -6,15 +6,15 @@ export class LegacyApAuthController {
   constructor(private readonly service: LegacyApService) {}
 
   @Get('login-with-code')
-  async loginWithCode(@Query('code') code?: string) {
+  async loginWithCode(@Headers('x-admin-code') code?: string) {
     if (!code) {
       throw new HttpException(
         {
           success: false,
-          message: 'Code was not provided.',
-          statusCode: '500',
+          message: 'Admin code was not provided.',
+          statusCode: '401',
         },
-        500,
+        401,
       );
     }
 

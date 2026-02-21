@@ -12,6 +12,7 @@ import {
 import { AnyFilesInterceptor } from '@nestjs/platform-express';
 import { LegacyAuthService } from './legacy-auth.service';
 import type { LegacyResponse } from '../../common/legacy-response';
+import { legacyError } from '../../common/legacy-response';
 
 @Controller()
 export class LegacyAuthController {
@@ -60,8 +61,11 @@ export class LegacyAuthController {
       this.log('login.invalid_payload', {
         endpoint: 'authentication/login',
       });
-      const response = this.service.loginNotImplemented();
-      this.throwLegacy(response, 500);
+      const response = legacyError(
+        'Could not login user. Please check your credentials.',
+        400,
+      );
+      this.throwLegacy(response, 400);
     }
     const response = await this.service.loginLocal(body);
     this.log('login.response', {
@@ -98,8 +102,11 @@ export class LegacyAuthController {
       this.log('login.invalid_payload', {
         endpoint: 'user/login',
       });
-      const response = this.service.loginNotImplemented();
-      this.throwLegacy(response, 500);
+      const response = legacyError(
+        'Could not login user. Please check your credentials.',
+        400,
+      );
+      this.throwLegacy(response, 400);
     }
     const response = await this.service.loginLocal(body);
     this.log('login.response', {

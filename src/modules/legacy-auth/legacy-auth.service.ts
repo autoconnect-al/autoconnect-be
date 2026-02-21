@@ -31,10 +31,6 @@ export class LegacyAuthService {
     return legacyError(`Migration pending for ${feature}`, 501);
   }
 
-  loginNotImplemented() {
-    return legacyError('ERROR: Something went wrong', 500);
-  }
-
   async loginLocal(body: unknown) {
     try {
       return await this.localUserVendorService.login(body);
@@ -63,7 +59,7 @@ export class LegacyAuthService {
       if (!token) {
         return legacyError(
           'Could not refresh token. Please check your credentials.',
-          500,
+          401,
         );
       }
 
@@ -72,7 +68,7 @@ export class LegacyAuthService {
       if (!userId) {
         return legacyError(
           'Could not refresh token. Please check your credentials.',
-          500,
+          401,
         );
       }
 
@@ -82,7 +78,7 @@ export class LegacyAuthService {
       if (!user || user.deleted || user.blocked) {
         return legacyError(
           'Could not refresh token. Please check your credentials.',
-          500,
+          401,
         );
       }
 
@@ -102,7 +98,7 @@ export class LegacyAuthService {
     } catch {
       return legacyError(
         'Could not refresh token. Please check your credentials.',
-        500,
+        401,
       );
     }
   }
@@ -121,7 +117,10 @@ export class LegacyAuthService {
 
   async getInstagramAccessToken(code?: string) {
     if (!code || code.trim().length === 0) {
-      return legacyError('Could not get access token. Please check your data.');
+      return legacyError(
+        'Could not get access token. Please check your data.',
+        400,
+      );
     }
 
     const clientId = instagramClientId;
@@ -158,6 +157,7 @@ export class LegacyAuthService {
       if (!shortLivedPayload.access_token) {
         return legacyError(
           'Could not get access token. Please check your data.',
+          400,
         );
       }
 
@@ -185,6 +185,7 @@ export class LegacyAuthService {
       if (!longLivedPayload.access_token) {
         return legacyError(
           'Could not get long-lived access token. Please check your data.',
+          400,
         );
       }
 
@@ -193,7 +194,10 @@ export class LegacyAuthService {
         expires_in: longLivedPayload.expires_in ?? null,
       });
     } catch {
-      return legacyError('Could not get access token. Please check your data.');
+      return legacyError(
+        'Could not get access token. Please check your data.',
+        500,
+      );
     }
   }
 }

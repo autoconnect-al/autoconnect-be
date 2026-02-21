@@ -467,6 +467,16 @@ export class PostImportService {
         );
       }
 
+      if (carDetailId) {
+        await this.prisma.car_detail.updateMany({
+          where: {
+            id: carDetailId,
+            OR: [{ post_id: null }, { post_id: { not: postId } }],
+          },
+          data: { post_id: postId },
+        });
+      }
+
       // Update post with car_detail_id if a car_detail was created
       if (carDetailId && isNewPost) {
         await this.prisma.post.update({

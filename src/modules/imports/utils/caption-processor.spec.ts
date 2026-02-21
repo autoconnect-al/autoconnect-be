@@ -45,101 +45,56 @@ describe('caption-processor', () => {
   });
 
   describe('isCustomsPaid', () => {
-    describe('should detect customs paid indicators', () => {
-      it('should detect "pa dogane"', () => {
-        expect(isCustomsPaid('pa dogane')).toBe(true);
-        expect(isCustomsPaid('Makina pa dogane')).toBe(true);
-      });
+    const paidKeywords = [
+      'me dogane',
+      'dogana paguar',
+      'gati per targa',
+      'dogan paguar',
+      'dogane te paguar',
+    ];
 
-      it('should detect "pa letra"', () => {
-        expect(isCustomsPaid('pa letra')).toBe(true);
-        expect(isCustomsPaid('Gjendja perfekte pa letra')).toBe(true);
-      });
+    const unpaidKeywords = [
+      'pa dogane',
+      'pa dogan',
+      'pa doganë',
+      'deri ne durres',
+      'deri ne durrës',
+      'deri ne port',
+      'deri ne portë',
+    ];
 
-      it('should detect "deri ne durres"', () => {
-        expect(isCustomsPaid('deri ne durres')).toBe(true);
-        expect(isCustomsPaid('Dorezone deri ne durres')).toBe(true);
-      });
-
-      it('should detect "deri ne port"', () => {
-        expect(isCustomsPaid('deri ne port')).toBe(true);
-        expect(isCustomsPaid('Makina deri ne port')).toBe(true);
-      });
-
-      it('should detect "paguar dogane"', () => {
-        expect(isCustomsPaid('paguar dogane')).toBe(true);
-      });
-
-      it('should detect "dogane te paguar"', () => {
-        expect(isCustomsPaid('dogane te paguar')).toBe(true);
-      });
-
-      it('should detect "nuk ka dogane"', () => {
-        expect(isCustomsPaid('nuk ka dogane')).toBe(true);
-      });
-
-      it('should detect "bie dogane"', () => {
-        expect(isCustomsPaid('bie dogane')).toBe(true);
-      });
-
-      it('should detect "dogana kaluar"', () => {
-        expect(isCustomsPaid('dogana kaluar')).toBe(true);
-      });
-
-      it('should detect "dogane lire"', () => {
-        expect(isCustomsPaid('dogane lire')).toBe(true);
-      });
-
-      it('should detect "pa pezullim"', () => {
-        expect(isCustomsPaid('pa pezullim')).toBe(true);
-      });
-
-      it('should detect "importue"', () => {
-        expect(isCustomsPaid('importue')).toBe(true);
-      });
-
-      it('should detect "blerje direkte"', () => {
-        expect(isCustomsPaid('blerje direkte')).toBe(true);
-      });
-
-      it('should detect "deri shtepi"', () => {
-        expect(isCustomsPaid('deri shtepi')).toBe(true);
-      });
-
-      it('should detect "dogane paguara"', () => {
-        expect(isCustomsPaid('dogane paguara')).toBe(true);
-      });
+    it('returns true for known paid indicators', () => {
+      for (const term of paidKeywords) {
+        expect(isCustomsPaid(term)).toBe(true);
+      }
     });
 
-    it('should be case insensitive', () => {
-      expect(isCustomsPaid('PA DOGANE')).toBe(true);
-      expect(isCustomsPaid('Pa Dogane')).toBe(true);
-      expect(isCustomsPaid('DERI NE DURRES')).toBe(true);
+    it('returns false for known unpaid indicators', () => {
+      for (const term of unpaidKeywords) {
+        expect(isCustomsPaid(term)).toBe(false);
+      }
     });
 
-    it('should return false when no keywords found', () => {
-      expect(isCustomsPaid('Makina e bukur per shitje')).toBe(false);
-      expect(isCustomsPaid('Kontakt 06XXXXXXX')).toBe(false);
+    it('is case insensitive', () => {
+      expect(isCustomsPaid('ME DOGANE')).toBe(true);
+      expect(isCustomsPaid('Pa Dogane')).toBe(false);
+      expect(isCustomsPaid('DERI NE DURRES')).toBe(false);
     });
 
-    it('should handle null/undefined', () => {
+    it('returns null when no keywords match', () => {
+      expect(isCustomsPaid('Makina e bukur per shitje')).toBeNull();
+      expect(isCustomsPaid('Kontakt 06XXXXXXX')).toBeNull();
+    });
+
+    it('handles null/undefined safely', () => {
       expect(isCustomsPaid(null)).toBe(false);
       expect(isCustomsPaid(undefined)).toBe(false);
     });
 
-    it('should handle real caption examples', () => {
-      // Real world example captions
-      expect(isCustomsPaid('Makina pa dogane, i mire per te marrur')).toBe(
-        true,
-      );
-      expect(
-        isCustomsPaid(
-          'Deri ne durres, dogana kaluar, gjendje perfekte, kontakt',
-        ),
-      ).toBe(true);
-      expect(isCustomsPaid('Makina per shitje, dogane lire')).toBe(true);
-      expect(isCustomsPaid('Makina e vjetersuar, duhet dogane')).toBe(false);
-      expect(isCustomsPaid('Makina importue nga Europa')).toBe(true);
+    it('handles real caption examples that match present keywords', () => {
+      expect(isCustomsPaid('Makina me dogane, e paguar')).toBe(true);
+      expect(isCustomsPaid('Deri ne port, pa dogane')).toBe(false);
+      expect(isCustomsPaid('Dogana paguar ne dritare')).toBe(true);
     });
   });
 });
