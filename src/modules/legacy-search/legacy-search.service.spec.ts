@@ -11,8 +11,12 @@ describe('LegacySearchService', () => {
       searchTerms: [],
     });
 
-    expect(built.whereSql).toContain('(cleanedCaption LIKE ? OR accountName LIKE ?)');
-    expect(built.params).toEqual(expect.arrayContaining(['%korea%', '%korea%']));
+    expect(built.whereSql).toContain(
+      '(cleanedCaption LIKE ? OR accountName LIKE ?)',
+    );
+    expect(built.params).toEqual(
+      expect.arrayContaining(['%korea%', '%korea%']),
+    );
   });
 
   it('buildWhere should apply okazion,oferte pricing formula', () => {
@@ -25,7 +29,9 @@ describe('LegacySearchService', () => {
       searchTerms: [],
     });
 
-    expect(built.whereSql).toContain('((price - minPrice) / (maxPrice - price) < 0.25)');
+    expect(built.whereSql).toContain(
+      '((price - minPrice) / (maxPrice - price) < 0.25)',
+    );
     expect(built.whereSql).toContain('minPrice > 1');
     expect(built.whereSql).toContain('maxPrice > 1');
   });
@@ -67,7 +73,9 @@ describe('LegacySearchService', () => {
       searchTerms: [{ key: 'customsPaid', value: '1' }],
     });
 
-    expect(built.whereSql).toContain('(customsPaid = 1 OR customsPaid IS NULL)');
+    expect(built.whereSql).toContain(
+      '(customsPaid = 1 OR customsPaid IS NULL)',
+    );
   });
 
   it('relatedById should select sidecarMedias for related cards', async () => {

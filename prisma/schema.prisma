@@ -107,13 +107,31 @@ model post {
   status                                    String?      @db.VarChar(30)
   postOpen                                  Int          @default(0)
   impressions                               Int          @default(0)
+  reach                                     Int          @default(0)
+  clicks                                    Int          @default(0)
+  contact                                   Int          @default(0)
+  contactCall                               Int          @default(0)
+  contactWhatsapp                           Int          @default(0)
+  contactEmail                              Int          @default(0)
+  contactInstagram                          Int          @default(0)
   car_detail_car_detail_post_idTopost       car_detail[] @relation("car_detail_post_idTopost")
   car_detail_post_car_detail_idTocar_detail car_detail?  @relation("post_car_detail_idTocar_detail", fields: [car_detail_id], references: [id], onDelete: Cascade, map: "car_detail___fk")
+  post_reach_unique                         post_reach_unique[]
   vendor                                    vendor       @relation(fields: [vendor_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "post_FK")
 
   @@index([car_detail_id], map: "car_detail___fk")
   @@index([dateUpdated, deleted, live], map: "dateUpdated")
   @@index([vendor_id], map: "post_FK")
+}
+
+model post_reach_unique {
+  post_id       BigInt   @db.UnsignedBigInt
+  visitor_hash  String   @db.VarChar(64)
+  dateCreated   DateTime @db.DateTime(0)
+  post          post     @relation(fields: [post_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "post_reach_unique_post_fk")
+
+  @@id([post_id, visitor_hash])
+  @@index([post_id], map: "post_reach_unique_post_idx")
 }
 
 model potential_vendor {

@@ -140,7 +140,10 @@ export class LegacyDataController {
     @Headers() headers: Record<string, unknown>,
   ) {
     const jwtEmail = this.extractJwtEmail(headers);
-    const response = await this.localPostOrderService.createPost(body, jwtEmail);
+    const response = await this.localPostOrderService.createPost(
+      body,
+      jwtEmail,
+    );
     if (!response.success)
       this.throwLegacy('ERROR: Something went wrong', '500', 500);
     return response;
@@ -153,7 +156,10 @@ export class LegacyDataController {
     @Headers() headers: Record<string, unknown>,
   ) {
     const jwtEmail = this.extractJwtEmail(headers);
-    const response = await this.localPostOrderService.updatePost(body, jwtEmail);
+    const response = await this.localPostOrderService.updatePost(
+      body,
+      jwtEmail,
+    );
     if (!response.success)
       this.throwLegacy('ERROR: Something went wrong', '500', 500);
     return response;

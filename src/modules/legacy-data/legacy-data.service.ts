@@ -154,11 +154,7 @@ export class LegacyDataService {
           app,
           excludeId,
         )
-      : await this.prisma.$queryRawUnsafe<unknown[]>(
-          query,
-          category,
-          app,
-        );
+      : await this.prisma.$queryRawUnsafe<unknown[]>(query, category, app);
     return legacySuccess(rows);
   }
 

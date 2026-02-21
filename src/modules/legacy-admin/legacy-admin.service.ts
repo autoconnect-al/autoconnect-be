@@ -25,16 +25,53 @@ export class LegacyAdminService {
       ids.length > 0
         ? await this.prisma.post.findMany({
             where: { id: { in: ids } },
-            select: { id: true, status: true },
+            select: {
+              id: true,
+              status: true,
+              postOpen: true,
+              impressions: true,
+              reach: true,
+              clicks: true,
+              contact: true,
+              contactCall: true,
+              contactWhatsapp: true,
+              contactEmail: true,
+              contactInstagram: true,
+            } as any,
           })
         : [];
-    const statusById = new Map(
-      postStatuses.map((row) => [row.id.toString(), row.status ?? '']),
+    const metricsById = new Map(
+      postStatuses.map((row) => [
+        row.id.toString(),
+        {
+          status: row.status ?? '',
+          postOpen: row.postOpen ?? 0,
+          impressions: row.impressions ?? 0,
+          reach: row.reach ?? 0,
+          clicks: row.clicks ?? 0,
+          contactCount: row.contact ?? 0,
+          contactCall: row.contactCall ?? 0,
+          contactWhatsapp: row.contactWhatsapp ?? 0,
+          contactEmail: row.contactEmail ?? 0,
+          contactInstagram: row.contactInstagram ?? 0,
+        },
+      ]),
     );
 
     const withStatus = rows.map((row) => ({
       ...row,
-      status: statusById.get(row.id.toString()) ?? '',
+      ...(metricsById.get(row.id.toString()) ?? {
+        status: '',
+        postOpen: 0,
+        impressions: 0,
+        reach: 0,
+        clicks: 0,
+        contactCount: 0,
+        contactCall: 0,
+        contactWhatsapp: 0,
+        contactEmail: 0,
+        contactInstagram: 0,
+      }),
     }));
 
     return legacySuccess(this.normalizeBigInts(withStatus));
@@ -50,13 +87,33 @@ export class LegacyAdminService {
 
     const post = await this.prisma.post.findUnique({
       where: { id: BigInt(id) },
-      select: { status: true },
+      select: {
+        status: true,
+        postOpen: true,
+        impressions: true,
+        reach: true,
+        clicks: true,
+        contact: true,
+        contactCall: true,
+        contactWhatsapp: true,
+        contactEmail: true,
+        contactInstagram: true,
+      } as any,
     });
 
     return legacySuccess(
       this.normalizeBigInts({
         ...row,
         status: post?.status ?? '',
+        postOpen: post?.postOpen ?? 0,
+        impressions: post?.impressions ?? 0,
+        reach: post?.reach ?? 0,
+        clicks: post?.clicks ?? 0,
+        contactCount: post?.contact ?? 0,
+        contactCall: post?.contactCall ?? 0,
+        contactWhatsapp: post?.contactWhatsapp ?? 0,
+        contactEmail: post?.contactEmail ?? 0,
+        contactInstagram: post?.contactInstagram ?? 0,
       }),
     );
   }

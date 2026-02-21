@@ -88,10 +88,9 @@ describe('LegacyDataController jwt email handling', () => {
     (verifyAndDecodeLegacyJwtPayload as jest.Mock).mockReturnValue(null);
 
     await expect(
-      controller.createPost(
-        { post: {} },
-        { authorization: 'Bearer token' } as Record<string, unknown>,
-      ),
+      controller.createPost({ post: {} }, {
+        authorization: 'Bearer token',
+      } as Record<string, unknown>),
     ).rejects.toMatchObject<HttpException>({
       response: {
         success: false,

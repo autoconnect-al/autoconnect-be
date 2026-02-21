@@ -8,8 +8,17 @@ describe('PostController - incrementPostMetric', () => {
   let controller: PostController;
   let postImportService: PostImportService;
   let prismaService: PrismaService;
+  let setImmediateSpy: jest.SpyInstance;
 
   beforeEach(async () => {
+    setImmediateSpy = jest.spyOn(global, 'setImmediate').mockImplementation(((
+      callback: (...args: any[]) => void,
+      ...args: any[]
+    ) => {
+      callback(...args);
+      return 0 as unknown as NodeJS.Immediate;
+    }) as typeof setImmediate);
+
     const mockPostImportService = {
       incrementPostMetric: jest.fn(),
     };
@@ -33,6 +42,10 @@ describe('PostController - incrementPostMetric', () => {
     prismaService = module.get<PrismaService>(PrismaService);
   });
 
+  afterEach(() => {
+    setImmediateSpy.mockRestore();
+  });
+
   it('should be defined', () => {
     expect(controller).toBeDefined();
   });
@@ -40,14 +53,39 @@ describe('PostController - incrementPostMetric', () => {
   it('should throw BadRequestException for invalid metric', async () => {
     const response = {} as any;
     await expect(
-      controller.incrementPostMetric('123', 'invalid', response),
+      controller.incrementPostMetric(
+        '123',
+        'invalid',
+        undefined,
+        undefined,
+        response,
+      ),
     ).rejects.toThrow(BadRequestException);
   });
 
   it('should throw BadRequestException for invalid post ID', async () => {
     const response = {} as any;
     await expect(
-      controller.incrementPostMetric('not-a-number', 'postOpen', response),
+      controller.incrementPostMetric(
+        'not-a-number',
+        'postOpen',
+        undefined,
+        undefined,
+        response,
+      ),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('should throw BadRequestException for invalid contact method when metric is contact', async () => {
+    const response = {} as any;
+    await expect(
+      controller.incrementPostMetric(
+        '123',
+        'contact',
+        undefined,
+        'sms',
+        response,
+      ),
     ).rejects.toThrow(BadRequestException);
   });
 
@@ -64,7 +102,13 @@ describe('PostController - incrementPostMetric', () => {
         undefined,
       );
 
-      await controller.incrementPostMetric('123', 'postOpen', mockResponse);
+      await controller.incrementPostMetric(
+        '123',
+        'postOpen',
+        undefined,
+        undefined,
+        mockResponse,
+      );
 
       expect(mockResponse.status).toHaveBeenCalledWith(202);
     });
@@ -81,7 +125,13 @@ describe('PostController - incrementPostMetric', () => {
         undefined,
       );
 
-      await controller.incrementPostMetric('456', 'impressions', mockResponse);
+      await controller.incrementPostMetric(
+        '456',
+        'impressions',
+        'visitor-123',
+        undefined,
+        mockResponse,
+      );
 
       expect(mockResponse.status).toHaveBeenCalledWith(202);
     });
@@ -98,7 +148,13 @@ describe('PostController - incrementPostMetric', () => {
         undefined,
       );
 
-      await controller.incrementPostMetric('789', 'reach', mockResponse);
+      await controller.incrementPostMetric(
+        '789',
+        'reach',
+        undefined,
+        undefined,
+        mockResponse,
+      );
 
       expect(mockResponse.status).toHaveBeenCalledWith(202);
     });
@@ -115,7 +171,13 @@ describe('PostController - incrementPostMetric', () => {
         undefined,
       );
 
-      await controller.incrementPostMetric('111', 'clicks', mockResponse);
+      await controller.incrementPostMetric(
+        '111',
+        'clicks',
+        undefined,
+        undefined,
+        mockResponse,
+      );
 
       expect(mockResponse.status).toHaveBeenCalledWith(202);
     });
@@ -132,7 +194,13 @@ describe('PostController - incrementPostMetric', () => {
         undefined,
       );
 
-      await controller.incrementPostMetric('222', 'contact', mockResponse);
+      await controller.incrementPostMetric(
+        '222',
+        'contact',
+        undefined,
+        'call',
+        mockResponse,
+      );
 
       expect(mockResponse.status).toHaveBeenCalledWith(202);
     });

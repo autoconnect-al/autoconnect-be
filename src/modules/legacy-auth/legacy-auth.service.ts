@@ -61,7 +61,10 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
           stack,
         }),
       );
-      return legacyError('Could not login user. Please check your credentials.', 500);
+      return legacyError(
+        'Could not login user. Please check your credentials.',
+        500,
+      );
     }
   }
 

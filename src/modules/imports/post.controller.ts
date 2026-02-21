@@ -48,6 +48,21 @@ export class PostController {
     description: 'The metric to increment',
     required: true,
   })
+  @ApiQuery({
+    name: 'visitorId',
+    type: 'string',
+    description:
+      'Anonymous visitor ID for unique reach deduplication (used with metric=impressions)',
+    required: false,
+  })
+  @ApiQuery({
+    name: 'contactMethod',
+    type: 'string',
+    enum: ['call', 'whatsapp', 'email', 'instagram'],
+    description:
+      'Contact method breakdown (required when metric=contact, ignored otherwise)',
+    required: false,
+  })
   @ApiResponse({
     status: 202,
     description: 'Increment queued successfully',
@@ -72,18 +87,45 @@ export class PostController {
   async incrementPostMetric(
     @Param('postId') postId: string,
     @Query('metric') metric: string,
+    @Query('visitorId') visitorId?: string,
+    @Query('contactMethod') contactMethod?: string,
     @Res() res: Response,
   ) {
+    const allowedMetrics = [
+      'postOpen',
+      'impressions',
+      'reach',
+      'clicks',
+      'contact',
+    ] as const;
+    const allowedContactMethods = ['call', 'whatsapp', 'email', 'instagram'];
+
     // Validate metric
-    if (
-      !['postOpen', 'impressions', 'reach', 'clicks', 'contact'].includes(
-        metric,
-      )
-    ) {
+    if (!allowedMetrics.includes(metric as (typeof allowedMetrics)[number])) {
       throw new BadRequestException(
         `Invalid metric: ${metric}. Must be 'postOpen', 'impressions', 'reach', 'clicks', or 'contact'.`,
       );
     }
+
+    if (metric === 'contact') {
+      if (
+        !contactMethod ||
+        !allowedContactMethods.includes(contactMethod.toLowerCase())
+      ) {
+        throw new BadRequestException(
+          "Invalid contact method. Must be one of 'call', 'whatsapp', 'email', 'instagram' when metric=contact.",
+        );
+      }
+    }
+
+    const sanitizedVisitorId =
+      typeof visitorId === 'string' && visitorId.trim().length > 0
+        ? visitorId.trim().slice(0, 255)
+        : undefined;
+    const normalizedContactMethod =
+      typeof contactMethod === 'string' && contactMethod.trim().length > 0
+        ? contactMethod.trim().toLowerCase()
+        : undefined;
 
     // Parse postId as BigInt
     let parsedPostId: bigint;
@@ -116,10 +158,19 @@ export class PostController {
         await this.postImportService.incrementPostMetric(
           parsedPostId,
           metric as 'postOpen' | 'impressions' | 'reach' | 'clicks' | 'contact',
+          {
+            visitorId: sanitizedVisitorId,
+            contactMethod: normalizedContactMethod as
+              | 'call'
+              | 'whatsapp'
+              | 'email'
+              | 'instagram'
+              | undefined,
+          },
         );
 
         console.log(
-          `[PostMetric] Successfully incremented ${metric} for post ${postId}`,
+          `[PostMetric] Successfully incremented ${metric} for post ${postId}${normalizedContactMethod ? ` [${normalizedContactMethod}]` : ''}`,
         );
       } catch (error) {
         console.error(

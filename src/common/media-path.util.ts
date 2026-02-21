@@ -7,4 +7,3 @@ export function getMediaRootPath(): string {
   }
   return resolve(process.cwd(), 'media');
 }
-

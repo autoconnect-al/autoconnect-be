@@ -2,6 +2,7 @@ import { PostImportService } from './post-import.service';
 import { PrismaService } from '../../../database/prisma.service';
 
 class MockPrismaService {
+  $executeRawUnsafe = jest.fn();
   post = {
     findUnique: jest.fn(),
     upsert: jest.fn(),
@@ -141,6 +142,9 @@ describe('PostImportService.incrementPostMetric', () => {
         postOpen: {
           increment: 1,
         },
+        clicks: {
+          increment: 1,
+        },
       },
     });
   });
@@ -164,19 +168,48 @@ describe('PostImportService.incrementPostMetric', () => {
     });
   });
 
-  it('should increment reach metric', async () => {
+  it('should increment reach only once for a unique visitor on impression', async () => {
     const postId = 789n;
-    prisma.post.update.mockResolvedValue({
-      id: postId,
-      reach: 10,
+    prisma.$executeRawUnsafe.mockResolvedValue(1);
+    prisma.post.update.mockResolvedValue({ id: postId });
+
+    await service.incrementPostMetric(postId, 'impressions', {
+      visitorId: 'visitor-1',
     });
 
-    await service.incrementPostMetric(postId, 'reach');
-
-    expect(prisma.post.update).toHaveBeenCalledWith({
+    expect(prisma.post.update).toHaveBeenNthCalledWith(1, {
+      where: { id: postId },
+      data: {
+        impressions: {
+          increment: 1,
+        },
+      },
+    });
+    expect(prisma.$executeRawUnsafe).toHaveBeenCalledTimes(1);
+    expect(prisma.post.update).toHaveBeenNthCalledWith(2, {
       where: { id: postId },
       data: {
         reach: {
+          increment: 1,
+        },
+      },
+    });
+  });
+
+  it('should not increment reach when visitor was already counted for the post', async () => {
+    const postId = 790n;
+    prisma.$executeRawUnsafe.mockResolvedValue(0);
+    prisma.post.update.mockResolvedValue({ id: postId });
+
+    await service.incrementPostMetric(postId, 'impressions', {
+      visitorId: 'visitor-1',
+    });
+
+    expect(prisma.post.update).toHaveBeenCalledTimes(1);
+    expect(prisma.post.update).toHaveBeenCalledWith({
+      where: { id: postId },
+      data: {
+        impressions: {
           increment: 1,
         },
       },
@@ -209,6 +242,30 @@ describe('PostImportService.incrementPostMetric', () => {
       contact: 2,
     });
 
+    await service.incrementPostMetric(postId, 'contact', {
+      contactMethod: 'call',
+    });
+
+    expect(prisma.post.update).toHaveBeenCalledWith({
+      where: { id: postId },
+      data: {
+        contact: {
+          increment: 1,
+        },
+        contactCall: {
+          increment: 1,
+        },
+      },
+    });
+  });
+
+  it('should increment contact metric without method breakdown when method is omitted', async () => {
+    const postId = 223n;
+    prisma.post.update.mockResolvedValue({
+      id: postId,
+      contact: 1,
+    });
+
     await service.incrementPostMetric(postId, 'contact');
 
     expect(prisma.post.update).toHaveBeenCalledWith({
@@ -219,6 +276,32 @@ describe('PostImportService.incrementPostMetric', () => {
         },
       },
     });
+  });
+
+  it('should increment legacy reach metric', async () => {
+    const postId = 224n;
+    prisma.post.update.mockResolvedValue({ id: postId, reach: 5 });
+
+    await service.incrementPostMetric(postId, 'reach');
+
+    expect(prisma.post.update).toHaveBeenCalledWith({
+      where: { id: postId },
+      data: {
+        reach: {
+          increment: 1,
+        },
+      },
+    });
+  });
+
+  it('should throw error for invalid contact method', async () => {
+    const postId = 225n;
+
+    await expect(
+      service.incrementPostMetric(postId, 'contact', {
+        contactMethod: 'sms' as any,
+      }),
+    ).rejects.toThrow('Invalid contact method');
   });
 
   it('should throw error for invalid metric', async () => {

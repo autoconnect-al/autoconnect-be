@@ -2,13 +2,7 @@ import { LegacyApService } from './legacy-ap.service';
 
 describe('LegacyApService createdTime conversion', () => {
   const createService = () =>
-    new LegacyApService(
-      {} as any,
-      {} as any,
-      {} as any,
-      {} as any,
-      {} as any,
-    );
+    new LegacyApService({} as any, {} as any, {} as any, {} as any, {} as any);
 
   it('accepts unix seconds as string', () => {
     const service = createService();

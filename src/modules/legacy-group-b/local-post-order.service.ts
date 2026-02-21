@@ -693,11 +693,7 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
   > {
     if (sidecarInput.length === 0) return [];
 
-    const vendorFolder = resolve(
-      this.mediaRoot,
-      vendorId.toString(),
-      postId,
-    );
+    const vendorFolder = resolve(this.mediaRoot, vendorId.toString(), postId);
     await mkdir(vendorFolder, { recursive: true });
 
     const results: Array<{
@@ -787,7 +783,11 @@ F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
 
     const relativeTmpPrefix = '/media/tmp/';
     const sourcePath = sourceUrl.includes(relativeTmpPrefix)
-      ? resolve(this.mediaRoot, 'tmp', sourceUrl.split(relativeTmpPrefix)[1] ?? '')
+      ? resolve(
+          this.mediaRoot,
+          'tmp',
+          sourceUrl.split(relativeTmpPrefix)[1] ?? '',
+        )
       : isAbsolute(sourceUrl)
         ? sourceUrl
         : resolve(process.cwd(), sourceUrl.replace(/^\/+/, ''));

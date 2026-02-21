@@ -12,6 +12,7 @@ import { ImageDownloadService } from './image-download.service';
 import { isWithinThreeMonths, isWithinDays } from '../utils/date-filter';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { createHash } from 'crypto';
 
 export interface ImportPostData {
   id: number | string;
@@ -79,6 +80,19 @@ export interface ParsedResult {
   highlightedTo?: number | null;
   promotionTo?: number | null;
   mostWantedTo?: number | null;
+}
+
+type IncrementMetric =
+  | 'postOpen'
+  | 'impressions'
+  | 'reach'
+  | 'clicks'
+  | 'contact';
+type ContactMethod = 'call' | 'whatsapp' | 'email' | 'instagram';
+
+interface IncrementMetricOptions {
+  visitorId?: string;
+  contactMethod?: ContactMethod;
 }
 
 @Injectable()
@@ -847,25 +861,95 @@ export class PostImportService {
   }
 
   /**
-   * Increment a post metric (postOpen, impressions, reach, clicks, or contact) asynchronously
-   * @param postId - The ID of the post to increment
-   * @param metric - The metric to increment ('postOpen', 'impressions', 'reach', 'clicks', or 'contact')
-   * @throws Error if metric is invalid
+   * Increment post metrics.
+   *
+   * - `impressions`: always increments, optional `visitorId` increments `reach` once per post.
+   * - `clicks`: increments `clicks`.
+   * - `contact`: increments total `contact` and optional method-specific counter.
+   * - `postOpen`: legacy metric, increments both `postOpen` and `clicks`.
+   * - `reach`: kept for backward compatibility, increments directly.
    */
   async incrementPostMetric(
     postId: bigint,
-    metric: 'postOpen' | 'impressions' | 'reach' | 'clicks' | 'contact',
+    metric: IncrementMetric,
+    options: IncrementMetricOptions = {},
   ): Promise<void> {
-    if (
-      !['postOpen', 'impressions', 'reach', 'clicks', 'contact'].includes(
-        metric,
-      )
-    ) {
+    const allowedMetrics: IncrementMetric[] = [
+      'postOpen',
+      'impressions',
+      'reach',
+      'clicks',
+      'contact',
+    ];
+    if (!allowedMetrics.includes(metric)) {
       throw new Error(
         `Invalid metric: ${metric}. Must be 'postOpen', 'impressions', 'reach', 'clicks', or 'contact'.`,
       );
     }
 
+    if (metric === 'impressions') {
+      await this.incrementSimpleMetric(postId, 'impressions');
+
+      const sanitizedVisitorId = this.sanitizeVisitorId(options.visitorId);
+      if (sanitizedVisitorId) {
+        await this.incrementUniqueReach(postId, sanitizedVisitorId);
+      }
+      return;
+    }
+
+    if (metric === 'clicks') {
+      await this.incrementSimpleMetric(postId, 'clicks');
+      return;
+    }
+
+    if (metric === 'postOpen') {
+      await this.prisma.post.update({
+        where: { id: postId },
+        data: {
+          postOpen: { increment: 1 },
+          clicks: { increment: 1 },
+        } as Prisma.postUpdateInput,
+      });
+      return;
+    }
+
+    if (metric === 'contact') {
+      const updateData: Record<string, unknown> = {
+        contact: { increment: 1 },
+      };
+      const contactMethod = this.normalizeContactMethod(options.contactMethod);
+      if (options.contactMethod && !contactMethod) {
+        throw new Error(
+          `Invalid contact method: ${options.contactMethod}. Must be one of 'call', 'whatsapp', 'email', 'instagram'.`,
+        );
+      }
+      if (contactMethod) {
+        const contactMethodFieldMap: Record<ContactMethod, string> = {
+          call: 'contactCall',
+          whatsapp: 'contactWhatsapp',
+          email: 'contactEmail',
+          instagram: 'contactInstagram',
+        };
+        (updateData as Record<string, unknown>)[
+          contactMethodFieldMap[contactMethod]
+        ] = { increment: 1 };
+      }
+
+      await this.prisma.post.update({
+        where: { id: postId },
+        data: updateData as Prisma.postUpdateInput,
+      });
+      return;
+    }
+
+    // Legacy compatibility for direct reach increments.
+    await this.incrementSimpleMetric(postId, 'reach');
+  }
+
+  private async incrementSimpleMetric(
+    postId: bigint,
+    metric: 'impressions' | 'reach' | 'clicks',
+  ): Promise<void> {
     const updateData: Prisma.postUpdateInput = {
       [metric]: {
         increment: 1,
@@ -876,5 +960,49 @@ export class PostImportService {
       where: { id: postId },
       data: updateData,
     });
+  }
+
+  private async incrementUniqueReach(
+    postId: bigint,
+    visitorId: string,
+  ): Promise<void> {
+    const visitorHash = createHash('sha256').update(visitorId).digest('hex');
+
+    const insertedRows = await this.prisma.$executeRawUnsafe(
+      'INSERT IGNORE INTO post_reach_unique (post_id, visitor_hash, dateCreated) VALUES (?, ?, NOW())',
+      postId.toString(),
+      visitorHash,
+    );
+
+    if (Number(insertedRows) > 0) {
+      await this.incrementSimpleMetric(postId, 'reach');
+    }
+  }
+
+  private sanitizeVisitorId(visitorId?: string): string | null {
+    if (typeof visitorId !== 'string') {
+      return null;
+    }
+    const trimmed = visitorId.trim();
+    if (!trimmed) {
+      return null;
+    }
+    return trimmed.slice(0, 255);
+  }
+
+  private normalizeContactMethod(contactMethod?: string): ContactMethod | null {
+    if (!contactMethod) {
+      return null;
+    }
+    const normalized = contactMethod.toLowerCase().trim();
+    if (
+      normalized === 'call' ||
+      normalized === 'whatsapp' ||
+      normalized === 'email' ||
+      normalized === 'instagram'
+    ) {
+      return normalized;
+    }
+    return null;
   }
 }
