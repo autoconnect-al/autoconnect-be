@@ -56,9 +56,9 @@ describe('PostController - incrementPostMetric', () => {
       controller.incrementPostMetric(
         '123',
         'invalid',
-        undefined,
-        undefined,
         response,
+        undefined,
+        undefined,
       ),
     ).rejects.toThrow(BadRequestException);
   });
@@ -69,9 +69,9 @@ describe('PostController - incrementPostMetric', () => {
       controller.incrementPostMetric(
         'not-a-number',
         'postOpen',
-        undefined,
-        undefined,
         response,
+        undefined,
+        undefined,
       ),
     ).rejects.toThrow(BadRequestException);
   });
@@ -82,9 +82,9 @@ describe('PostController - incrementPostMetric', () => {
       controller.incrementPostMetric(
         '123',
         'contact',
+        response,
         undefined,
         'sms',
-        response,
       ),
     ).rejects.toThrow(BadRequestException);
   });
@@ -105,9 +105,9 @@ describe('PostController - incrementPostMetric', () => {
       await controller.incrementPostMetric(
         '123',
         'postOpen',
-        undefined,
-        undefined,
         mockResponse,
+        undefined,
+        undefined,
       );
 
       expect(mockResponse.status).toHaveBeenCalledWith(202);
@@ -128,9 +128,9 @@ describe('PostController - incrementPostMetric', () => {
       await controller.incrementPostMetric(
         '456',
         'impressions',
+        mockResponse,
         'visitor-123',
         undefined,
-        mockResponse,
       );
 
       expect(mockResponse.status).toHaveBeenCalledWith(202);
@@ -151,9 +151,9 @@ describe('PostController - incrementPostMetric', () => {
       await controller.incrementPostMetric(
         '789',
         'reach',
-        undefined,
-        undefined,
         mockResponse,
+        undefined,
+        undefined,
       );
 
       expect(mockResponse.status).toHaveBeenCalledWith(202);
@@ -174,9 +174,9 @@ describe('PostController - incrementPostMetric', () => {
       await controller.incrementPostMetric(
         '111',
         'clicks',
-        undefined,
-        undefined,
         mockResponse,
+        undefined,
+        undefined,
       );
 
       expect(mockResponse.status).toHaveBeenCalledWith(202);
@@ -197,9 +197,9 @@ describe('PostController - incrementPostMetric', () => {
       await controller.incrementPostMetric(
         '222',
         'contact',
+        mockResponse,
         undefined,
         'call',
-        mockResponse,
       );
 
       expect(mockResponse.status).toHaveBeenCalledWith(202);

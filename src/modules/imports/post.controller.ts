@@ -87,9 +87,9 @@ export class PostController {
   async incrementPostMetric(
     @Param('postId') postId: string,
     @Query('metric') metric: string,
+    @Res() res: Response,
     @Query('visitorId') visitorId?: string,
     @Query('contactMethod') contactMethod?: string,
-    @Res() res: Response,
   ) {
     const allowedMetrics = [
       'postOpen',
