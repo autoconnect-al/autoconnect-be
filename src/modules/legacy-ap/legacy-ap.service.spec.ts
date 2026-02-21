@@ -200,3 +200,64 @@ describe('LegacyApService.autoRenewPosts allowed promotion writes', () => {
     );
   });
 });
+
+describe('LegacyApService admin role management', () => {
+  it('grants ADMIN role to existing user', async () => {
+    const prisma = {
+      user: {
+        findUnique: jest.fn().mockResolvedValue({ id: 7n, deleted: false }),
+      },
+      role: {
+        findFirst: jest.fn().mockResolvedValue({ id: 9 }),
+      },
+      $executeRawUnsafe: jest.fn().mockResolvedValue(1),
+    } as any;
+
+    const service = new LegacyApService(
+      prisma,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    const response = await service.grantAdminRole('7');
+
+    expect(response.success).toBe(true);
+    expect(prisma.$executeRawUnsafe).toHaveBeenCalledWith(
+      'INSERT IGNORE INTO user_role (user_id, role_id) VALUES (?, ?)',
+      7n,
+      9,
+    );
+  });
+
+  it('prevents revoking the last ADMIN role', async () => {
+    const prisma = {
+      user: {
+        findUnique: jest.fn().mockResolvedValue({ id: 7n, deleted: false }),
+      },
+      role: {
+        findFirst: jest.fn().mockResolvedValue({ id: 9 }),
+      },
+      $queryRawUnsafe: jest
+        .fn()
+        .mockResolvedValueOnce([{ total: 1n }])
+        .mockResolvedValueOnce([{ total: 1n }]),
+      $executeRawUnsafe: jest.fn().mockResolvedValue(1),
+    } as any;
+
+    const service = new LegacyApService(
+      prisma,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    const response = await service.revokeAdminRole('7');
+
+    expect(response.success).toBe(false);
+    expect(response.statusCode).toBe('409');
+    expect(prisma.$executeRawUnsafe).not.toHaveBeenCalled();
+  });
+});

@@ -88,6 +88,14 @@ Priority levels:
   - Updated `/Users/reipano/Personal/vehicle-api/src/common/guards/admin.guard.ts` to the same header/JWT model (no query auth).
   - Updated `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/legacy-ap-auth.controller.ts` to read `X-Admin-Code` header (not query).
   - Updated `/Users/reipano/Personal/vehicle-api/src/modules/imports/remote-post-saver.service.ts` to send `X-Admin-Code` and stop using `?code=` in guarded routes.
+  - Updated AP admin controllers in `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/legacy-ap-admin.controller.ts` to `LegacyJwtAdminGuard` so admin panel endpoints now require admin JWT role.
+  - Replaced username-based role claim assignment with DB-backed role lookup (`user_role` + `role`) for user JWT mint/refresh paths:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-group-a/local-user-vendor.service.ts`
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-auth/legacy-auth.service.ts`
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-group-b/local-post-order.service.ts`
+  - Added admin role management controls:
+    - API: `/role-management/grant-admin/:id` and `/role-management/revoke-admin/:id` (admin JWT protected).
+    - CLI bootstrap: `/Users/reipano/Personal/vehicle-api/scripts/admin-role.js` (`npm run admin:role -- <grant|revoke> <userId>`).
 
 #### 0.3 Validate required runtime config at boot
 - **Status**: ✅ Done (2026-02-21)

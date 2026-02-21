@@ -8,6 +8,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../database/prisma.service';
 import { requireEnv } from '../../common/require-env.util';
+import { getUserRoleNames } from '../../common/user-roles.util';
 
 const jwtSecret = requireEnv('JWT_SECRET');
 const instagramClientId = requireEnv('INSTAGRAM_CLIENT_ID');
@@ -88,7 +89,7 @@ export class LegacyAuthService {
         nbf: Math.floor(Date.now() / 1000),
         exp: Math.floor(Date.now() / 1000) + 86400,
         userId: String(user.id),
-        roles: [user.username === 'rei' ? 'ADMIN' : 'USER'],
+        roles: await getUserRoleNames(this.prisma, String(user.id)),
         name: user.name,
         email: user.email,
         username: user.username,

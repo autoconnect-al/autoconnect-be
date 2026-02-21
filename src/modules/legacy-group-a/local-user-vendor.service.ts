@@ -8,6 +8,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { Resend } from 'resend';
 import { requireEnv } from '../../common/require-env.util';
+import { getUserRoleNames } from '../../common/user-roles.util';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -182,7 +183,7 @@ export class LocalUserVendorService {
         nbf: Math.floor(Date.now() / 1000),
         exp: Math.floor(Date.now() / 1000) + 86400,
         userId: String(user.id),
-        roles: [user.username === 'rei' ? 'ADMIN' : 'USER'],
+        roles: await getUserRoleNames(this.prisma, String(user.id)),
         name: user.name,
         email: user.email,
         username: user.username,

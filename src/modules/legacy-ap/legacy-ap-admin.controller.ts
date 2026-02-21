@@ -15,7 +15,6 @@ import {
 } from '@nestjs/common';
 import { AnyFilesInterceptor } from '@nestjs/platform-express';
 import type { Request } from 'express';
-import { ApCodeGuard } from '../../common/guards/ap-code.guard';
 import { LegacyJwtAdminGuard } from '../../common/guards/legacy-jwt-admin.guard';
 import { LegacyJwtGuard } from '../../common/guards/legacy-jwt.guard';
 import { LegacyApService } from './legacy-ap.service';
@@ -52,6 +51,18 @@ export class RoleManagementController {
   @HttpCode(200)
   async deleteRole(@Param('id') id: string) {
     return this.handleLegacy(this.service.deleteRole(id));
+  }
+
+  @Post('grant-admin/:id')
+  @HttpCode(200)
+  async grantAdmin(@Param('id') id: string) {
+    return this.handleLegacy(this.service.grantAdminRole(id));
+  }
+
+  @Post('revoke-admin/:id')
+  @HttpCode(200)
+  async revokeAdmin(@Param('id') id: string) {
+    return this.handleLegacy(this.service.revokeAdminRole(id));
   }
 
   @UseGuards(LegacyJwtGuard)
@@ -161,7 +172,7 @@ export class VendorAdminController {
 }
 
 @Controller('post')
-@UseGuards(ApCodeGuard)
+@UseGuards(LegacyJwtAdminGuard)
 export class PostToolingController {
   constructor(private readonly service: LegacyApService) {}
 
@@ -242,7 +253,7 @@ export class PostToolingController {
 }
 
 @Controller('vendor-management')
-@UseGuards(ApCodeGuard)
+@UseGuards(LegacyJwtAdminGuard)
 export class VendorManagementController {
   constructor(private readonly service: LegacyApService) {}
 
@@ -298,7 +309,7 @@ export class VendorManagementController {
 }
 
 @Controller('car-details')
-@UseGuards(ApCodeGuard)
+@UseGuards(LegacyJwtAdminGuard)
 export class CarDetailsAdminController {
   constructor(private readonly service: LegacyApService) {}
 
@@ -370,7 +381,7 @@ export class CarDetailsAdminController {
 }
 
 @Controller('make-model-data')
-@UseGuards(ApCodeGuard)
+@UseGuards(LegacyJwtAdminGuard)
 export class MakeModelDataController {
   constructor(private readonly service: LegacyApService) {}
 
@@ -396,7 +407,7 @@ export class MakeModelDataController {
 }
 
 @Controller('article')
-@UseGuards(ApCodeGuard)
+@UseGuards(LegacyJwtAdminGuard)
 export class ArticleAdminController {
   constructor(private readonly service: LegacyApService) {}
 
@@ -424,7 +435,7 @@ export class ArticleAdminController {
 }
 
 @Controller('sitemap')
-@UseGuards(ApCodeGuard)
+@UseGuards(LegacyJwtAdminGuard)
 export class SitemapAdminController {
   constructor(private readonly service: LegacyApService) {}
 
@@ -435,7 +446,7 @@ export class SitemapAdminController {
 }
 
 @Controller('api/v1/orders')
-@UseGuards(ApCodeGuard)
+@UseGuards(LegacyJwtAdminGuard)
 export class LegacyApPaymentsAdminController {
   constructor(private readonly service: LegacyApService) {}
 

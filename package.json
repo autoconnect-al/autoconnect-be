@@ -30,7 +30,8 @@
     "contract:diff:ap:tooling": "CONTRACT_CASES_DIR=test/contracts/cases-ap-tooling node scripts/contract-diff.js",
     "contract:matrix:ap": "node scripts/generate-ap-endpoint-matrix.js",
     "verify:critical": "node scripts/verify-critical-endpoints.js",
-    "verify:fe:strict": "node scripts/verify-fe-strict-parity.js"
+    "verify:fe:strict": "node scripts/verify-fe-strict-parity.js",
+    "admin:role": "node scripts/admin-role.js"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.4",

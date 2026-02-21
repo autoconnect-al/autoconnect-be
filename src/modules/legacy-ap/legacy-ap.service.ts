@@ -141,6 +141,85 @@ export class LegacyApService {
     return legacySuccess(id);
   }
 
+  async grantAdminRole(userId: string) {
+    const parsedUserId = this.parseNumericId(userId);
+    if (!parsedUserId) {
+      return legacyError('Invalid user id.', 400);
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: parsedUserId },
+      select: { id: true, deleted: true },
+    });
+    if (!user || user.deleted) {
+      return legacyError('User not found.', 404);
+    }
+
+    const adminRole = await this.prisma.role.findFirst({
+      where: { name: 'ADMIN', deleted: false },
+      select: { id: true },
+    });
+    if (!adminRole) {
+      return legacyError('ADMIN role is not configured.', 500);
+    }
+
+    await this.prisma.$executeRawUnsafe(
+      'INSERT IGNORE INTO user_role (user_id, role_id) VALUES (?, ?)',
+      parsedUserId,
+      adminRole.id,
+    );
+
+    return legacySuccess(true, 'Admin role granted successfully');
+  }
+
+  async revokeAdminRole(userId: string) {
+    const parsedUserId = this.parseNumericId(userId);
+    if (!parsedUserId) {
+      return legacyError('Invalid user id.', 400);
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: parsedUserId },
+      select: { id: true, deleted: true },
+    });
+    if (!user || user.deleted) {
+      return legacyError('User not found.', 404);
+    }
+
+    const adminRole = await this.prisma.role.findFirst({
+      where: { name: 'ADMIN', deleted: false },
+      select: { id: true },
+    });
+    if (!adminRole) {
+      return legacyError('ADMIN role is not configured.', 500);
+    }
+
+    const adminLinks = await this.prisma.$queryRawUnsafe<Array<{ total: bigint }>>(
+      'SELECT COUNT(*) AS total FROM user_role WHERE role_id = ?',
+      adminRole.id,
+    );
+    const totalAdmins = Number(adminLinks[0]?.total ?? 0n);
+
+    const targetLink = await this.prisma.$queryRawUnsafe<Array<{ total: bigint }>>(
+      'SELECT COUNT(*) AS total FROM user_role WHERE user_id = ? AND role_id = ?',
+      parsedUserId,
+      adminRole.id,
+    );
+    const targetHasAdmin = Number(targetLink[0]?.total ?? 0n) > 0;
+
+    if (targetHasAdmin && totalAdmins <= 1) {
+      return legacyError('Cannot remove the last ADMIN user.', 409);
+    }
+
+    await this.prisma.$executeRawUnsafe(
+      'DELETE FROM user_role WHERE user_id = ? AND role_id = ?',
+      parsedUserId,
+      adminRole.id,
+    );
+
+    return legacySuccess(true, 'Admin role revoked successfully');
+  }
+
   async getUsers() {
     const users = await this.prisma.user.findMany({
       where: { deleted: false },
@@ -1706,6 +1785,17 @@ export class LegacyApService {
 
   private toSafeString(value: unknown): string {
     return typeof value === 'string' ? value.trim() : '';
+  }
+
+  private parseNumericId(value: string): bigint | null {
+    if (!/^\d+$/.test(value)) {
+      return null;
+    }
+    try {
+      return BigInt(value);
+    } catch {
+      return null;
+    }
   }
 
   private toSafeNullableString(value: unknown): string | null {

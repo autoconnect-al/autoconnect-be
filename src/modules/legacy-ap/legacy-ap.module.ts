@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { ApCodeGuard } from '../../common/guards/ap-code.guard';
 import { LegacyJwtAdminGuard } from '../../common/guards/legacy-jwt-admin.guard';
 import { LegacyJwtGuard } from '../../common/guards/legacy-jwt.guard';
 import { LegacyDataService } from '../legacy-data/legacy-data.service';
@@ -41,7 +40,6 @@ import { LegacyApService } from './legacy-ap.service';
     LocalPostOrderService,
     LegacyDataService,
     LegacySitemapService,
-    ApCodeGuard,
     LegacyJwtGuard,
     LegacyJwtAdminGuard,
   ],

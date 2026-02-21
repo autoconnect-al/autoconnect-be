@@ -12,6 +12,7 @@ import { isAbsolute, join, resolve } from 'path';
 import sharp from 'sharp';
 import { getMediaRootPath } from '../../common/media-path.util';
 import { requireEnv } from '../../common/require-env.util';
+import { getUserRoleNames } from '../../common/user-roles.util';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -92,7 +93,7 @@ export class LocalPostOrderService {
           nbf: Math.floor(Date.now() / 1000),
           exp: Math.floor(Date.now() / 1000) + 86400,
           userId: String(user.id),
-          roles: [user.username === 'rei' ? 'ADMIN' : 'USER'],
+          roles: await getUserRoleNames(this.prisma, String(user.id)),
           name: user.name,
           email: user.email,
           username: user.username,

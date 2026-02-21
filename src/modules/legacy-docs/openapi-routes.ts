@@ -233,6 +233,18 @@ export const legacyRoutes: LegacyRoute[] = [
     security: true,
   },
   {
+    method: 'post',
+    path: '/role-management/grant-admin/{id}',
+    summary: 'Grant ADMIN role to user',
+    security: true,
+  },
+  {
+    method: 'post',
+    path: '/role-management/revoke-admin/{id}',
+    summary: 'Revoke ADMIN role from user',
+    security: true,
+  },
+  {
     method: 'get',
     path: '/role-management/role/{id}',
     summary: 'Get role by id',
