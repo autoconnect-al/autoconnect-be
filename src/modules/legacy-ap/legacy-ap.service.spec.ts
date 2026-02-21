@@ -100,3 +100,103 @@ describe('LegacyApService createdTime conversion', () => {
     expect(row.car_detail_car_detail_post_idTopost).toBeUndefined();
   });
 });
+
+describe('LegacyApService.importPromptResults promotion guards', () => {
+  it('does not update promotion fields from car-details import payload', async () => {
+    const prisma = {
+      post: {
+        update: jest.fn().mockResolvedValue({}),
+      },
+      car_detail: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findUnique: jest.fn().mockResolvedValue({
+          id: 1n,
+          make: 'BMW',
+          model: 'X5',
+          variant: null,
+          registration: null,
+          mileage: null,
+          transmission: null,
+          fuelType: null,
+          engineSize: null,
+          drivetrain: null,
+          seats: null,
+          numberOfDoors: null,
+          bodyType: null,
+          price: null,
+          sold: false,
+          customsPaid: false,
+          contact: null,
+          type: 'car',
+        }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    } as any;
+
+    const service = new LegacyApService(
+      prisma,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    await service.importPromptResults(
+      JSON.stringify([
+        {
+          id: '1',
+          make: 'BMW',
+          model: 'X5',
+          renewTo: 1,
+          highlightedTo: 2,
+          promotionTo: 3,
+          mostWantedTo: 4,
+        },
+      ]),
+    );
+
+    expect(prisma.post.update).toHaveBeenCalledTimes(1);
+    const updateArg = prisma.post.update.mock.calls[0][0];
+    expect(updateArg.data).not.toHaveProperty('renewTo');
+    expect(updateArg.data).not.toHaveProperty('highlightedTo');
+    expect(updateArg.data).not.toHaveProperty('promotionTo');
+    expect(updateArg.data).not.toHaveProperty('mostWantedTo');
+    expect(updateArg.data).toMatchObject({
+      live: true,
+      revalidate: false,
+    });
+  });
+});
+
+describe('LegacyApService.autoRenewPosts allowed promotion writes', () => {
+  it('updates renewTo and renewedTime', async () => {
+    const prisma = {
+      post: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+    } as any;
+
+    const service = new LegacyApService(
+      prisma,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+    jest
+      .spyOn(service as any, 'rebuildSearchFromPosts')
+      .mockResolvedValue(undefined);
+
+    const response = await service.autoRenewPosts();
+
+    expect(response.success).toBe(true);
+    expect(prisma.post.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          renewTo: expect.any(Number),
+          renewedTime: expect.any(Number),
+        }),
+      }),
+    );
+  });
+});

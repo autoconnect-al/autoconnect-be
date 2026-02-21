@@ -312,3 +312,84 @@ describe('PostImportService.incrementPostMetric', () => {
     ).rejects.toThrow('Invalid metric: invalid');
   });
 });
+
+describe('PostImportService.importResult promotion guards', () => {
+  let service: PostImportService;
+  let prisma: MockPrismaService;
+
+  beforeEach(() => {
+    prisma = new MockPrismaService();
+    service = new PostImportService(
+      prisma as unknown as PrismaService,
+      new MockOpenAIService() as any,
+      new MockImageDownloadService() as any,
+    );
+  });
+
+  it('does not update promotion fields from AI import payload', async () => {
+    const postId = 123n;
+    prisma.car_detail.findFirst.mockResolvedValue({
+      id: 777n,
+      post_id: postId,
+      model: 'X5',
+      make: 'BMW',
+      variant: null,
+      registration: null,
+      mileage: null,
+      transmission: null,
+      fuelType: null,
+      engineSize: null,
+      drivetrain: null,
+      seats: null,
+      numberOfDoors: null,
+      bodyType: null,
+      price: null,
+      emissionGroup: null,
+      sold: false,
+      customsPaid: false,
+      contact: null,
+      type: 'car',
+      priceVerified: false,
+      mileageVerified: false,
+    });
+    prisma.car_detail.update.mockResolvedValue({});
+    prisma.post.findUnique.mockResolvedValue({
+      id: postId,
+      status: 'TO_BE_PUBLISHED',
+      origin: 'INSTAGRAM',
+      renewTo: 1700000000,
+      highlightedTo: 1700000001,
+      promotionTo: 1700000002,
+      mostWantedTo: 1700000003,
+    });
+    prisma.post.update.mockResolvedValue({});
+
+    const response = await service.importResult(
+      JSON.stringify([
+        {
+          id: '123',
+          make: 'BMW',
+          model: 'X5',
+          renewTo: 1,
+          highlightedTo: 2,
+          promotionTo: 3,
+          mostWantedTo: 4,
+        },
+      ]),
+    );
+
+    expect(response.success).toBe(true);
+    expect(prisma.post.update).toHaveBeenCalledTimes(1);
+    const updateArg = prisma.post.update.mock.calls[0][0];
+    expect(updateArg.data).not.toHaveProperty('renewTo');
+    expect(updateArg.data).not.toHaveProperty('highlightedTo');
+    expect(updateArg.data).not.toHaveProperty('promotionTo');
+    expect(updateArg.data).not.toHaveProperty('mostWantedTo');
+    expect(updateArg.data).toMatchObject({
+      status: 'TO_BE_PUBLISHED',
+      origin: 'INSTAGRAM',
+      live: true,
+      revalidate: false,
+    });
+  });
+});

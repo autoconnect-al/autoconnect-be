@@ -13,6 +13,7 @@ import { isWithinThreeMonths, isWithinDays } from '../utils/date-filter';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { createHash } from 'crypto';
+import { sanitizePostUpdateDataForSource } from '../../../common/promotion-field-guard.util';
 
 export interface ImportPostData {
   id: number | string;
@@ -795,37 +796,23 @@ export class PostImportService {
             where: { id: postId },
           });
           if (post) {
-            await this.prisma.post.update({
-              where: { id: postId },
-              data: {
-                status: this.getPromotionFieldValueOrDefault(
-                  parsedResult.status,
-                  post.status,
-                ),
-                origin: this.getPromotionFieldValueOrDefault(
-                  parsedResult.origin,
-                  post.origin,
-                ),
-                renewTo: this.getPromotionFieldValueOrDefault(
-                  parsedResult.renewTo,
-                  post.renewTo,
-                ),
-                highlightedTo: this.getPromotionFieldValueOrDefault(
-                  parsedResult.highlightedTo,
-                  post.highlightedTo,
-                ),
-                promotionTo: this.getPromotionFieldValueOrDefault(
-                  parsedResult.promotionTo,
-                  post.promotionTo,
-                ),
-                mostWantedTo: this.getPromotionFieldValueOrDefault(
-                  parsedResult.mostWantedTo,
-                  post.mostWantedTo,
-                ),
+            const postUpdateData = sanitizePostUpdateDataForSource(
+              {
+                status: parsedResult.status ?? post.status,
+                origin: parsedResult.origin ?? post.origin,
+                renewTo: parsedResult.renewTo ?? post.renewTo,
+                highlightedTo: parsedResult.highlightedTo ?? post.highlightedTo,
+                promotionTo: parsedResult.promotionTo ?? post.promotionTo,
+                mostWantedTo: parsedResult.mostWantedTo ?? post.mostWantedTo,
                 live: true,
                 revalidate: false,
                 dateUpdated: new Date(),
               },
+              'untrusted',
+            );
+            await this.prisma.post.update({
+              where: { id: postId },
+              data: postUpdateData,
             });
           }
         }
@@ -847,13 +834,6 @@ export class PostImportService {
       deleted,
       errors: errors.length ? errors : undefined,
     };
-  }
-
-  private getPromotionFieldValueOrDefault<T>(
-    value: T | null | undefined,
-    defaultValue: T,
-  ): T {
-    return value ?? defaultValue;
   }
 
   private resultIsEmpty(result: ParsedResult): boolean {

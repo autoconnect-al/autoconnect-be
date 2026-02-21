@@ -13,6 +13,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Resend } from 'resend';
 import { decodeCaption } from '../imports/utils/caption-processor';
 import { requireEnv } from '../../common/require-env.util';
+import { sanitizePostUpdateDataForSource } from '../../common/promotion-field-guard.util';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -718,9 +719,8 @@ export class LegacyApService {
         },
       });
 
-      await this.prisma.post.update({
-        where: { id: BigInt(id) },
-        data: {
+      const postUpdateData = sanitizePostUpdateDataForSource(
+        {
           live: true,
           revalidate: false,
           origin: this.toSafeString(result.origin) || undefined,
@@ -731,6 +731,11 @@ export class LegacyApService {
           mostWantedTo: this.toNullableInt(result.mostWantedTo) ?? undefined,
           dateUpdated: new Date(),
         },
+        'untrusted',
+      );
+      await this.prisma.post.update({
+        where: { id: BigInt(id) },
+        data: postUpdateData,
       });
     }
 
