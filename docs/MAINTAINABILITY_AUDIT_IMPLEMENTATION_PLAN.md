@@ -240,6 +240,7 @@ Priority levels:
 ### Important
 
 #### 1.4 Replace `setImmediate` fire-and-forget with queue jobs
+- **Status**: ✅ Done (2026-02-21)
 - **Issue**
   - Async work triggered without persistence/retry.
   - Files:
@@ -252,6 +253,24 @@ Priority levels:
   3. Worker handles retries/backoff/dead-letter.
 - **Acceptance checks**
   - Process restart does not drop queued jobs.
+- **Implementation progress**
+  - Added BullMQ queue + worker processor with retries/backoff:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/imports/queue/import-jobs.constants.ts`
+    - `/Users/reipano/Personal/vehicle-api/src/modules/imports/queue/import-jobs.types.ts`
+    - `/Users/reipano/Personal/vehicle-api/src/modules/imports/queue/import-jobs.service.ts`
+    - `/Users/reipano/Personal/vehicle-api/src/modules/imports/queue/import-jobs.processor.ts`
+  - Registered queue infrastructure in:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/imports/apify-import.module.ts`
+  - Replaced controller fire-and-forget with queue enqueue + `202` response:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/imports/apify-import/apify-import.controller.ts`
+    - `/Users/reipano/Personal/vehicle-api/src/modules/imports/encar-import/encar.controller.ts`
+    - `/Users/reipano/Personal/vehicle-api/src/modules/imports/post.controller.ts`
+  - Added dead-letter queue write on final retry failure in processor.
+  - Added fallback mode for environments without Redis yet:
+    - `IMPORT_QUEUE_ENABLED=true` -> queue mode enabled.
+    - `IMPORT_QUEUE_ENABLED=false` (default) -> inline async fallback (no Redis required).
+  - Updated post metric controller tests for queue-based behavior:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/imports/post.controller.spec.ts`
 
 #### 1.5 Make Encar parsing/mapping resilient
 - **Issue**

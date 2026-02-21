@@ -5,10 +5,13 @@ import {
   Res,
   HttpStatus,
   UseGuards,
+  Optional,
+  Inject,
 } from '@nestjs/common';
 import type { Response } from 'express';
-import { EncarScrapeService } from './encar-scrape.service';
 import { AdminGuard } from '../../../common/guards/admin.guard';
+import { ImportJobsService } from '../queue/import-jobs.service';
+import { EncarScrapeService } from './encar-scrape.service';
 import { createLogger } from '../../../common/logger.util';
 
 @Controller('encar')
@@ -16,10 +19,15 @@ import { createLogger } from '../../../common/logger.util';
 export class EncarController {
   private readonly logger = createLogger('encar-controller');
 
-  constructor(private readonly encarScrapeService: EncarScrapeService) {}
+  constructor(
+    @Optional()
+    @Inject(ImportJobsService)
+    private readonly importJobsService: ImportJobsService | null,
+    private readonly encarScrapeService: EncarScrapeService,
+  ) {}
 
   @Post('scrape')
-  scrape(
+  async scrape(
     @Query('pages') pages = '1',
     @Query('useOpenAI') useOpenAI: string | undefined,
     @Query('downloadImages') downloadImages: string | undefined,
@@ -38,7 +46,29 @@ export class EncarController {
       ? Number(forceDownloadImagesDays)
       : undefined;
 
-    res.status(HttpStatus.ACCEPTED).json({ ok: true, pages: pagesNum });
+    if (this.importJobsService) {
+      const job = await this.importJobsService.enqueueEncarScrape({
+        pages: pagesNum,
+        useOpenAI: shouldUseOpenAI,
+        downloadImages: shouldDownloadImages,
+        forceDownloadImages: shouldForceDownloadImages,
+        forceDownloadImagesDays: forceDownloadDays,
+      });
+
+      res.status(HttpStatus.ACCEPTED).json({
+        ok: true,
+        pages: pagesNum,
+        status: 'queued',
+        jobId: job.id ?? null,
+      });
+      return;
+    }
+
+    res.status(HttpStatus.ACCEPTED).json({
+      ok: true,
+      pages: pagesNum,
+      status: 'queued-inline',
+    });
 
     setImmediate(() => {
       this.encarScrapeService
@@ -49,9 +79,9 @@ export class EncarController {
           forceDownloadImages: shouldForceDownloadImages,
           forceDownloadImagesDays: forceDownloadDays,
         })
-        .catch((err) => {
-          this.logger.error('encar scrape failed', {
-            error: err instanceof Error ? err.message : String(err),
+        .catch((error) => {
+          this.logger.error('inline encar scrape failed', {
+            error: error instanceof Error ? error.message : String(error),
           });
         });
     });

@@ -1,49 +1,30 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PostController } from './post.controller';
+import { BadRequestException } from '@nestjs/common';
+import { ImportJobsService } from './queue/import-jobs.service';
 import { PostImportService } from './services/post-import.service';
 import { PrismaService } from '../../database/prisma.service';
-import { BadRequestException } from '@nestjs/common';
 
 describe('PostController - incrementPostMetric', () => {
   let controller: PostController;
-  let postImportService: PostImportService;
-  let prismaService: PrismaService;
-  let setImmediateSpy: jest.SpyInstance;
+  let importJobsService: ImportJobsService;
 
   beforeEach(async () => {
-    setImmediateSpy = jest.spyOn(global, 'setImmediate').mockImplementation(((
-      callback: (...args: any[]) => void,
-      ...args: any[]
-    ) => {
-      callback(...args);
-      return 0 as unknown as NodeJS.Immediate;
-    }) as typeof setImmediate);
-
-    const mockPostImportService = {
-      incrementPostMetric: jest.fn(),
-    };
-
-    const mockPrismaService = {
-      post: {
-        findUnique: jest.fn(),
-      },
+    const mockImportJobsService = {
+      enqueuePostMetricIncrement: jest.fn().mockResolvedValue({ id: 'job-1' }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [PostController],
       providers: [
-        { provide: PostImportService, useValue: mockPostImportService },
-        { provide: PrismaService, useValue: mockPrismaService },
+        { provide: ImportJobsService, useValue: mockImportJobsService },
+        { provide: PostImportService, useValue: {} },
+        { provide: PrismaService, useValue: {} },
       ],
     }).compile();
 
     controller = module.get<PostController>(PostController);
-    postImportService = module.get<PostImportService>(PostImportService);
-    prismaService = module.get<PrismaService>(PrismaService);
-  });
-
-  afterEach(() => {
-    setImmediateSpy.mockRestore();
+    importJobsService = module.get<ImportJobsService>(ImportJobsService);
   });
 
   it('should be defined', () => {
@@ -95,12 +76,6 @@ describe('PostController - incrementPostMetric', () => {
         status: jest.fn().mockReturnThis(),
         json: jest.fn(),
       } as any;
-      (prismaService.post.findUnique as jest.Mock).mockResolvedValue({
-        id: 123n,
-      });
-      (postImportService.incrementPostMetric as jest.Mock).mockResolvedValue(
-        undefined,
-      );
 
       await controller.incrementPostMetric(
         '123',
@@ -110,6 +85,7 @@ describe('PostController - incrementPostMetric', () => {
         undefined,
       );
 
+      expect(importJobsService.enqueuePostMetricIncrement).toHaveBeenCalled();
       expect(mockResponse.status).toHaveBeenCalledWith(202);
     });
 
@@ -118,12 +94,6 @@ describe('PostController - incrementPostMetric', () => {
         status: jest.fn().mockReturnThis(),
         json: jest.fn(),
       } as any;
-      (prismaService.post.findUnique as jest.Mock).mockResolvedValue({
-        id: 456n,
-      });
-      (postImportService.incrementPostMetric as jest.Mock).mockResolvedValue(
-        undefined,
-      );
 
       await controller.incrementPostMetric(
         '456',
@@ -133,6 +103,7 @@ describe('PostController - incrementPostMetric', () => {
         undefined,
       );
 
+      expect(importJobsService.enqueuePostMetricIncrement).toHaveBeenCalled();
       expect(mockResponse.status).toHaveBeenCalledWith(202);
     });
 
@@ -141,12 +112,6 @@ describe('PostController - incrementPostMetric', () => {
         status: jest.fn().mockReturnThis(),
         json: jest.fn(),
       } as any;
-      (prismaService.post.findUnique as jest.Mock).mockResolvedValue({
-        id: 789n,
-      });
-      (postImportService.incrementPostMetric as jest.Mock).mockResolvedValue(
-        undefined,
-      );
 
       await controller.incrementPostMetric(
         '789',
@@ -156,6 +121,7 @@ describe('PostController - incrementPostMetric', () => {
         undefined,
       );
 
+      expect(importJobsService.enqueuePostMetricIncrement).toHaveBeenCalled();
       expect(mockResponse.status).toHaveBeenCalledWith(202);
     });
 
@@ -164,12 +130,6 @@ describe('PostController - incrementPostMetric', () => {
         status: jest.fn().mockReturnThis(),
         json: jest.fn(),
       } as any;
-      (prismaService.post.findUnique as jest.Mock).mockResolvedValue({
-        id: 111n,
-      });
-      (postImportService.incrementPostMetric as jest.Mock).mockResolvedValue(
-        undefined,
-      );
 
       await controller.incrementPostMetric(
         '111',
@@ -179,6 +139,7 @@ describe('PostController - incrementPostMetric', () => {
         undefined,
       );
 
+      expect(importJobsService.enqueuePostMetricIncrement).toHaveBeenCalled();
       expect(mockResponse.status).toHaveBeenCalledWith(202);
     });
 
@@ -187,12 +148,6 @@ describe('PostController - incrementPostMetric', () => {
         status: jest.fn().mockReturnThis(),
         json: jest.fn(),
       } as any;
-      (prismaService.post.findUnique as jest.Mock).mockResolvedValue({
-        id: 222n,
-      });
-      (postImportService.incrementPostMetric as jest.Mock).mockResolvedValue(
-        undefined,
-      );
 
       await controller.incrementPostMetric(
         '222',
@@ -202,6 +157,7 @@ describe('PostController - incrementPostMetric', () => {
         'call',
       );
 
+      expect(importJobsService.enqueuePostMetricIncrement).toHaveBeenCalled();
       expect(mockResponse.status).toHaveBeenCalledWith(202);
     });
   });

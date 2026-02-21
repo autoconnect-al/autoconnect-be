@@ -7,11 +7,14 @@ import {
   HttpStatus,
   Res,
   BadRequestException,
+  Optional,
+  Inject,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { ApiOperation, ApiParam, ApiQuery, ApiResponse } from '@nestjs/swagger';
-import { PostImportService } from './services/post-import.service';
 import { Throttle } from '@nestjs/throttler';
+import { ImportJobsService } from './queue/import-jobs.service';
+import { PostImportService } from './services/post-import.service';
 import { PrismaService } from '../../database/prisma.service';
 import { createLogger } from '../../common/logger.util';
 
@@ -22,14 +25,16 @@ export class PostController {
   private readonly logger = createLogger('post-controller');
 
   constructor(
+    @Optional()
+    @Inject(ImportJobsService)
+    private readonly importJobsService: ImportJobsService | null,
     private readonly postImportService: PostImportService,
     private readonly prisma: PrismaService,
   ) {}
 
   /**
    * Increment a post metric (postOpen, impressions, reach, clicks, or contact)
-   * Returns immediately and processes the increment asynchronously
-   * High rate limit: 1000 requests per 60 seconds per IP
+   * Returns immediately and processes the increment asynchronously.
    */
   @Post(':postId/increment')
   @Get(':postId/increment')
@@ -80,13 +85,6 @@ export class PostController {
       example: { statusCode: 400, message: 'Invalid metric' },
     },
   })
-  @ApiResponse({
-    status: 404,
-    description: 'Post not found',
-    schema: {
-      example: { statusCode: 404, message: 'Post not found' },
-    },
-  })
   async incrementPostMetric(
     @Param('postId') postId: string,
     @Query('metric') metric: string,
@@ -103,7 +101,6 @@ export class PostController {
     ] as const;
     const allowedContactMethods = ['call', 'whatsapp', 'email', 'instagram'];
 
-    // Validate metric
     if (!allowedMetrics.includes(metric as (typeof allowedMetrics)[number])) {
       throw new BadRequestException(
         `Invalid metric: ${metric}. Must be 'postOpen', 'impressions', 'reach', 'clicks', or 'contact'.`,
@@ -121,6 +118,10 @@ export class PostController {
       }
     }
 
+    if (!/^\d+$/.test(postId)) {
+      throw new BadRequestException('Invalid post ID format');
+    }
+
     const sanitizedVisitorId =
       typeof visitorId === 'string' && visitorId.trim().length > 0
         ? visitorId.trim().slice(0, 255)
@@ -130,34 +131,44 @@ export class PostController {
         ? contactMethod.trim().toLowerCase()
         : undefined;
 
-    // Parse postId as BigInt
-    let parsedPostId: bigint;
-    try {
-      parsedPostId = BigInt(postId);
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    } catch (error) {
-      throw new BadRequestException('Invalid post ID format');
+    if (this.importJobsService) {
+      const job = await this.importJobsService.enqueuePostMetricIncrement({
+        postId,
+        metric: metric as 'postOpen' | 'impressions' | 'reach' | 'clicks' | 'contact',
+        visitorId: sanitizedVisitorId,
+        contactMethod: normalizedContactMethod as
+          | 'call'
+          | 'whatsapp'
+          | 'email'
+          | 'instagram'
+          | undefined,
+      });
+
+      res.status(HttpStatus.ACCEPTED).json({
+        ok: true,
+        status: 'queued',
+        jobId: job.id ?? null,
+      });
+      return;
     }
 
-    // Return immediately with 202 Accepted
-    res.status(HttpStatus.ACCEPTED).json({ ok: true, status: 'queued' });
+    res.status(HttpStatus.ACCEPTED).json({
+      ok: true,
+      status: 'queued-inline',
+    });
 
-    // Process increment asynchronously
-    // eslint-disable-next-line @typescript-eslint/no-misused-promises
     setImmediate(async () => {
       try {
-        // Verify post exists
+        const parsedPostId = BigInt(postId);
         const post = await this.prisma.post.findUnique({
           where: { id: parsedPostId },
           select: { id: true },
         });
-
         if (!post) {
           this.logger.warn('post not found for metric increment', { postId });
           return;
         }
 
-        // Increment the metric
         await this.postImportService.incrementPostMetric(
           parsedPostId,
           metric as 'postOpen' | 'impressions' | 'reach' | 'clicks' | 'contact',
@@ -171,14 +182,8 @@ export class PostController {
               | undefined,
           },
         );
-
-        this.logger.info('post metric incremented', {
-          postId,
-          metric,
-          contactMethod: normalizedContactMethod ?? null,
-        });
       } catch (error) {
-        this.logger.error('failed to increment post metric', {
+        this.logger.error('inline metric increment failed', {
           postId,
           metric,
           error: error instanceof Error ? error.message : String(error),
