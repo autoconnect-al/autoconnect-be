@@ -12,8 +12,12 @@ import { LegacySitemapService } from '../legacy-sitemap/legacy-sitemap.service';
 import { JwtService } from '@nestjs/jwt';
 import { Resend } from 'resend';
 import { decodeCaption } from '../imports/utils/caption-processor';
+import { requireEnv } from '../../common/require-env.util';
 
 type AnyRecord = Record<string, unknown>;
+
+const jwtSecret = requireEnv('JWT_SECRET');
+const adminLoginCode = requireEnv('AP_ADMIN_CODE');
 
 @Injectable()
 export class LegacyApService {
@@ -27,30 +31,13 @@ export class LegacyApService {
     private readonly legacySitemapService: LegacySitemapService,
   ) {
     this.jwtService = new JwtService({
-      secret:
-        process.env.JWT_SECRET ??
-        `-----BEGIN RSA PRIVATE KEY-----
-MIICWwIBAAKBgHhtbw0Ojj24oDS1NFTg4jJaNNulbn1tAYlgTaoua1Fogkmtbhed
-p3wMaJu0PHrCNM4DZeBA1XxpQcDuTSLukkSVRGqRsrSB3UyRfc3ykINN0/nQmTvh
-C3WxyOF/xTAfa3r4d/aMs+knBtBvXR8NS6C6Nfd+eSr3mfMlPB31Sfn7AgMBAAEC
-gYA2+zeFTYzxbvZtugE/c0CyXm7djSTpzLez4azzsqe6ji1VuAGYdJj/0KZ92Ab4
-wOvc1r5PaSpO17t2exXqieNrF+GTM2t0e8IjjuI65wcWLtmmorSgxOaix2Ytww9m
-7VSvjjkjMSXFKssmhrnnHwu5+Bi74xoQRQf/G9k3OsSZoQJBAOgfSqVwZGnaU6yi
-bAQwW900XT7gDLr7gXQWzAGdvSIUYh2Elrr+rcXrlZ+xPRbsTTLIlmtmeqo9kCwe
-d7B2fpECQQCE0MWQgBZHrfePHta7zU7XGTZBUljhMVVOldTEALVVhTBBn6kA62V8
-iKOudmJX9AtPe6aITBzKK+qcTI1UIk3LAkEAt9mxAgBXSBAJHj83VsoGuNn00Qwc
-iS0Th6NWyiDp4MhMPhz6VfnKIW1LAUUcob9gFc0SdtagaZ6BRrCLFFWGQQJAD1fa
-6vWRHVjAl50Va36tU/YKqYMs118OntR6TuZSDH4lc/9Q09Vd1QQn/JiahdSgld8P
-/wDj9osaQFIrpYOM/wJAWW38Ogcp70SPtAyV1kl4jP38jyXFD+M3VESBrhZRzz5E
-F4RzDtfTdh+Oy9rr11Fr9HvlTQeNhBTTOc4veOpd3A==
------END RSA PRIVATE KEY-----`,
+      secret: jwtSecret,
       signOptions: { algorithm: 'HS256' },
     });
   }
 
   async loginWithCode(code: string): Promise<LegacyResponse> {
-    const expected = process.env.CODE ?? process.env.AP_ADMIN_CODE ?? '';
-    if (!expected || code !== expected) {
+    if (code !== adminLoginCode) {
       return legacyError(
         'Could not login user. Please check your credentials.',
         500,

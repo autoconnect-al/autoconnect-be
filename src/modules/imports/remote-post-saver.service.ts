@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { requireEnv } from '../../common/require-env.util';
 
 type Post = {
   pk?: number;
@@ -21,10 +22,8 @@ type Post = {
 @Injectable()
 export class RemotePostSaverService {
   // keep same defaults as your script; you can move these to env later
-  private readonly basePath =
-    process.env.AUTOCONNECT_BASE_URL ?? 'https://ap-be.autoconnect.al';
-  private readonly code =
-    process.env.AUTOCONNECT_CODE ?? 'ejkuU89EcU6LinIHVUvhpQz65gY8DOgG';
+  private readonly basePath = requireEnv('AUTOCONNECT_BASE_URL');
+  private readonly code = requireEnv('AUTOCONNECT_CODE');
 
   // Import your existing PostModel from your project (same as save-post.ts)
   // Adjust the path to wherever you keep it in Nest.
