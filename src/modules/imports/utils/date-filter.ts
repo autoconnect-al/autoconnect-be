@@ -1,6 +1,9 @@
 /**
  * Utility functions for filtering posts by date
  */
+import { createLogger } from '../../../common/logger.util';
+
+const logger = createLogger('date-filter-util');
 
 // Timestamp threshold: Unix timestamps less than this are in seconds, >= are in milliseconds
 // This value (10 billion) corresponds to Sept 2286, a reasonable cutoff
@@ -66,7 +69,9 @@ export function isWithinThreeMonths(
 
     return postDate.getTime() >= threeMonthsAgo.getTime();
   } catch (error) {
-    console.error('Error checking date filter:', error);
+    logger.error('Error checking date filter (three months)', {
+      error: error instanceof Error ? error.message : String(error),
+    });
     return false;
   }
 }
@@ -133,7 +138,9 @@ export function isWithinDays(
 
     return postDate.getTime() >= daysAgo.getTime();
   } catch (error) {
-    console.error('Error checking date filter:', error);
+    logger.error('Error checking date filter (days)', {
+      error: error instanceof Error ? error.message : String(error),
+    });
     return false;
   }
 }

@@ -13,11 +13,14 @@ import { ApiOperation, ApiParam, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { PostImportService } from './services/post-import.service';
 import { Throttle } from '@nestjs/throttler';
 import { PrismaService } from '../../database/prisma.service';
+import { createLogger } from '../../common/logger.util';
 
 @Controller({
   path: ['posts', 'api/v1/posts'],
 })
 export class PostController {
+  private readonly logger = createLogger('post-controller');
+
   constructor(
     private readonly postImportService: PostImportService,
     private readonly prisma: PrismaService,
@@ -150,7 +153,7 @@ export class PostController {
         });
 
         if (!post) {
-          console.warn(`[PostMetric] Post ${postId} not found`);
+          this.logger.warn('post not found for metric increment', { postId });
           return;
         }
 
@@ -169,14 +172,17 @@ export class PostController {
           },
         );
 
-        console.log(
-          `[PostMetric] Successfully incremented ${metric} for post ${postId}${normalizedContactMethod ? ` [${normalizedContactMethod}]` : ''}`,
-        );
+        this.logger.info('post metric incremented', {
+          postId,
+          metric,
+          contactMethod: normalizedContactMethod ?? null,
+        });
       } catch (error) {
-        console.error(
-          `[PostMetric] Failed to increment ${metric} for post ${postId}:`,
-          error,
-        );
+        this.logger.error('failed to increment post metric', {
+          postId,
+          metric,
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     });
   }

@@ -9,6 +9,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Resend } from 'resend';
 import { requireEnv } from '../../common/require-env.util';
 import { getUserRoleNames } from '../../common/user-roles.util';
+import { createLogger } from '../../common/logger.util';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -32,6 +33,7 @@ type UserPayload = {
 export class LocalUserVendorService {
   private readonly jwtService: JwtService;
   private readonly resetIssuer = 'your.domain.name';
+  private readonly logger = createLogger('local-user-vendor-service');
 
   constructor(private readonly prisma: PrismaService) {
     this.jwtService = new JwtService({
@@ -41,13 +43,7 @@ export class LocalUserVendorService {
   }
 
   private log(event: string, payload: Record<string, unknown>) {
-    console.log(
-      JSON.stringify({
-        scope: 'local-user-vendor-service',
-        event,
-        ...payload,
-      }),
-    );
+    this.logger.info(event, payload);
   }
 
   async createUser(raw: unknown): Promise<LegacyResponse> {
@@ -198,14 +194,7 @@ export class LocalUserVendorService {
       const message =
         error instanceof Error ? error.message : 'Unknown login error';
       const stack = error instanceof Error ? error.stack : undefined;
-      console.error(
-        JSON.stringify({
-          scope: 'local-user-vendor-service',
-          event: 'login.exception',
-          message,
-          stack,
-        }),
-      );
+      this.logger.error('login.exception', { message, stack });
       return legacyError(
         'Could not login user. Please check your credentials.',
         500,

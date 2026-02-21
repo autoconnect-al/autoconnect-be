@@ -147,7 +147,7 @@ Priority levels:
 ### Good to have
 
 #### 0.5 Replace raw `console.*` with structured logger service
-- **Status**: ⏳ Pending
+- **Status**: ✅ Done (2026-02-21)
 - **Issue**
   - Logging is inconsistent and noisy.
 - **Implementation**
@@ -156,6 +156,28 @@ Priority levels:
   3. Ensure secrets and tokens are redacted.
 - **Acceptance checks**
   - Logs are JSON and queryable; no secret fields present.
+- **Implementation progress**
+  - Added structured logger utility with JSON output and key-based secret redaction:
+    - `/Users/reipano/Personal/vehicle-api/src/common/logger.util.ts`
+  - Replaced raw logging in import-critical and remaining runtime paths:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/imports/apify-import/apify-dataset-import.service.ts`
+    - `/Users/reipano/Personal/vehicle-api/src/modules/imports/services/post-import.service.ts`
+    - `/Users/reipano/Personal/vehicle-api/src/modules/imports/apify-import/apify-import.controller.ts`
+    - `/Users/reipano/Personal/vehicle-api/src/modules/imports/encar-import/encar.controller.ts`
+    - `/Users/reipano/Personal/vehicle-api/src/modules/imports/services/openai.service.ts`
+    - `/Users/reipano/Personal/vehicle-api/src/modules/imports/services/image-download.service.ts`
+    - `/Users/reipano/Personal/vehicle-api/src/modules/imports/utils/date-filter.ts`
+    - `/Users/reipano/Personal/vehicle-api/src/modules/imports/post.controller.ts`
+    - `/Users/reipano/Personal/vehicle-api/src/modules/imports/encar-import/encar-scrape.service.ts`
+    - `/Users/reipano/Personal/vehicle-api/src/modules/imports/encar-import/save-from-encar.ts`
+    - `/Users/reipano/Personal/vehicle-api/src/modules/imports/remote-post-saver.service.ts`
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-auth/legacy-auth.controller.ts`
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-auth/legacy-auth.service.ts`
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-group-a/local-user-vendor.service.ts`
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/legacy-ap.service.ts`
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-data/local-media.service.ts`
+    - `/Users/reipano/Personal/vehicle-api/src/main.ts`
+  - `src` now has no direct `console.*` calls outside the logger utility itself.
 
 ---
 
@@ -164,6 +186,7 @@ Priority levels:
 ### Critical / Must do
 
 #### 1.1 Fix shared mutable state race in Apify import service
+- **Status**: ✅ Done (2026-02-21)
 - **Issue**
   - Class-level mutable fields (`batch`, counters) are reused across runs.
   - File: `/Users/reipano/Personal/vehicle-api/src/modules/imports/apify-import/apify-dataset-import.service.ts`
@@ -175,8 +198,13 @@ Priority levels:
   3. Optionally enforce one active run per source with lock.
 - **Acceptance checks**
   - Two concurrent runs produce isolated counts and no cross-contamination.
+- **Implementation progress**
+  - Removed class-level mutable state (`batch`, counters) and moved run state into local variables in `importLatestDataset`.
+  - Added `runId` per import run and included it in logs for traceability.
+  - File: `/Users/reipano/Personal/vehicle-api/src/modules/imports/apify-import/apify-dataset-import.service.ts`
 
 #### 1.2 Remove private internals access (`postImportService['prisma']`)
+- **Status**: ✅ Done (2026-02-21)
 - **Issue**
   - Service accesses another service internals via bracket hack.
 - **Risk**
@@ -187,8 +215,14 @@ Priority levels:
   2. Replace direct `['prisma']` access.
 - **Acceptance checks**
   - No `['prisma']` access remains.
+- **Implementation progress**
+  - Added explicit service API:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/imports/services/post-import.service.ts` -> `getPostState(postId)`
+  - Replaced internal bracket access in:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/imports/apify-import/apify-dataset-import.service.ts`
 
 #### 1.3 Fix logic accidentally gated by `SHOW_LOGS`
+- **Status**: ✅ Done (2026-02-21)
 - **Issue**
   - In `post-import.service.ts`, some DB updates are inside `if (SHOW_LOGS)` block.
 - **Risk**
@@ -198,6 +232,10 @@ Priority levels:
   2. Keep only `console/log` in `SHOW_LOGS` blocks.
 - **Acceptance checks**
   - Behavior identical with `SHOW_LOGS=true/false`.
+- **Implementation progress**
+  - Moved sold-path DB mutations out of logging-only block in:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/imports/services/post-import.service.ts`
+  - `SHOW_LOGS` now controls logging only, not persistence side effects, in the fixed branch.
 
 ### Important
 

@@ -3,8 +3,10 @@ import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import express from 'express';
 import { getMediaRootPath } from './common/media-path.util';
+import { createLogger } from './common/logger.util';
 
 async function bootstrap() {
+  const logger = createLogger('http-access');
   const app = await NestFactory.create(AppModule, { bodyParser: false });
 
   app.use(express.json({ limit: '10mb' }));
@@ -26,16 +28,12 @@ async function bootstrap() {
     const start = Date.now();
     res.on('finish', () => {
       const durationMs = Date.now() - start;
-      // Structured line for endpoint usage and auth-failure analysis.
-      console.log(
-        JSON.stringify({
-          ts: new Date().toISOString(),
-          method: req.method,
-          path: req.originalUrl ?? req.url,
-          status: res.statusCode,
-          durationMs,
-        }),
-      );
+      logger.info('request.finished', {
+        method: req.method,
+        path: req.originalUrl ?? req.url,
+        status: res.statusCode,
+        durationMs,
+      });
     });
     next();
   });

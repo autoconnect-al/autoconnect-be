@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { requireEnv } from '../../common/require-env.util';
+import { createLogger } from '../../common/logger.util';
 
 type Post = {
   pk?: number;
@@ -21,6 +22,7 @@ type Post = {
 
 @Injectable()
 export class RemotePostSaverService {
+  private readonly logger = createLogger('remote-post-saver-service');
   // keep same defaults as your script; you can move these to env later
   private readonly basePath = requireEnv('AUTOCONNECT_BASE_URL');
   private readonly code = requireEnv('AUTOCONNECT_CODE');
@@ -98,7 +100,9 @@ export class RemotePostSaverService {
       body: JSON.stringify(body),
     }).catch((e) => {
       // script catches errors per request
-      console.error(e);
+      this.logger.error('save post request failed', {
+        error: e instanceof Error ? e.message : String(e),
+      });
     });
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const json = await response?.json();

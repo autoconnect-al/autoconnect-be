@@ -9,6 +9,7 @@ import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../database/prisma.service';
 import { requireEnv } from '../../common/require-env.util';
 import { getUserRoleNames } from '../../common/user-roles.util';
+import { createLogger } from '../../common/logger.util';
 
 const jwtSecret = requireEnv('JWT_SECRET');
 const instagramClientId = requireEnv('INSTAGRAM_CLIENT_ID');
@@ -17,6 +18,7 @@ const instagramClientSecret = requireEnv('INSTAGRAM_CLIENT_SECRET');
 @Injectable()
 export class LegacyAuthService {
   private readonly jwtService: JwtService;
+  private readonly logger = createLogger('legacy-auth-service');
 
   constructor(
     private readonly localUserVendorService: LocalUserVendorService,
@@ -39,14 +41,7 @@ export class LegacyAuthService {
       const message =
         error instanceof Error ? error.message : 'Unknown auth service error';
       const stack = error instanceof Error ? error.stack : undefined;
-      console.error(
-        JSON.stringify({
-          scope: 'legacy-auth-service',
-          event: 'login.exception',
-          message,
-          stack,
-        }),
-      );
+      this.logger.error('login.exception', { message, stack });
       return legacyError(
         'Could not login user. Please check your credentials.',
         500,

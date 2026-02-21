@@ -10,12 +10,15 @@ import {
 import type { Response } from 'express';
 import { ApifyDatasetImportService } from './apify-dataset-import.service';
 import { AdminGuard } from '../../../common/guards/admin.guard';
+import { createLogger } from '../../../common/logger.util';
 
 @Controller({
   path: ['apify', 'api/v1/apify'],
 })
 @UseGuards(AdminGuard)
 export class ApifyController {
+  private readonly logger = createLogger('apify-import-controller');
+
   constructor(private readonly apifyImport: ApifyDatasetImportService) {}
 
   @Post('import')
@@ -49,7 +52,9 @@ export class ApifyController {
           forceDownloadDays,
         )
         .catch((err) => {
-          console.error('[ApifyImport] failed:', err);
+          this.logger.error('import failed', {
+            error: err instanceof Error ? err.message : String(err),
+          });
         });
     });
   }

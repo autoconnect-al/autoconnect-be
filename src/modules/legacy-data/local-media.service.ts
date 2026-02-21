@@ -8,6 +8,7 @@ import {
   type LegacyResponse,
 } from '../../common/legacy-response';
 import { getMediaRootPath } from '../../common/media-path.util';
+import { createLogger } from '../../common/logger.util';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -19,6 +20,7 @@ type UploadImageInput = {
 
 @Injectable()
 export class LocalMediaService {
+  private readonly logger = createLogger('local-media-service');
   private readonly mediaRoot = getMediaRootPath();
   private readonly mediaTmpRoot = resolve(this.mediaRoot, 'tmp');
 
@@ -30,14 +32,7 @@ export class LocalMediaService {
       raw && typeof raw === 'object' && !Array.isArray(raw)
         ? Object.keys(raw as Record<string, unknown>).slice(0, 5)
         : [];
-    console.log(
-      JSON.stringify({
-        scope: 'local-media-service',
-        event: 'upload-image.input-shape',
-        rawType,
-        rawKeys,
-      }),
-    );
+    this.logger.info('upload-image.input-shape', { rawType, rawKeys });
 
     const image = this.normalizeInput(raw);
     if (!image.file) {

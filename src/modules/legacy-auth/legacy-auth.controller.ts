@@ -13,19 +13,16 @@ import { AnyFilesInterceptor } from '@nestjs/platform-express';
 import { LegacyAuthService } from './legacy-auth.service';
 import type { LegacyResponse } from '../../common/legacy-response';
 import { legacyError } from '../../common/legacy-response';
+import { createLogger } from '../../common/logger.util';
 
 @Controller()
 export class LegacyAuthController {
+  private readonly logger = createLogger('auth-controller');
+
   constructor(private readonly service: LegacyAuthService) {}
 
   private log(event: string, payload: Record<string, unknown>) {
-    console.log(
-      JSON.stringify({
-        scope: 'auth-controller',
-        event,
-        ...payload,
-      }),
-    );
+    this.logger.info(event, payload);
   }
 
   private throwLegacy(response: LegacyResponse, httpStatus: number) {

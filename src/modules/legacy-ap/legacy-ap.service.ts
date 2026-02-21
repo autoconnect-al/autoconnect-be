@@ -14,6 +14,7 @@ import { Resend } from 'resend';
 import { decodeCaption } from '../imports/utils/caption-processor';
 import { requireEnv } from '../../common/require-env.util';
 import { sanitizePostUpdateDataForSource } from '../../common/promotion-field-guard.util';
+import { createLogger } from '../../common/logger.util';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -23,6 +24,7 @@ const adminLoginCode = requireEnv('AP_ADMIN_CODE');
 @Injectable()
 export class LegacyApService {
   private readonly jwtService: JwtService;
+  private readonly logger = createLogger('legacy-ap-service');
 
   constructor(
     private readonly prisma: PrismaService,
@@ -1965,14 +1967,10 @@ export class LegacyApService {
       } catch (error) {
         const message =
           error instanceof Error ? error.message : 'Unknown rebuild error';
-        console.error(
-          JSON.stringify({
-            scope: 'legacy-ap-service',
-            event: 'rebuild-search.create-failed',
-            postId: String(post.id),
-            message,
-          }),
-        );
+        this.logger.error('rebuild-search.create-failed', {
+          postId: String(post.id),
+          message,
+        });
       }
     }
   }

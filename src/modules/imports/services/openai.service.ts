@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { createLogger } from '../../../common/logger.util';
 
 export interface CarDetailFromAI {
   make?: string;
@@ -16,6 +17,7 @@ export interface CarDetailFromAI {
 
 @Injectable()
 export class OpenAIService {
+  private readonly logger = createLogger('openai-service');
   private readonly apiKey = process.env.OPENAI_API_KEY;
   private readonly apiUrl = 'https://api.openai.com/v1/chat/completions';
   private readonly model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
@@ -24,7 +26,7 @@ export class OpenAIService {
     cleanedCaption: string,
   ): Promise<CarDetailFromAI | null> {
     if (!this.apiKey) {
-      console.warn(
+      this.logger.warn(
         'OpenAI API key not configured. Skipping car details generation.',
       );
       return null;
@@ -63,7 +65,10 @@ export class OpenAIService {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('OpenAI API error:', response.status, errorText);
+        this.logger.error('OpenAI API error', {
+          status: response.status,
+          errorText,
+        });
         return null;
       }
 
@@ -78,7 +83,9 @@ export class OpenAIService {
       const carDetails = this.parseCarDetails(content);
       return carDetails;
     } catch (error) {
-      console.error('Error generating car details from OpenAI:', error);
+      this.logger.error('Error generating car details from OpenAI', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       return null;
     }
   }
@@ -112,7 +119,7 @@ Return ONLY the JSON object, no additional text.
       // Try to extract JSON from the response
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
-        console.error('No JSON found in OpenAI response');
+        this.logger.error('No JSON found in OpenAI response');
         return null;
       }
 
@@ -128,7 +135,9 @@ Return ONLY the JSON object, no additional text.
 
       return Object.keys(cleaned).length > 0 ? cleaned : null;
     } catch (error) {
-      console.error('Error parsing car details from OpenAI response:', error);
+      this.logger.error('Error parsing car details from OpenAI response', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       return null;
     }
   }

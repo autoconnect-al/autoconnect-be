@@ -9,10 +9,13 @@ import {
 import type { Response } from 'express';
 import { EncarScrapeService } from './encar-scrape.service';
 import { AdminGuard } from '../../../common/guards/admin.guard';
+import { createLogger } from '../../../common/logger.util';
 
 @Controller('encar')
 @UseGuards(AdminGuard)
 export class EncarController {
+  private readonly logger = createLogger('encar-controller');
+
   constructor(private readonly encarScrapeService: EncarScrapeService) {}
 
   @Post('scrape')
@@ -47,7 +50,9 @@ export class EncarController {
           forceDownloadImagesDays: forceDownloadDays,
         })
         .catch((err) => {
-          console.error('[EncarScrape] failed', err);
+          this.logger.error('encar scrape failed', {
+            error: err instanceof Error ? err.message : String(err),
+          });
         });
     });
   }

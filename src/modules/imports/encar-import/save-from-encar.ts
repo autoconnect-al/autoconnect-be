@@ -1,5 +1,6 @@
 import { IdriveScrapeResponse, Vehicle } from '../types/encar';
 import { PostModel } from '../types/instagram';
+import { createLogger } from '../../../common/logger.util';
 
 const url = `https://triovetura.com/api/proxy?endpoint=cars&filters=buy_now_price_from%3D1000%26per_page%3D50%26buy_now%3D1%26status%3D3%26from_year%3D2000%26sortDirection%3Ddesc%26page%3D{page}%26vehicle_type%3D1`;
 const mercedesModelsToFix = [
@@ -11,6 +12,7 @@ const mercedesModelsToFix = [
   'S-Class',
   'V-Class',
 ];
+const logger = createLogger('encar-save');
 
 export async function scrapeEncar(
   page?: number,
@@ -55,12 +57,10 @@ export async function scrapeEncar(
           vehicle.title,
           postData.cardDetails?.model,
         );
-        console.log(
-          'Variant mapped:',
-          vehicle.title,
-          '->',
-          postData.cardDetails.variant,
-        );
+        logger.info('variant mapped', {
+          title: vehicle.title,
+          variant: postData.cardDetails.variant,
+        });
         postData.cardDetails.registration = vehicle.year;
         postData.cardDetails.mileage = vehicle.lots[0]?.odometer?.km;
         postData.cardDetails.transmission = vehicle.transmission?.name;
@@ -113,7 +113,9 @@ export async function scrapeEncar(
       }
     }
   } catch (e) {
-    console.error('Error scraping Encar:', e);
+    logger.error('Error scraping Encar', {
+      error: e instanceof Error ? e.message : String(e),
+    });
     return {
       carsToSave: [] as any[],
       hasMore: false,
