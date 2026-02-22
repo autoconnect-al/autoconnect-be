@@ -56,6 +56,7 @@ async function bootstrap() {
     credentials: true,
     allowedHeaders: [
       'Authorization',
+      'X-Http-Authorization',
       'Content-Type',
       'Accept',
       'Origin',
