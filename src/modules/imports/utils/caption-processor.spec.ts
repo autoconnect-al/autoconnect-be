@@ -87,8 +87,8 @@ describe('caption-processor', () => {
     });
 
     it('handles null/undefined safely', () => {
-      expect(isCustomsPaid(null)).toBe(false);
-      expect(isCustomsPaid(undefined)).toBe(false);
+      expect(isCustomsPaid(null)).toBeNull();
+      expect(isCustomsPaid(undefined)).toBeNull();
     });
 
     it('handles real caption examples that match present keywords', () => {

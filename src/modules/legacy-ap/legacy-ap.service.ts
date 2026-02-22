@@ -1881,10 +1881,22 @@ export class LegacyApService {
   }
 
   private resolveCustomsPaid(result: Record<string, unknown>): boolean | null {
+    const caption =
+      this.toSafeNullableString(result.caption) ??
+      this.toSafeNullableString(result.cleanedCaption);
+    const inferred = isCustomsPaid(caption);
     if (Object.prototype.hasOwnProperty.call(result, 'customsPaid')) {
-      return this.nullableBooleanFrom(result.customsPaid);
+      const explicit = this.nullableBooleanFrom(result.customsPaid);
+      if (explicit === true) {
+        return true;
+      }
+      if (explicit === false) {
+        // If payload sends false but caption has no customs signal, treat as unknown.
+        return inferred === null ? null : false;
+      }
+      return inferred;
     }
-    return isCustomsPaid(this.toSafeString(result.caption));
+    return inferred;
   }
 
   private generateId(length: number, onlyNumbers = true): string {

@@ -335,7 +335,7 @@ describe('LegacyApService.importPromptResults promotion guards', () => {
     );
   });
 
-  it('keeps explicit customsPaid=false when provided in payload', async () => {
+  it('treats explicit customsPaid=false as unknown when caption has no customs signal', async () => {
     const prisma = {
       post: {
         update: jest.fn().mockResolvedValue({}),
@@ -386,6 +386,69 @@ describe('LegacyApService.importPromptResults promotion guards', () => {
           make: 'BMW',
           model: 'X5',
           customsPaid: false,
+          caption: 'Makina ne gjendje shume te mire',
+        },
+      ]),
+    );
+
+    const carDetailUpdateArg = prisma.car_detail.update.mock.calls[0][0];
+    expect(carDetailUpdateArg.data).toMatchObject({
+      customsPaid: null,
+    });
+  });
+
+  it('keeps explicit customsPaid=false when caption signals unpaid customs', async () => {
+    const prisma = {
+      post: {
+        update: jest.fn().mockResolvedValue({}),
+      },
+      car_detail: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findFirst: jest.fn().mockResolvedValue({
+          id: 1n,
+          post_id: 1n,
+          make: 'BMW',
+          model: 'X5',
+          variant: null,
+          registration: null,
+          mileage: null,
+          transmission: null,
+          fuelType: null,
+          engineSize: null,
+          drivetrain: null,
+          seats: null,
+          numberOfDoors: null,
+          bodyType: null,
+          price: null,
+          sold: false,
+          customsPaid: true,
+          priceVerified: false,
+          mileageVerified: false,
+          fuelVerified: false,
+          contact: null,
+          type: 'car',
+        }),
+        findUnique: jest.fn(),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    } as any;
+
+    const service = new LegacyApService(
+      prisma,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    await service.importPromptResults(
+      JSON.stringify([
+        {
+          id: '1',
+          make: 'BMW',
+          model: 'X5',
+          customsPaid: false,
+          caption: 'Sapo ardhur, deri ne durres',
         },
       ]),
     );
