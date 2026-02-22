@@ -767,7 +767,8 @@ export class LegacyApService {
           variant:
             this.toSafeNullableString(result.variant) ?? carDetail.variant,
           registration:
-            this.toSafeNullableString(result.registration) ??
+            (this.toNullableInt(result.registration)?.toString() ??
+              this.toSafeNullableString(result.registration)) ??
             carDetail.registration,
           mileage: this.toNullableFloat(result.mileage) ?? carDetail.mileage,
           transmission:
@@ -791,6 +792,18 @@ export class LegacyApService {
           customsPaid: this.booleanFrom(
             result.customsPaid,
             carDetail.customsPaid ?? false,
+          ),
+          priceVerified: this.booleanFrom(
+            result.priceVerified,
+            carDetail.priceVerified ?? false,
+          ),
+          mileageVerified: this.booleanFrom(
+            result.mileageVerified,
+            carDetail.mileageVerified ?? false,
+          ),
+          fuelVerified: this.booleanFrom(
+            result.fuelVerified,
+            carDetail.fuelVerified ?? false,
           ),
           contact: result.contact
             ? JSON.stringify(result.contact)

@@ -128,6 +128,9 @@ describe('LegacyApService.importPromptResults promotion guards', () => {
           price: null,
           sold: false,
           customsPaid: false,
+          priceVerified: false,
+          mileageVerified: false,
+          fuelVerified: false,
           contact: null,
           type: 'car',
         }),
@@ -149,6 +152,10 @@ describe('LegacyApService.importPromptResults promotion guards', () => {
           id: '1',
           make: 'BMW',
           model: 'X5',
+          registration: 2015,
+          priceVerified: true,
+          mileageVerified: true,
+          fuelVerified: true,
           renewTo: 1,
           highlightedTo: 2,
           promotionTo: 3,
@@ -166,6 +173,15 @@ describe('LegacyApService.importPromptResults promotion guards', () => {
     expect(updateArg.data).toMatchObject({
       live: true,
       revalidate: false,
+    });
+
+    expect(prisma.car_detail.update).toHaveBeenCalledTimes(1);
+    const carDetailUpdateArg = prisma.car_detail.update.mock.calls[0][0];
+    expect(carDetailUpdateArg.data).toMatchObject({
+      registration: '2015',
+      priceVerified: true,
+      mileageVerified: true,
+      fuelVerified: true,
     });
   });
 });
