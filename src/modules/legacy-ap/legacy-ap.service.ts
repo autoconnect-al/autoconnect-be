@@ -343,12 +343,19 @@ export class LegacyApService {
       },
       include: {
         vendor: true,
+        car_detail_post_car_detail_idTocar_detail: true,
         car_detail_car_detail_post_idTopost: true,
       },
     });
 
     const mapped = rows.map((row) => {
-      const details = row.car_detail_car_detail_post_idTopost?.[0] ?? null;
+      const details =
+        row.car_detail_post_car_detail_idTocar_detail ??
+        row.car_detail_car_detail_post_idTopost?.find(
+          (item) => item.id === row.car_detail_id,
+        ) ??
+        row.car_detail_car_detail_post_idTopost?.[0] ??
+        null;
       return this.normalizeBigInts({
         id: row.id,
         caption: row.caption
@@ -368,6 +375,7 @@ export class LegacyApService {
         price: details?.price ?? null,
         mileage: details?.mileage ?? null,
         fuelType: details?.fuelType ?? null,
+        engineSize: details?.engineSize ?? null,
         sold: details?.sold ?? null,
         contact: details?.contact ?? null,
         transmission: details?.transmission ?? null,
@@ -786,7 +794,7 @@ export class LegacyApService {
           fuelType:
             this.toSafeNullableString(result.fuelType) ?? carDetail.fuelType,
           engineSize:
-            this.toSafeNullableString(result.engineSize) ??
+            this.toSafeNullableNumericString(result.engineSize) ??
             carDetail.engineSize,
           drivetrain:
             this.toSafeNullableString(result.drivetrain) ??
@@ -1826,6 +1834,16 @@ export class LegacyApService {
   private toSafeNullableString(value: unknown): string | null {
     const text = this.toSafeString(value);
     return text || null;
+  }
+
+  private toSafeNullableNumericString(value: unknown): string | null {
+    if (typeof value === 'number') {
+      return Number.isFinite(value) ? String(value) : null;
+    }
+    if (typeof value === 'bigint') {
+      return value.toString();
+    }
+    return this.toSafeNullableString(value);
   }
 
   private toNullableInt(value: unknown): number | null {

@@ -59,6 +59,7 @@ describe('LegacyApService createdTime conversion', () => {
                 price: 10000,
                 mileage: 120000,
                 fuelType: 'diesel',
+                engineSize: '2.0',
                 sold: false,
                 contact: '{"phone_number":"1"}',
                 transmission: 'automatic',
@@ -94,6 +95,7 @@ describe('LegacyApService createdTime conversion', () => {
       make: 'BMW',
       model: 'X5',
       registration: '2017',
+      engineSize: '2.0',
       vendorId: '2',
       accountName: 'vendor.a',
       revalidate: false,
@@ -158,6 +160,7 @@ describe('LegacyApService.importPromptResults promotion guards', () => {
           priceVerified: true,
           mileageVerified: true,
           fuelVerified: true,
+          engineSize: 3,
           renewTo: 1,
           highlightedTo: 2,
           promotionTo: 3,
@@ -181,6 +184,7 @@ describe('LegacyApService.importPromptResults promotion guards', () => {
     const carDetailUpdateArg = prisma.car_detail.update.mock.calls[0][0];
     expect(carDetailUpdateArg.data).toMatchObject({
       registration: '2015',
+      engineSize: '3',
       priceVerified: true,
       mileageVerified: true,
       fuelVerified: true,
