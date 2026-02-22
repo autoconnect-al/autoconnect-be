@@ -3,6 +3,7 @@ import { PrismaService } from '../../../database/prisma.service';
 
 class MockPrismaService {
   $executeRawUnsafe = jest.fn();
+  $queryRawUnsafe = jest.fn();
   post = {
     findUnique: jest.fn(),
     upsert: jest.fn(),
@@ -29,6 +30,8 @@ describe('PostImportService.importPost', () => {
 
   beforeEach(() => {
     prisma = new MockPrismaService();
+    prisma.$executeRawUnsafe.mockResolvedValue(1);
+    prisma.$queryRawUnsafe.mockResolvedValue([]);
     service = new PostImportService(
       prisma as unknown as PrismaService,
       new MockOpenAIService() as any,
@@ -111,6 +114,27 @@ describe('PostImportService.importPost', () => {
       },
       data: { post_id: postId },
     });
+  });
+
+  it('skips replayed payload when idempotency key+hash is already completed', async () => {
+    const postId = 999n;
+    prisma.$executeRawUnsafe.mockResolvedValueOnce(0);
+    prisma.$queryRawUnsafe.mockResolvedValueOnce([{ status: 'completed' }]);
+
+    const result = await service.importPost(
+      {
+        id: postId.toString(),
+        caption: 'Replay',
+        origin: 'INSTAGRAM',
+        sidecarMedias: [],
+      },
+      1,
+      false,
+      false,
+    );
+
+    expect(result).toBe(postId);
+    expect(prisma.post.upsert).not.toHaveBeenCalled();
   });
 });
 

@@ -284,11 +284,23 @@ Priority levels:
 ### Good to have
 
 #### 1.6 Add idempotency and dedupe keys for imports
+- **Status**: ✅ Done (2026-02-21)
 - **Implementation**
   1. Define idempotency key per source post ID + source type.
   2. Use unique constraints or upsert guard table.
 - **Acceptance checks**
   - Replaying same payload does not duplicate writes.
+- **Implementation progress**
+  - Added DB-backed idempotency guard table bootstrap on startup:
+    - `/Users/reipano/Personal/vehicle-api/src/database/prisma.service.ts`
+  - Added payload-level idempotency claim/complete/fail flow in import pipeline:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/imports/services/post-import.service.ts`
+  - Behavior:
+    - same source + same payload hash => replay skipped
+    - same source + changed payload => processed
+    - failed payload can be retried (status transitions from `failed` to `processing`)
+  - Added regression test for replay skip:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/imports/services/post-import.service.spec.ts`
 
 ---
 

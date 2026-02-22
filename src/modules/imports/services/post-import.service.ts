@@ -138,9 +138,40 @@ export class PostImportService {
     forceDownloadImages = false,
     forceDownloadImagesDays?: number,
   ): Promise<bigint | null> {
+    let idempotencyKey = '';
+    let payloadHash = '';
+    let idempotencyClaimed = false;
+
     try {
       const now = new Date();
       const postId = BigInt(postData.id);
+      const source =
+        typeof postData.origin === 'string' && postData.origin.trim().length > 0
+          ? postData.origin.trim()
+          : 'UNKNOWN';
+      idempotencyKey = `${source}:${postId.toString()}`;
+      payloadHash = this.buildImportPayloadHash({
+        postData,
+        vendorId,
+        useOpenAI,
+        downloadImages,
+        forceDownloadImages,
+        forceDownloadImagesDays,
+      });
+
+      idempotencyClaimed = await this.claimImportIdempotency(
+        idempotencyKey,
+        payloadHash,
+      );
+      if (!idempotencyClaimed) {
+        if (process.env.SHOW_LOGS) {
+          this.logger.info('skipping replayed import payload', {
+            postId: postId.toString(),
+            source,
+          });
+        }
+        return postId;
+      }
 
       if (process.env.SHOW_LOGS) {
         this.logger.info('processing post', {
@@ -179,12 +210,14 @@ export class PostImportService {
               postId: postId.toString(),
             });
           }
+          await this.markImportCompleted(idempotencyKey, payloadHash);
           return null;
         }
       } else if (existingPost && existingPost.deleted) {
         if (process.env.SHOW_LOGS) {
           this.logger.info('skipping deleted post', { postId: postId.toString() });
         }
+        await this.markImportCompleted(idempotencyKey, payloadHash);
         return postId;
       }
 
@@ -224,6 +257,7 @@ export class PostImportService {
           this.logger.info('sold post cleaned', { postId: postId.toString() });
         }
 
+        await this.markImportCompleted(idempotencyKey, payloadHash);
         return postId;
       }
 
@@ -516,8 +550,12 @@ export class PostImportService {
         }
       }
 
+      await this.markImportCompleted(idempotencyKey, payloadHash);
       return post.id;
     } catch (e) {
+      if (idempotencyClaimed && idempotencyKey && payloadHash) {
+        await this.markImportFailed(idempotencyKey, payloadHash, e);
+      }
       if (process.env.SHOW_LOGS) {
         this.logger.error('failed to import post', {
           error: e instanceof Error ? e.message : String(e),
@@ -526,6 +564,121 @@ export class PostImportService {
       // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
       return Promise.reject(e);
     }
+  }
+
+  private buildImportPayloadHash(payload: unknown): string {
+    const canonical = JSON.stringify(this.toCanonicalValue(payload));
+    return createHash('sha256').update(canonical).digest('hex');
+  }
+
+  private toCanonicalValue(value: unknown): unknown {
+    if (Array.isArray(value)) {
+      return value.map((item) => this.toCanonicalValue(item));
+    }
+    if (value && typeof value === 'object') {
+      const entries = Object.entries(value as Record<string, unknown>).sort(
+        ([a], [b]) => a.localeCompare(b),
+      );
+      const output: Record<string, unknown> = {};
+      for (const [key, entryValue] of entries) {
+        output[key] = this.toCanonicalValue(entryValue);
+      }
+      return output;
+    }
+    return value;
+  }
+
+  private async claimImportIdempotency(
+    idempotencyKey: string,
+    payloadHash: string,
+  ): Promise<boolean> {
+    const now = new Date();
+    const inserted = await this.prisma.$executeRawUnsafe(
+      `
+        INSERT IGNORE INTO import_idempotency (
+          idempotency_key,
+          payload_hash,
+          status,
+          last_error,
+          attempts,
+          created_at,
+          updated_at
+        ) VALUES (?, ?, 'processing', NULL, 1, ?, ?)
+      `,
+      idempotencyKey,
+      payloadHash,
+      now,
+      now,
+    );
+
+    if (Number(inserted) > 0) {
+      return true;
+    }
+
+    const rows = await this.prisma.$queryRawUnsafe<Array<{ status: string }>>(
+      `
+        SELECT status
+        FROM import_idempotency
+        WHERE idempotency_key = ? AND payload_hash = ?
+        ORDER BY id DESC
+        LIMIT 1
+      `,
+      idempotencyKey,
+      payloadHash,
+    );
+    const status = String(rows[0]?.status ?? '');
+    if (status !== 'failed') {
+      return false;
+    }
+
+    const reclaimed = await this.prisma.$executeRawUnsafe(
+      `
+        UPDATE import_idempotency
+        SET status = 'processing', last_error = NULL, attempts = attempts + 1, updated_at = ?
+        WHERE idempotency_key = ? AND payload_hash = ? AND status = 'failed'
+      `,
+      now,
+      idempotencyKey,
+      payloadHash,
+    );
+
+    return Number(reclaimed) > 0;
+  }
+
+  private async markImportCompleted(
+    idempotencyKey: string,
+    payloadHash: string,
+  ): Promise<void> {
+    await this.prisma.$executeRawUnsafe(
+      `
+        UPDATE import_idempotency
+        SET status = 'completed', updated_at = ?
+        WHERE idempotency_key = ? AND payload_hash = ?
+      `,
+      new Date(),
+      idempotencyKey,
+      payloadHash,
+    );
+  }
+
+  private async markImportFailed(
+    idempotencyKey: string,
+    payloadHash: string,
+    error: unknown,
+  ): Promise<void> {
+    const message =
+      error instanceof Error ? error.message : String(error ?? 'unknown');
+    await this.prisma.$executeRawUnsafe(
+      `
+        UPDATE import_idempotency
+        SET status = 'failed', last_error = ?, updated_at = ?
+        WHERE idempotency_key = ? AND payload_hash = ?
+      `,
+      message,
+      new Date(),
+      idempotencyKey,
+      payloadHash,
+    );
   }
 
   private async createEmptyCarDetail(
