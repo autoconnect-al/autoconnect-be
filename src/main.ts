@@ -5,9 +5,29 @@ import express from 'express';
 import { getMediaRootPath } from './common/media-path.util';
 import { createLogger } from './common/logger.util';
 
+const defaultAllowedOrigins = [
+  'https://ap.autoconnect.al',
+  'https://www.autoconnect.al',
+  'https://autoconnect.al',
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://localhost:5173',
+];
+
+function getAllowedCorsOrigins(): string[] {
+  const fromEnv = String(process.env.CORS_ORIGINS ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const merged = new Set<string>([...defaultAllowedOrigins, ...fromEnv]);
+  return Array.from(merged);
+}
+
 async function bootstrap() {
   const logger = createLogger('http-access');
   const app = await NestFactory.create(AppModule, { bodyParser: false });
+  const allowedOrigins = getAllowedCorsOrigins();
+  const strictCors = String(process.env.CORS_STRICT ?? '').toLowerCase() === 'true';
 
   app.use(express.json({ limit: '10mb' }));
   app.use(
@@ -18,9 +38,31 @@ async function bootstrap() {
   );
 
   app.enableCors({
-    origin: true,
+    origin: strictCors
+      ? (origin, callback) => {
+          // Allow non-browser calls (no Origin header).
+          if (!origin) {
+            callback(null, true);
+            return;
+          }
+          if (allowedOrigins.includes(origin)) {
+            callback(null, true);
+            return;
+          }
+          callback(new Error(`CORS origin not allowed: ${origin}`), false);
+        }
+      : true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
+    allowedHeaders: [
+      'Authorization',
+      'Content-Type',
+      'Accept',
+      'Origin',
+      'X-Requested-With',
+      'X-Admin-Code',
+    ],
+    exposedHeaders: ['Authorization'],
     maxAge: 3600,
   });
 
