@@ -111,7 +111,7 @@ describe('LegacyApService.importPromptResults promotion guards', () => {
       },
       car_detail: {
         updateMany: jest.fn().mockResolvedValue({ count: 0 }),
-        findUnique: jest.fn().mockResolvedValue({
+        findFirst: jest.fn().mockResolvedValue({
           id: 1n,
           make: 'BMW',
           model: 'X5',
@@ -183,6 +183,75 @@ describe('LegacyApService.importPromptResults promotion guards', () => {
       mileageVerified: true,
       fuelVerified: true,
     });
+  });
+
+  it('updates car detail when row is linked by post_id and id differs', async () => {
+    const prisma = {
+      post: {
+        update: jest.fn().mockResolvedValue({}),
+      },
+      car_detail: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findFirst: jest.fn().mockResolvedValue({
+          id: 999n,
+          post_id: 1n,
+          make: 'BMW',
+          model: 'X5',
+          variant: 'old',
+          registration: '2012',
+          mileage: null,
+          transmission: null,
+          fuelType: null,
+          engineSize: null,
+          drivetrain: null,
+          seats: null,
+          numberOfDoors: null,
+          bodyType: null,
+          price: null,
+          sold: false,
+          customsPaid: false,
+          priceVerified: false,
+          mileageVerified: false,
+          fuelVerified: false,
+          contact: null,
+          type: 'car',
+        }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    } as any;
+
+    const service = new LegacyApService(
+      prisma,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    await service.importPromptResults(
+      JSON.stringify([
+        {
+          id: '1',
+          make: 'BMW',
+          model: 'X5',
+          variant: 'new-variant',
+        },
+      ]),
+    );
+
+    expect(prisma.car_detail.findFirst).toHaveBeenCalledWith({
+      where: {
+        OR: [{ id: 1n }, { post_id: 1n }],
+      },
+    });
+    expect(prisma.car_detail.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 999n },
+        data: expect.objectContaining({
+          variant: 'new-variant',
+        }),
+      }),
+    );
   });
 });
 

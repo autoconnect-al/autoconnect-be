@@ -748,14 +748,18 @@ export class LegacyApService {
           data: { deleted: true, dateUpdated: new Date() },
         });
         await this.prisma.car_detail.updateMany({
-          where: { id: BigInt(id) },
+          where: {
+            OR: [{ id: BigInt(id) }, { post_id: BigInt(id) }],
+          },
           data: { deleted: true, dateUpdated: new Date() },
         });
         continue;
       }
 
-      const carDetail = await this.prisma.car_detail.findUnique({
-        where: { id: BigInt(id) },
+      const carDetail = await this.prisma.car_detail.findFirst({
+        where: {
+          OR: [{ id: BigInt(id) }, { post_id: BigInt(id) }],
+        },
       });
       if (!carDetail) continue;
 
