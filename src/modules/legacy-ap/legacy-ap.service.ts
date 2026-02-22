@@ -364,6 +364,7 @@ export class LegacyApService {
         make: details?.make ?? null,
         model: details?.model ?? null,
         variant: details?.variant ?? null,
+        registration: details?.registration ?? null,
         price: details?.price ?? null,
         mileage: details?.mileage ?? null,
         fuelType: details?.fuelType ?? null,
