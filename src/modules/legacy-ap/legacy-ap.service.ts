@@ -756,11 +756,16 @@ export class LegacyApService {
         continue;
       }
 
-      const carDetail = await this.prisma.car_detail.findFirst({
-        where: {
-          OR: [{ id: BigInt(id) }, { post_id: BigInt(id) }],
-        },
-      });
+      const postId = BigInt(id);
+      // Prefer the row linked by post_id because /post/posts reads from that relation.
+      const carDetail =
+        (await this.prisma.car_detail.findFirst({
+          where: { post_id: postId },
+          orderBy: [{ dateUpdated: 'desc' }, { id: 'desc' }],
+        })) ??
+        (await this.prisma.car_detail.findUnique({
+          where: { id: postId },
+        }));
       if (!carDetail) continue;
 
       await this.prisma.car_detail.update({

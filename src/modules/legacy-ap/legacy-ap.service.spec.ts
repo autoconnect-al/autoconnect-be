@@ -113,6 +113,7 @@ describe('LegacyApService.importPromptResults promotion guards', () => {
         updateMany: jest.fn().mockResolvedValue({ count: 0 }),
         findFirst: jest.fn().mockResolvedValue({
           id: 1n,
+          post_id: 1n,
           make: 'BMW',
           model: 'X5',
           variant: null,
@@ -134,6 +135,7 @@ describe('LegacyApService.importPromptResults promotion guards', () => {
           contact: null,
           type: 'car',
         }),
+        findUnique: jest.fn(),
         update: jest.fn().mockResolvedValue({}),
       },
     } as any;
@@ -183,6 +185,7 @@ describe('LegacyApService.importPromptResults promotion guards', () => {
       mileageVerified: true,
       fuelVerified: true,
     });
+    expect(prisma.car_detail.findUnique).not.toHaveBeenCalled();
   });
 
   it('updates car detail when row is linked by post_id and id differs', async () => {
@@ -199,6 +202,79 @@ describe('LegacyApService.importPromptResults promotion guards', () => {
           model: 'X5',
           variant: 'old',
           registration: '2012',
+          mileage: null,
+          transmission: null,
+          fuelType: null,
+          engineSize: null,
+          drivetrain: null,
+          seats: null,
+          numberOfDoors: null,
+          bodyType: null,
+          price: null,
+          sold: false,
+          customsPaid: false,
+          priceVerified: false,
+          mileageVerified: false,
+          fuelVerified: false,
+          contact: null,
+          type: 'car',
+        }),
+        findUnique: jest.fn(),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    } as any;
+
+    const service = new LegacyApService(
+      prisma,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    await service.importPromptResults(
+      JSON.stringify([
+        {
+          id: '1',
+          make: 'BMW',
+          model: 'X5',
+          variant: 'new-variant',
+        },
+      ]),
+    );
+
+    expect(prisma.car_detail.findFirst).toHaveBeenCalledWith({
+      where: {
+        post_id: 1n,
+      },
+      orderBy: [{ dateUpdated: 'desc' }, { id: 'desc' }],
+    });
+    expect(prisma.car_detail.findUnique).not.toHaveBeenCalled();
+    expect(prisma.car_detail.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 999n },
+        data: expect.objectContaining({
+          variant: 'new-variant',
+        }),
+      }),
+    );
+  });
+
+  it('falls back to id lookup when no post_id-linked row exists', async () => {
+    const prisma = {
+      post: {
+        update: jest.fn().mockResolvedValue({}),
+      },
+      car_detail: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findFirst: jest.fn().mockResolvedValue(null),
+        findUnique: jest.fn().mockResolvedValue({
+          id: 1n,
+          post_id: null,
+          make: 'BMW',
+          model: 'X5',
+          variant: 'old',
+          registration: null,
           mileage: null,
           transmission: null,
           fuelType: null,
@@ -239,14 +315,13 @@ describe('LegacyApService.importPromptResults promotion guards', () => {
       ]),
     );
 
-    expect(prisma.car_detail.findFirst).toHaveBeenCalledWith({
-      where: {
-        OR: [{ id: 1n }, { post_id: 1n }],
-      },
+    expect(prisma.car_detail.findFirst).toHaveBeenCalled();
+    expect(prisma.car_detail.findUnique).toHaveBeenCalledWith({
+      where: { id: 1n },
     });
     expect(prisma.car_detail.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 999n },
+        where: { id: 1n },
         data: expect.objectContaining({
           variant: 'new-variant',
         }),
