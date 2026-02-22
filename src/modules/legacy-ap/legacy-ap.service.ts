@@ -11,7 +11,7 @@ import { LegacyDataService } from '../legacy-data/legacy-data.service';
 import { LegacySitemapService } from '../legacy-sitemap/legacy-sitemap.service';
 import { JwtService } from '@nestjs/jwt';
 import { Resend } from 'resend';
-import { decodeCaption } from '../imports/utils/caption-processor';
+import { decodeCaption, isCustomsPaid } from '../imports/utils/caption-processor';
 import { requireEnv } from '../../common/require-env.util';
 import { sanitizePostUpdateDataForSource } from '../../common/promotion-field-guard.util';
 import { createLogger } from '../../common/logger.util';
@@ -806,10 +806,7 @@ export class LegacyApService {
             this.toSafeNullableString(result.bodyType) ?? carDetail.bodyType,
           price: this.toNullableFloat(result.price) ?? carDetail.price,
           sold: this.booleanFrom(result.sold, carDetail.sold ?? false),
-          customsPaid: this.booleanFrom(
-            result.customsPaid,
-            carDetail.customsPaid ?? false,
-          ),
+          customsPaid: this.resolveCustomsPaid(result),
           priceVerified: this.booleanFrom(
             result.priceVerified,
             carDetail.priceVerified ?? false,
@@ -1869,6 +1866,25 @@ export class LegacyApService {
       if (['0', 'false', 'no'].includes(lowered)) return false;
     }
     return fallback;
+  }
+
+  private nullableBooleanFrom(value: unknown): boolean | null {
+    if (value === null || value === undefined || value === '') return null;
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value !== 0;
+    if (typeof value === 'string') {
+      const lowered = value.toLowerCase();
+      if (['1', 'true', 'yes'].includes(lowered)) return true;
+      if (['0', 'false', 'no'].includes(lowered)) return false;
+    }
+    return null;
+  }
+
+  private resolveCustomsPaid(result: Record<string, unknown>): boolean | null {
+    if (Object.prototype.hasOwnProperty.call(result, 'customsPaid')) {
+      return this.nullableBooleanFrom(result.customsPaid);
+    }
+    return isCustomsPaid(this.toSafeString(result.caption));
   }
 
   private generateId(length: number, onlyNumbers = true): string {

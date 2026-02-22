@@ -154,6 +154,7 @@ describe('LegacyApService.importPromptResults promotion guards', () => {
       JSON.stringify([
         {
           id: '1',
+          caption: 'Makina ne shitje pa reference dogane',
           make: 'BMW',
           model: 'X5',
           registration: 2015,
@@ -185,6 +186,7 @@ describe('LegacyApService.importPromptResults promotion guards', () => {
     expect(carDetailUpdateArg.data).toMatchObject({
       registration: '2015',
       engineSize: '3',
+      customsPaid: null,
       priceVerified: true,
       mileageVerified: true,
       fuelVerified: true,
@@ -331,6 +333,67 @@ describe('LegacyApService.importPromptResults promotion guards', () => {
         }),
       }),
     );
+  });
+
+  it('keeps explicit customsPaid=false when provided in payload', async () => {
+    const prisma = {
+      post: {
+        update: jest.fn().mockResolvedValue({}),
+      },
+      car_detail: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findFirst: jest.fn().mockResolvedValue({
+          id: 1n,
+          post_id: 1n,
+          make: 'BMW',
+          model: 'X5',
+          variant: null,
+          registration: null,
+          mileage: null,
+          transmission: null,
+          fuelType: null,
+          engineSize: null,
+          drivetrain: null,
+          seats: null,
+          numberOfDoors: null,
+          bodyType: null,
+          price: null,
+          sold: false,
+          customsPaid: true,
+          priceVerified: false,
+          mileageVerified: false,
+          fuelVerified: false,
+          contact: null,
+          type: 'car',
+        }),
+        findUnique: jest.fn(),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    } as any;
+
+    const service = new LegacyApService(
+      prisma,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    await service.importPromptResults(
+      JSON.stringify([
+        {
+          id: '1',
+          make: 'BMW',
+          model: 'X5',
+          customsPaid: false,
+        },
+      ]),
+    );
+
+    const carDetailUpdateArg = prisma.car_detail.update.mock.calls[0][0];
+    expect(carDetailUpdateArg.data).toMatchObject({
+      customsPaid: false,
+    });
   });
 });
 
