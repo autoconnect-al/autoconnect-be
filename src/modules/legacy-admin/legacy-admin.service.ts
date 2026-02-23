@@ -119,18 +119,30 @@ export class LegacyAdminService {
   }
 
   async getUser(userId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: BigInt(userId) },
-      select: {
-        id: true,
-        name: true,
-        username: true,
-        email: true,
-        phone: true,
-        whatsapp: true,
-        location: true,
-      },
-    });
+    const authRows = await this.prisma.$queryRawUnsafe<
+      Array<{
+        id: bigint;
+        name: string | null;
+        username: string | null;
+        email: string | null;
+        phone: string | null;
+        whatsapp: string | null;
+        location: string | null;
+      }>
+    >(
+      `
+      SELECT
+        id, name, username, email,
+        phoneNumber AS phone,
+        whatsAppNumber AS whatsapp,
+        location
+      FROM vendor
+      WHERE id = ? AND deleted = 0
+      LIMIT 1
+      `,
+      BigInt(userId),
+    );
+    const user = authRows[0];
     if (!user) {
       return legacyError('ERROR: Not authorised', 401);
     }

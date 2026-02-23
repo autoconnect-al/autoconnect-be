@@ -68,9 +68,25 @@ export class LegacyAuthService {
         );
       }
 
-      const user = await this.prisma.user.findUnique({
-        where: { id: BigInt(userId) },
-      });
+      const rows = await this.prisma.$queryRawUnsafe<
+        Array<{
+          id: bigint;
+          name: string | null;
+          username: string | null;
+          email: string | null;
+          deleted: boolean | number | null;
+          blocked: boolean | number | null;
+        }>
+      >(
+        `
+        SELECT id, name, username, email, deleted, blocked
+        FROM vendor
+        WHERE id = ?
+        LIMIT 1
+        `,
+        BigInt(userId),
+      );
+      const user = rows[0];
       if (!user || user.deleted || user.blocked) {
         return legacyError(
           'Could not refresh token. Please check your credentials.',
@@ -85,9 +101,9 @@ export class LegacyAuthService {
         exp: Math.floor(Date.now() / 1000) + 86400,
         userId: String(user.id),
         roles: await getUserRoleNames(this.prisma, String(user.id)),
-        name: user.name,
-        email: user.email,
-        username: user.username,
+        name: user.name ?? '',
+        email: user.email ?? '',
+        username: user.username ?? '',
       });
 
       return legacySuccess({ jwt: newToken });

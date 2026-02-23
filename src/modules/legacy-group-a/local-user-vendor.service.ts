@@ -29,6 +29,20 @@ type UserPayload = {
   roles: Array<{ id: number; name: string }>;
 };
 
+type VendorAuthRow = {
+  id: bigint;
+  name: string | null;
+  username: string | null;
+  email: string | null;
+  password: string | null;
+  phone: string | null;
+  whatsapp: string | null;
+  location: string | null;
+  blocked: boolean | number | null;
+  deleted: boolean | number | null;
+  verificationCode: string | null;
+};
+
 @Injectable()
 export class LocalUserVendorService {
   private readonly jwtService: JwtService;
@@ -67,45 +81,43 @@ export class LocalUserVendorService {
       const passwordHash = await this.encryptPassword(request.password);
 
       await this.prisma.$transaction(async (tx) => {
-        await tx.user.create({
-          data: {
-            id: userId,
-            name: request.name,
-            username: request.username,
-            email: request.email,
-            phone: request.phone,
-            whatsapp: request.whatsapp,
-            location: request.location,
-            blocked: false,
-            attemptedLogin: 0,
-            password: passwordHash,
-            profileImage: '',
-            dateCreated: now,
-            deleted: false,
-            verified: true,
-            verificationCode: null,
-          },
-        });
+        await tx.$executeRawUnsafe(
+          `
+          INSERT INTO vendor (
+            id, dateCreated, dateUpdated, deleted, contact, accountName, profilePicture, accountExists, initialised, biography,
+            name, username, email, phoneNumber, whatsAppNumber, location, blocked, attemptedLogin, password, verified, verificationCode, profileImage
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+          userId,
+          now,
+          now,
+          false,
+          '{"phone_number":"","email":"","whatsapp":""}',
+          `new vendor ${userId.toString()}`,
+          '',
+          false,
+          false,
+          '',
+          request.name,
+          request.username,
+          request.email,
+          request.phone || null,
+          request.whatsapp || null,
+          request.location || null,
+          false,
+          0,
+          passwordHash,
+          true,
+          null,
+          '',
+        );
 
         await tx.$executeRawUnsafe(
-          'INSERT IGNORE INTO user_role (user_id, role_id) VALUES (?, ?)',
+          'INSERT IGNORE INTO vendor_role (vendor_id, role_id) VALUES (?, ?)',
           userId,
           1,
         );
-
-        await tx.vendor.create({
-          data: {
-            id: userId,
-            dateCreated: now,
-            deleted: false,
-            accountExists: false,
-            initialised: false,
-            profilePicture: '',
-            accountName: `new vendor ${userId.toString()}`,
-            biography: '',
-            contact: '{"phone_number":"","email":"","whatsapp":""}',
-          },
-        });
       });
 
       try {
@@ -143,13 +155,7 @@ export class LocalUserVendorService {
         return legacyError('Username/email and password are required.', 400);
       }
 
-      const user = await this.prisma.user.findFirst({
-        where: {
-          OR: [{ username: usernameOrEmail }, { email: usernameOrEmail }],
-          deleted: false,
-          blocked: false,
-        },
-      });
+      const user = await this.findVendorAuthByUsernameOrEmail(usernameOrEmail);
 
       if (!user) {
         this.log('login.user_not_found', {
@@ -163,7 +169,7 @@ export class LocalUserVendorService {
 
       const verification = await this.verifyPasswordWithLegacyFallbacks(
         password,
-        user.password,
+        user.password ?? '',
       );
       if (!verification.ok) {
         this.log('login.password_mismatch', {
@@ -185,13 +191,12 @@ export class LocalUserVendorService {
       if (verification.needsRehash) {
         try {
           const upgradedHash = await this.encryptPassword(password);
-          await this.prisma.user.update({
-            where: { id: user.id },
-            data: {
-              password: upgradedHash,
-              dateUpdated: new Date(),
-            },
-          });
+          await this.prisma.$executeRawUnsafe(
+            'UPDATE vendor SET password = ?, dateUpdated = ? WHERE id = ?',
+            upgradedHash,
+            new Date(),
+            user.id,
+          );
           this.log('login.password_rehashed', {
             userId: String(user.id),
             strategy: verification.strategy,
@@ -213,9 +218,9 @@ export class LocalUserVendorService {
         exp: Math.floor(Date.now() / 1000) + 86400,
         userId: String(user.id),
         roles: await getUserRoleNames(this.prisma, String(user.id)),
-        name: user.name,
-        email: user.email,
-        username: user.username,
+        name: user.name ?? '',
+        email: user.email ?? '',
+        username: user.username ?? '',
       });
       this.log('login.success', {
         userId: String(user.id),
@@ -285,10 +290,7 @@ export class LocalUserVendorService {
         return legacyError('Email is required', 400);
       }
 
-      const user = await this.prisma.user.findFirst({
-        where: { email },
-        select: { id: true, email: true },
-      });
+      const user = await this.findVendorAuthByEmail(email);
       if (!user) {
         return legacyError('User not found', 404);
       }
@@ -306,10 +308,12 @@ export class LocalUserVendorService {
         },
       );
 
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: { verificationCode: verificationToken },
-      });
+      await this.prisma.$executeRawUnsafe(
+        'UPDATE vendor SET verificationCode = ?, dateUpdated = ? WHERE id = ?',
+        verificationToken,
+        new Date(),
+        user.id,
+      );
 
       await this.sendResetPasswordEmail(email, code);
       return legacySuccess(true);
@@ -332,7 +336,7 @@ export class LocalUserVendorService {
         );
       }
 
-      const user = await this.prisma.user.findFirst({ where: { email } });
+      const user = await this.findVendorAuthByEmail(email);
       if (!user || !user.verificationCode) {
         return legacyError(`User with email: ${email} was not found.`, 404);
       }
@@ -357,14 +361,12 @@ export class LocalUserVendorService {
         return legacyError('Invalid or expired reset code', 401);
       }
 
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: {
-          password: await this.encryptPassword(newPassword),
-          verificationCode: null,
-          dateUpdated: new Date(),
-        },
-      });
+      await this.prisma.$executeRawUnsafe(
+        'UPDATE vendor SET password = ?, verificationCode = NULL, dateUpdated = ? WHERE id = ?',
+        await this.encryptPassword(newPassword),
+        new Date(),
+        user.id,
+      );
 
       return legacySuccess(true);
     } catch {
@@ -398,25 +400,35 @@ export class LocalUserVendorService {
         return legacyError('User with provided username/email already exists', 409);
       }
 
-      await this.prisma.user.update({
-        where: { id: BigInt(userId) },
-        data: {
-          name: request.name,
-          username: request.username,
-          email: request.email,
-          phone: request.phone,
-          whatsapp: request.whatsapp,
-          location: request.location,
-          dateUpdated: new Date(),
-        },
-      });
+      await this.prisma.$executeRawUnsafe(
+        `
+        UPDATE vendor
+        SET
+          name = ?,
+          username = ?,
+          email = ?,
+          phoneNumber = ?,
+          whatsAppNumber = ?,
+          location = ?,
+          dateUpdated = ?
+        WHERE id = ?
+        `,
+        request.name,
+        request.username,
+        request.email,
+        request.phone || null,
+        request.whatsapp || null,
+        request.location || null,
+        new Date(),
+        BigInt(userId),
+      );
 
       await this.prisma.$executeRawUnsafe(
-        'DELETE FROM user_role WHERE user_id = ?',
+        'DELETE FROM vendor_role WHERE vendor_id = ?',
         BigInt(userId),
       );
       await this.prisma.$executeRawUnsafe(
-        'INSERT IGNORE INTO user_role (user_id, role_id) VALUES (?, ?)',
+        'INSERT IGNORE INTO vendor_role (vendor_id, role_id) VALUES (?, ?)',
         BigInt(userId),
         1,
       );
@@ -450,13 +462,12 @@ export class LocalUserVendorService {
         return legacyError('Provided passwords were not the same.', 400);
       }
 
-      await this.prisma.user.update({
-        where: { id: BigInt(userId) },
-        data: {
-          password: await this.encryptPassword(request.password),
-          dateUpdated: new Date(),
-        },
-      });
+      await this.prisma.$executeRawUnsafe(
+        'UPDATE vendor SET password = ?, dateUpdated = ? WHERE id = ?',
+        await this.encryptPassword(request.password),
+        new Date(),
+        BigInt(userId),
+      );
 
       return legacySuccess(true);
     } catch {
@@ -588,20 +599,20 @@ export class LocalUserVendorService {
     email: string,
   ): Promise<boolean> {
     if (!username) {
-      const user = await this.prisma.user.findFirst({
-        where: {
-          OR: [{ username: email }, { email }],
-        },
-      });
-      return !user;
+      const rows = await this.prisma.$queryRawUnsafe<Array<{ total: bigint }>>(
+        'SELECT COUNT(*) as total FROM vendor WHERE deleted = 0 AND (username = ? OR email = ?)',
+        email,
+        email,
+      );
+      return Number(rows[0]?.total ?? 0n) === 0;
     }
 
-    const user = await this.prisma.user.findFirst({
-      where: {
-        OR: [{ username }, { email }],
-      },
-    });
-    return !user;
+    const rows = await this.prisma.$queryRawUnsafe<Array<{ total: bigint }>>(
+      'SELECT COUNT(*) as total FROM vendor WHERE deleted = 0 AND (username = ? OR email = ?)',
+      username,
+      email,
+    );
+    return Number(rows[0]?.total ?? 0n) === 0;
   }
 
   private async isUsernameAndEmailUnique(
@@ -609,22 +620,25 @@ export class LocalUserVendorService {
     email: string,
     id: string,
   ): Promise<boolean> {
-    const rows = await this.prisma.user.findMany({
-      where: {
-        OR: [{ username }, { email }],
-      },
-      select: { id: true },
-    });
+    const rows = await this.prisma.$queryRawUnsafe<Array<{ id: bigint }>>(
+      `
+      SELECT id
+      FROM vendor
+      WHERE deleted = 0 AND (username = ? OR email = ?)
+      `,
+      username,
+      email,
+    );
 
     if (rows.length === 0) return true;
     if (rows.length > 1) return false;
-    return String(rows[0].id) === String(id);
+    return String(rows[0]?.id ?? '') === String(id);
   }
 
   private async generateUniqueNumericUserId(): Promise<bigint> {
     for (let i = 0; i < 100; i += 1) {
       const candidate = BigInt(this.generateRandomCode(15, true));
-      const existing = await this.prisma.user.findUnique({
+      const existing = await this.prisma.vendor.findUnique({
         where: { id: candidate },
         select: { id: true },
       });
@@ -742,5 +756,40 @@ export class LocalUserVendorService {
     }
     const trimmed = value.trim();
     return trimmed ? trimmed : null;
+  }
+
+  private async findVendorAuthByUsernameOrEmail(
+    usernameOrEmail: string,
+  ): Promise<VendorAuthRow | null> {
+    const rows = await this.prisma.$queryRawUnsafe<VendorAuthRow[]>(
+      `
+      SELECT
+        id, name, username, email, password, phoneNumber AS phone, whatsAppNumber AS whatsapp, location,
+        blocked, deleted, verificationCode
+      FROM vendor
+      WHERE (username = ? OR email = ?) AND deleted = 0 AND blocked = 0
+      LIMIT 1
+      `,
+      usernameOrEmail,
+      usernameOrEmail,
+    );
+    return rows[0] ?? null;
+  }
+
+  private async findVendorAuthByEmail(
+    email: string,
+  ): Promise<VendorAuthRow | null> {
+    const rows = await this.prisma.$queryRawUnsafe<VendorAuthRow[]>(
+      `
+      SELECT
+        id, name, username, email, password, phoneNumber AS phone, whatsAppNumber AS whatsapp, location,
+        blocked, deleted, verificationCode
+      FROM vendor
+      WHERE email = ? AND deleted = 0
+      LIMIT 1
+      `,
+      email,
+    );
+    return rows[0] ?? null;
   }
 }

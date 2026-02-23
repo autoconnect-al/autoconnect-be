@@ -559,7 +559,7 @@ describe('LegacyApService.autoRenewPosts allowed promotion writes', () => {
 describe('LegacyApService admin role management', () => {
   it('grants ADMIN role to existing user', async () => {
     const prisma = {
-      user: {
+      vendor: {
         findUnique: jest.fn().mockResolvedValue({ id: 7n, deleted: false }),
       },
       role: {
@@ -580,7 +580,7 @@ describe('LegacyApService admin role management', () => {
 
     expect(response.success).toBe(true);
     expect(prisma.$executeRawUnsafe).toHaveBeenCalledWith(
-      'INSERT IGNORE INTO user_role (user_id, role_id) VALUES (?, ?)',
+      'INSERT IGNORE INTO vendor_role (vendor_id, role_id) VALUES (?, ?)',
       7n,
       9,
     );
@@ -588,7 +588,7 @@ describe('LegacyApService admin role management', () => {
 
   it('prevents revoking the last ADMIN role', async () => {
     const prisma = {
-      user: {
+      vendor: {
         findUnique: jest.fn().mockResolvedValue({ id: 7n, deleted: false }),
       },
       role: {

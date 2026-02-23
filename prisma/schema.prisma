@@ -233,6 +233,14 @@ model user_role {
   @@ignore
 }
 
+model vendor_role {
+  vendor_id BigInt @db.UnsignedBigInt
+  role_id   Int
+
+  @@id([vendor_id, role_id])
+  @@index([role_id], map: "vendor_role_fk_role")
+}
+
 model vendor {
   id                         BigInt    @id @db.UnsignedBigInt
   dateCreated                DateTime  @db.DateTime(0)
@@ -252,6 +260,15 @@ model vendor {
   whatsAppNumber             String?   @db.VarChar(50)
   location                   String?   @db.VarChar(500)
   useDetailsForPosts         Boolean   @default(false)
+  name                       String?   @db.VarChar(255)
+  username                   String?   @db.VarChar(255)
+  blocked                    Boolean?  @default(false)
+  attemptedLogin             Int?      @default(0)
+  password                   String?   @db.Text
+  email                      String?   @db.VarChar(255)
+  profileImage               String?   @db.LongText
+  verified                   Boolean?  @default(true)
+  verificationCode           String?   @db.VarChar(255)
   post                       post[]
 
   @@index([dateUpdated], map: "dateUpdated")

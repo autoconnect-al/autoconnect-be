@@ -38,7 +38,7 @@ async function main() {
   });
 
   try {
-    const user = await prisma.user.findUnique({
+    const user = await prisma.vendor.findUnique({
       where: { id: BigInt(userId) },
       select: { id: true, deleted: true },
     });
@@ -74,7 +74,7 @@ async function main() {
 
     if (action === 'grant') {
       await prisma.$executeRawUnsafe(
-        'INSERT IGNORE INTO user_role (user_id, role_id) VALUES (?, ?)',
+        'INSERT IGNORE INTO vendor_role (vendor_id, role_id) VALUES (?, ?)',
         BigInt(userId),
         adminRole.id,
       );
@@ -83,12 +83,12 @@ async function main() {
     }
 
     const adminLinks = await prisma.$queryRawUnsafe(
-      'SELECT COUNT(*) AS total FROM user_role WHERE role_id = ?',
+      'SELECT COUNT(*) AS total FROM vendor_role WHERE role_id = ?',
       adminRole.id,
     );
     const totalAdmins = Number(adminLinks[0]?.total ?? 0n);
     const targetLinks = await prisma.$queryRawUnsafe(
-      'SELECT COUNT(*) AS total FROM user_role WHERE user_id = ? AND role_id = ?',
+      'SELECT COUNT(*) AS total FROM vendor_role WHERE vendor_id = ? AND role_id = ?',
       BigInt(userId),
       adminRole.id,
     );
@@ -101,7 +101,7 @@ async function main() {
     }
 
     await prisma.$executeRawUnsafe(
-      'DELETE FROM user_role WHERE user_id = ? AND role_id = ?',
+      'DELETE FROM vendor_role WHERE vendor_id = ? AND role_id = ?',
       BigInt(userId),
       adminRole.id,
     );

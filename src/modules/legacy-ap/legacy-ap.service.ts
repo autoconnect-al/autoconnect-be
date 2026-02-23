@@ -149,11 +149,11 @@ export class LegacyApService {
       return legacyError('Invalid user id.', 400);
     }
 
-    const user = await this.prisma.user.findUnique({
+    const vendor = await this.prisma.vendor.findUnique({
       where: { id: parsedUserId },
       select: { id: true, deleted: true },
     });
-    if (!user || user.deleted) {
+    if (!vendor || vendor.deleted) {
       return legacyError('User not found.', 404);
     }
 
@@ -166,7 +166,7 @@ export class LegacyApService {
     }
 
     await this.prisma.$executeRawUnsafe(
-      'INSERT IGNORE INTO user_role (user_id, role_id) VALUES (?, ?)',
+      'INSERT IGNORE INTO vendor_role (vendor_id, role_id) VALUES (?, ?)',
       parsedUserId,
       adminRole.id,
     );
@@ -180,11 +180,11 @@ export class LegacyApService {
       return legacyError('Invalid user id.', 400);
     }
 
-    const user = await this.prisma.user.findUnique({
+    const vendor = await this.prisma.vendor.findUnique({
       where: { id: parsedUserId },
       select: { id: true, deleted: true },
     });
-    if (!user || user.deleted) {
+    if (!vendor || vendor.deleted) {
       return legacyError('User not found.', 404);
     }
 
@@ -197,13 +197,13 @@ export class LegacyApService {
     }
 
     const adminLinks = await this.prisma.$queryRawUnsafe<Array<{ total: bigint }>>(
-      'SELECT COUNT(*) AS total FROM user_role WHERE role_id = ?',
+      'SELECT COUNT(*) AS total FROM vendor_role WHERE role_id = ?',
       adminRole.id,
     );
     const totalAdmins = Number(adminLinks[0]?.total ?? 0n);
 
     const targetLink = await this.prisma.$queryRawUnsafe<Array<{ total: bigint }>>(
-      'SELECT COUNT(*) AS total FROM user_role WHERE user_id = ? AND role_id = ?',
+      'SELECT COUNT(*) AS total FROM vendor_role WHERE vendor_id = ? AND role_id = ?',
       parsedUserId,
       adminRole.id,
     );
@@ -214,7 +214,7 @@ export class LegacyApService {
     }
 
     await this.prisma.$executeRawUnsafe(
-      'DELETE FROM user_role WHERE user_id = ? AND role_id = ?',
+      'DELETE FROM vendor_role WHERE vendor_id = ? AND role_id = ?',
       parsedUserId,
       adminRole.id,
     );
@@ -223,35 +223,76 @@ export class LegacyApService {
   }
 
   async getUsers() {
-    const users = await this.prisma.user.findMany({
-      where: { deleted: false },
-      orderBy: { dateCreated: 'desc' },
-      take: 500,
-    });
-    const roleMap = await this.getRoleMap(users.map((row) => row.id));
+    const users = await this.prisma.$queryRawUnsafe<AnyRecord[]>(
+      `
+      SELECT
+        id,
+        name,
+        username,
+        email,
+        phoneNumber AS phone,
+        whatsAppNumber AS whatsapp,
+        location
+      FROM vendor
+      WHERE deleted = 0
+      ORDER BY dateCreated DESC
+      LIMIT 500
+      `,
+    );
+    const roleMap = await this.getRoleMap(
+      users.map((row) => BigInt(String(row.id))),
+    );
     return legacySuccess(users.map((row) => this.mapUser(row, roleMap)));
   }
 
   async getUserById(id: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: BigInt(id) },
-    });
-    if (!user || user.deleted) {
+    const users = await this.prisma.$queryRawUnsafe<AnyRecord[]>(
+      `
+      SELECT
+        id,
+        name,
+        username,
+        email,
+        phoneNumber AS phone,
+        whatsAppNumber AS whatsapp,
+        location
+      FROM vendor
+      WHERE id = ? AND deleted = 0
+      LIMIT 1
+      `,
+      BigInt(id),
+    );
+    const user = users[0];
+    if (!user) {
       return legacyError(`No user could be found for id: ${id}`);
     }
-    const roleMap = await this.getRoleMap([user.id]);
+    const roleMap = await this.getRoleMap([BigInt(String(user.id))]);
     return legacySuccess(this.mapUser(user, roleMap), id);
   }
 
   async getUserByUsername(username: string) {
-    const user = await this.prisma.user.findFirst({
-      where: { username, deleted: false },
-    });
+    const users = await this.prisma.$queryRawUnsafe<AnyRecord[]>(
+      `
+      SELECT
+        id,
+        name,
+        username,
+        email,
+        phoneNumber AS phone,
+        whatsAppNumber AS whatsapp,
+        location
+      FROM vendor
+      WHERE username = ? AND deleted = 0
+      LIMIT 1
+      `,
+      username,
+    );
+    const user = users[0];
     if (!user) {
       return legacyError(`No user could be found for username: ${username}`);
     }
 
-    const roleMap = await this.getRoleMap([user.id]);
+    const roleMap = await this.getRoleMap([BigInt(String(user.id))]);
     return legacySuccess(this.mapUser(user, roleMap), username);
   }
 
@@ -265,19 +306,15 @@ export class LegacyApService {
 
   async deleteUser(id: string) {
     const userId = BigInt(id);
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) {
+    const vendor = await this.prisma.vendor.findUnique({ where: { id: userId } });
+    if (!vendor) {
       return legacyError(`Could not delete user.`);
     }
 
-    if (!user.deleted) {
-      await this.prisma.user.update({
-        where: { id: userId },
-        data: { deleted: true, dateUpdated: new Date() },
-      });
-    } else {
-      await this.prisma.user.delete({ where: { id: userId } });
-    }
+    await this.prisma.vendor.update({
+      where: { id: userId },
+      data: { deleted: true, dateUpdated: new Date() },
+    });
 
     return legacySuccess(id);
   }
@@ -1929,19 +1966,19 @@ export class LegacyApService {
     if (userIds.length === 0) return map;
 
     const rows = await this.prisma.$queryRawUnsafe<
-      Array<{ user_id: bigint; role_id: number; role_name: string }>
+      Array<{ vendor_id: bigint; role_id: number; role_name: string }>
     >(
       `
-      SELECT ur.user_id, ur.role_id, r.name as role_name
-      FROM user_role ur
-      INNER JOIN role r ON r.id = ur.role_id
-      WHERE ur.user_id IN (${userIds.map(() => '?').join(',')})
+      SELECT vr.vendor_id, vr.role_id, r.name as role_name
+      FROM vendor_role vr
+      INNER JOIN role r ON r.id = vr.role_id
+      WHERE vr.vendor_id IN (${userIds.map(() => '?').join(',')})
       `,
       ...userIds,
     );
 
     for (const row of rows) {
-      const key = String(row.user_id);
+      const key = String(row.vendor_id);
       const current = map.get(key) ?? [];
       current.push({ id: Number(row.role_id), name: row.role_name });
       map.set(key, current);

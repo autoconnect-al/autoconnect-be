@@ -11,10 +11,7 @@ jest.mock(
 );
 
 class MockPrismaService {
-  user = {
-    findFirst: jest.fn(),
-    update: jest.fn(),
-  };
+  $executeRawUnsafe = jest.fn();
 }
 
 describe('LocalUserVendorService password migration', () => {
@@ -47,7 +44,7 @@ describe('LocalUserVendorService password migration', () => {
   });
 
   it('login should rehash password when legacy strategy is detected', async () => {
-    prisma.user.findFirst.mockResolvedValue({
+    (service as any).findVendorAuthByUsernameOrEmail = jest.fn().mockResolvedValue({
       id: 1n,
       username: 'admin',
       name: 'Admin',
@@ -56,7 +53,7 @@ describe('LocalUserVendorService password migration', () => {
       deleted: false,
       blocked: false,
     });
-    prisma.user.update.mockResolvedValue({});
+    prisma.$executeRawUnsafe.mockResolvedValue(1);
 
     (service as any).verifyPasswordWithLegacyFallbacks = jest
       .fn()
@@ -78,12 +75,11 @@ describe('LocalUserVendorService password migration', () => {
     });
 
     expect(response.success).toBe(true);
-    expect(prisma.user.update).toHaveBeenCalledWith({
-      where: { id: 1n },
-      data: {
-        password: '$2b$12$newhash',
-        dateUpdated: expect.any(Date),
-      },
-    });
+    expect(prisma.$executeRawUnsafe).toHaveBeenCalledWith(
+      'UPDATE vendor SET password = ?, dateUpdated = ? WHERE id = ?',
+      '$2b$12$newhash',
+      expect.any(Date),
+      1n,
+    );
   });
 });

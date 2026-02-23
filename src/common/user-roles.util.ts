@@ -10,9 +10,9 @@ export async function getUserRoleNames(
     const rows = await prisma.$queryRawUnsafe<RoleRow[]>(
       `
         SELECT r.name
-        FROM user_role ur
-        JOIN role r ON r.id = ur.role_id
-        WHERE ur.user_id = ? AND r.deleted = 0
+        FROM vendor_role vr
+        JOIN role r ON r.id = vr.role_id
+        WHERE vr.vendor_id = ? AND r.deleted = 0
       `,
       BigInt(userId),
     );

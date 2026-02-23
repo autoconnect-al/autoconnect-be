@@ -59,7 +59,7 @@ export class LocalPostOrderService {
         return legacyError('User email is required.', 400);
       }
 
-      let user = await this.prisma.user.findFirst({ where: { email } });
+      let user = await this.findVendorAuthByEmail(email);
       let jwt = '';
 
       if (!user) {
@@ -82,7 +82,7 @@ export class LocalPostOrderService {
           return legacyError('Could not create user', 500);
         }
 
-        user = await this.prisma.user.findFirst({ where: { email } });
+        user = await this.findVendorAuthByEmail(email);
         if (!user) {
           return legacyError('Could not create user', 500);
         }
@@ -94,9 +94,9 @@ export class LocalPostOrderService {
           exp: Math.floor(Date.now() / 1000) + 86400,
           userId: String(user.id),
           roles: await getUserRoleNames(this.prisma, String(user.id)),
-          name: user.name,
-          email: user.email,
-          username: user.username,
+          name: user.name ?? '',
+          email: user.email ?? '',
+          username: user.username ?? '',
         });
       }
 
@@ -350,10 +350,7 @@ export class LocalPostOrderService {
       const jwtEmail = this.toSafeString(emailFromJwt);
       let vendorIdFromJwt: bigint | null = null;
       if (jwtEmail) {
-        const jwtUser = await this.prisma.user.findFirst({
-          where: { email: jwtEmail },
-          select: { id: true },
-        });
+        const jwtUser = await this.findVendorAuthByEmail(jwtEmail);
         if (!jwtUser) {
           return legacyError('User email is required.', 400);
         }
@@ -785,5 +782,22 @@ export class LocalPostOrderService {
     } catch {
       return null;
     }
+  }
+
+  private async findVendorAuthByEmail(
+    email: string,
+  ): Promise<{ id: bigint; name: string | null; email: string | null; username: string | null } | null> {
+    const rows = await this.prisma.$queryRawUnsafe<
+      Array<{ id: bigint; name: string | null; email: string | null; username: string | null }>
+    >(
+      `
+      SELECT id, name, email, username
+      FROM vendor
+      WHERE email = ? AND deleted = 0
+      LIMIT 1
+      `,
+      email,
+    );
+    return rows[0] ?? null;
   }
 }
