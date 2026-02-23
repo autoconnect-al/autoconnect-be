@@ -505,10 +505,21 @@ Priority levels:
 ### Good to have
 
 #### 3.5 Externalize package->promotion mapping
+- **Status**: ✅ Done (2026-02-23)
 - **Implementation**
   - Move hardcoded switch mapping to DB/config.
 - **Acceptance checks**
   - Changing package behavior requires no code deploy.
+- **Implementation progress**
+  - Replaced hardcoded package switch mapping with config-driven mapping in:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-group-b/local-post-order.service.ts`
+  - Added env-configurable JSON mapping:
+    - `PROMOTION_PACKAGE_MAPPING_JSON`
+  - Added parser/validator:
+    - filters to allowed promotion fields
+    - deduplicates field lists per package
+    - falls back to safe defaults when config is missing/invalid
+  - Capture flow now builds promotion updates from config map (no code change required for mapping updates).
 
 ---
 

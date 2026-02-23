@@ -21,6 +21,10 @@ type AnyRecord = Record<string, unknown>;
 const jwtSecret = requireEnv('JWT_SECRET');
 const MAX_MEDIA_BYTES = 15 * 1024 * 1024; // 15MB hard limit for incoming media
 const DEFAULT_ALLOWED_MEDIA_HOSTS = [
+  'api.autoconnect.al',
+  'dev.autoconnect.al',
+  'autoconnect.al',
+  'www.autoconnect.al',
   'cdninstagram.com',
   'scontent.cdninstagram.com',
   '*.fbcdn.net',
@@ -37,6 +41,19 @@ const ALLOWED_MEDIA_MIME_TYPES = new Set([
   'image/bmp',
   'image/tiff',
 ]);
+const DEFAULT_PROMOTION_PACKAGE_MAPPING: Record<string, string[]> = {
+  '111': ['renewTo'],
+  '1112': ['highlightedTo'],
+  '1113': ['promotionTo'],
+  '1114': ['mostWantedTo'],
+  '2111': ['renewTo', 'promotionTo'],
+};
+const ALLOWED_PROMOTION_FIELDS = new Set([
+  'renewTo',
+  'highlightedTo',
+  'promotionTo',
+  'mostWantedTo',
+]);
 
 @Injectable()
 export class LocalPostOrderService {
@@ -45,6 +62,9 @@ export class LocalPostOrderService {
   private readonly mediaTmpRoot = resolve(this.mediaRoot, 'tmp');
   private readonly allowedMediaHosts = this.parseAllowedHosts(
     process.env.MEDIA_FETCH_ALLOWED_HOSTS,
+  );
+  private readonly promotionPackageMapping = this.parsePromotionPackageMapping(
+    process.env.PROMOTION_PACKAGE_MAPPING_JSON,
   );
 
   constructor(
@@ -334,30 +354,7 @@ export class LocalPostOrderService {
         .filter(Boolean);
 
       const timePlus14Days = Math.floor(Date.now() / 1000) + 14 * 24 * 3600;
-      const postUpdates: Record<string, unknown> = {};
-
-      for (const packageId of packageIds) {
-        switch (packageId) {
-          case '111':
-            postUpdates.renewTo = timePlus14Days;
-            break;
-          case '1112':
-            postUpdates.highlightedTo = timePlus14Days;
-            break;
-          case '1113':
-            postUpdates.promotionTo = timePlus14Days;
-            break;
-          case '1114':
-            postUpdates.mostWantedTo = timePlus14Days;
-            break;
-          case '2111':
-            postUpdates.renewTo = timePlus14Days;
-            postUpdates.promotionTo = timePlus14Days;
-            break;
-          default:
-            break;
-        }
-      }
+      const postUpdates = this.buildPromotionUpdates(packageIds, timePlus14Days);
 
       const captureState = await this.prisma.$transaction(async (tx) => {
         const transition = await tx.customer_orders.updateMany({
@@ -850,6 +847,21 @@ export class LocalPostOrderService {
   private async readMediaBuffer(sourceUrl: string): Promise<Buffer | null> {
     if (!sourceUrl) return null;
 
+    const localFromAbsoluteUrl = this.resolveLocalMediaPathFromAbsoluteUrl(
+      sourceUrl,
+    );
+    if (localFromAbsoluteUrl) {
+      try {
+        const buffer = await readFile(localFromAbsoluteUrl);
+        if (!this.isWithinMediaSizeLimit(buffer)) {
+          return null;
+        }
+        return (await this.isLikelyImageBuffer(buffer)) ? buffer : null;
+      } catch {
+        return null;
+      }
+    }
+
     if (sourceUrl.startsWith('data:')) {
       const commaIndex = sourceUrl.indexOf(',');
       if (commaIndex < 0) return null;
@@ -958,6 +970,57 @@ export class LocalPostOrderService {
     return DEFAULT_ALLOWED_MEDIA_HOSTS;
   }
 
+  private parsePromotionPackageMapping(
+    raw: string | undefined,
+  ): Record<string, string[]> {
+    if (!raw || raw.trim().length === 0) {
+      return DEFAULT_PROMOTION_PACKAGE_MAPPING;
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const mapping: Record<string, string[]> = {};
+
+      for (const [packageId, fields] of Object.entries(parsed)) {
+        if (!Array.isArray(fields)) {
+          continue;
+        }
+
+        const validFields = fields
+          .map((field) => this.toSafeString(field))
+          .filter((field) => ALLOWED_PROMOTION_FIELDS.has(field));
+
+        if (validFields.length > 0) {
+          mapping[packageId] = Array.from(new Set(validFields));
+        }
+      }
+
+      return Object.keys(mapping).length > 0
+        ? mapping
+        : DEFAULT_PROMOTION_PACKAGE_MAPPING;
+    } catch {
+      return DEFAULT_PROMOTION_PACKAGE_MAPPING;
+    }
+  }
+
+  private buildPromotionUpdates(
+    packageIds: string[],
+    promotionEndTs: number,
+  ): Record<string, unknown> {
+    const updates: Record<string, unknown> = {};
+
+    for (const packageId of packageIds) {
+      const fields = this.promotionPackageMapping[packageId] ?? [];
+      for (const field of fields) {
+        if (ALLOWED_PROMOTION_FIELDS.has(field)) {
+          updates[field] = promotionEndTs;
+        }
+      }
+    }
+
+    return updates;
+  }
+
   private isAllowedRemoteHost(hostname: string): boolean {
     const host = hostname.trim().toLowerCase();
     if (!host) return false;
@@ -1043,6 +1106,18 @@ export class LocalPostOrderService {
 
     // Relative arbitrary paths are not allowed.
     return null;
+  }
+
+  private resolveLocalMediaPathFromAbsoluteUrl(sourceUrl: string): string | null {
+    try {
+      const parsed = new URL(sourceUrl);
+      if (parsed.protocol !== 'https:') {
+        return null;
+      }
+      return this.resolveAllowedLocalMediaPath(parsed.pathname);
+    } catch {
+      return null;
+    }
   }
 
   private safeResolveInsideRoot(root: string, childPath: string): string | null {
