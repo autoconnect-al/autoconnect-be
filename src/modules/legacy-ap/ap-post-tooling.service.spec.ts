@@ -147,4 +147,89 @@ describe('ApPostToolingService', () => {
       }),
     );
   });
+
+  it('movePostsToSearch marks TO_BE_PUBLISHED posts as PUBLISHED after search upsert', async () => {
+    const prisma = {
+      post: {
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce([
+            {
+              id: 101n,
+              status: 'TO_BE_PUBLISHED',
+              deleted: false,
+              dateCreated: new Date('2026-02-23T00:00:00.000Z'),
+              caption: 'c',
+              cleanedCaption: 'c',
+              createdTime: '1771000000',
+              sidecarMedias: '[]',
+              likesCount: 1,
+              viewsCount: 2,
+              vendor_id: 9n,
+              promotionTo: null,
+              highlightedTo: null,
+              renewTo: null,
+              renewInterval: null,
+              renewedTime: null,
+              mostWantedTo: null,
+              vendor: {
+                accountExists: true,
+                accountName: 'vendor-x',
+                profilePicture: null,
+              },
+              car_detail_car_detail_post_idTopost: [
+                {
+                  deleted: false,
+                  sold: false,
+                  make: 'BMW',
+                  model: 'X5',
+                  variant: null,
+                  registration: '2019',
+                  mileage: 100000,
+                  price: 20000,
+                  transmission: 'auto',
+                  fuelType: 'diesel',
+                  engineSize: '2.0',
+                  drivetrain: null,
+                  seats: 5,
+                  numberOfDoors: 5,
+                  bodyType: 'SUV',
+                  emissionGroup: null,
+                  contact: '{}',
+                  customsPaid: true,
+                  type: 'car',
+                },
+              ],
+            },
+          ])
+          .mockResolvedValueOnce([]),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      search: {
+        upsert: jest.fn().mockResolvedValue({}),
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+    } as any;
+
+    const service = new ApPostToolingService(prisma, {} as any);
+    jest
+      .spyOn(service as any, 'calculateSearchPriceRange')
+      .mockResolvedValue({ minPrice: null, maxPrice: null });
+
+    const response = await service.movePostsToSearch();
+
+    expect(response.success).toBe(true);
+    expect(prisma.search.upsert).toHaveBeenCalledTimes(1);
+    expect(prisma.post.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: { in: [101n] },
+          status: 'TO_BE_PUBLISHED',
+        }),
+        data: expect.objectContaining({
+          status: 'PUBLISHED',
+        }),
+      }),
+    );
+  });
 });

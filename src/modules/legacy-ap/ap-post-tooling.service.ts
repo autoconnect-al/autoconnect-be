@@ -290,6 +290,7 @@ export class ApPostToolingService {
       if (posts.length === 0) {
         break;
       }
+      const publishedPostIds: bigint[] = [];
 
       for (const post of posts) {
         const details = post.car_detail_car_detail_post_idTopost?.[0];
@@ -350,6 +351,7 @@ export class ApPostToolingService {
               ...searchWriteData,
             },
           });
+          publishedPostIds.push(post.id);
         } catch (error) {
           const message =
             error instanceof Error ? error.message : 'Unknown rebuild error';
@@ -358,6 +360,19 @@ export class ApPostToolingService {
             message,
           });
         }
+      }
+
+      if (publishedPostIds.length > 0) {
+        await this.prisma.post.updateMany({
+          where: {
+            id: { in: publishedPostIds },
+            status: 'TO_BE_PUBLISHED',
+          },
+          data: {
+            status: 'PUBLISHED',
+            dateUpdated: runStartedAt,
+          },
+        });
       }
 
       lastSeenId = posts[posts.length - 1]?.id ?? null;
