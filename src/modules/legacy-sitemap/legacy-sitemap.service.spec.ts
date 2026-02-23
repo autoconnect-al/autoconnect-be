@@ -138,4 +138,70 @@ describe('LegacySitemapService', () => {
       rdConstruction: rd.result,
     }).toMatchSnapshot();
   });
+
+  it('caches default sitemap queries within TTL window', async () => {
+    const prisma = {
+      $queryRawUnsafe: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]),
+    } as any;
+
+    const service = new LegacySitemapService(prisma);
+    await service.getDefaultSitemap();
+    await service.getDefaultSitemap();
+
+    expect(prisma.$queryRawUnsafe).toHaveBeenCalledTimes(3);
+  });
+
+  it('rebuilds default sitemap after cache TTL expires', async () => {
+    const prisma = {
+      $queryRawUnsafe: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]),
+    } as any;
+
+    const service = new LegacySitemapService(prisma);
+    await service.getDefaultSitemap();
+    jest.advanceTimersByTime(301_000);
+    await service.getDefaultSitemap();
+
+    expect(prisma.$queryRawUnsafe).toHaveBeenCalledTimes(6);
+  });
+
+  it('caches article-app sitemap by app key', async () => {
+    const prisma = {
+      article: {
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce([
+            {
+              id: 1n,
+              category: 1n,
+              data: [{ language: 'en', title: 'A' }],
+            },
+          ])
+          .mockResolvedValueOnce([
+            {
+              id: 2n,
+              category: 2n,
+              data: [{ language: 'en', title: 'B' }],
+            },
+          ]),
+      },
+    } as any;
+
+    const service = new LegacySitemapService(prisma);
+    await service.getSitemapForApp('rd-construction');
+    await service.getSitemapForApp('rd-construction');
+    await service.getSitemapForApp('rent-a-car-in-tirana');
+
+    expect(prisma.article.findMany).toHaveBeenCalledTimes(2);
+  });
 });

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { legacySuccess } from '../../common/legacy-response';
+import { createLogger } from '../../common/logger.util';
 
 type SitemapRow = {
   id: string | number | bigint;
@@ -43,12 +44,19 @@ type ArticleSitemapPathConfig = {
 
 @Injectable()
 export class LegacySitemapService {
+  private readonly logger = createLogger('legacy-sitemap-service');
   private readonly locales = {
     en: 'en',
     sqAl: 'sq-al',
   } as const;
 
   private readonly defaultLocale = 'sq-al';
+  private readonly cacheTtlMs = this.getCacheTtlMs();
+  private readonly sitemapCache = new Map<
+    string,
+    { expiresAt: number; value: SitemapItem[] }
+  >();
+  private readonly inFlight = new Map<string, Promise<SitemapItem[]>>();
 
   private readonly pathNames: Record<string, { en: string; 'sq-al': string }> =
     {
@@ -138,13 +146,70 @@ export class LegacySitemapService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getDefaultSitemap() {
-    const result = await this.getSitemapForAutoconnect();
+    const result = await this.getCachedSitemap('autoconnect-default', () =>
+      this.getSitemapForAutoconnect(),
+    );
     return legacySuccess(result);
   }
 
   async getSitemapForApp(_appName: string) {
-    const result = await this.getSitemapForArticleApp(_appName);
+    const appName = this.toText(_appName).trim();
+    const result = await this.getCachedSitemap(`article-app:${appName}`, () =>
+      this.getSitemapForArticleApp(appName),
+    );
     return legacySuccess(result);
+  }
+
+  private async getCachedSitemap(
+    key: string,
+    resolver: () => Promise<SitemapItem[]>,
+  ): Promise<SitemapItem[]> {
+    const now = Date.now();
+    const cached = this.sitemapCache.get(key);
+    if (cached && cached.expiresAt > now) {
+      this.logger.info('sitemap.cache.hit', { key });
+      return cached.value;
+    }
+
+    const inProgress = this.inFlight.get(key);
+    if (inProgress) {
+      this.logger.info('sitemap.cache.await_inflight', { key });
+      return inProgress;
+    }
+
+    this.logger.info('sitemap.cache.miss', { key });
+    const promise = resolver()
+      .then((result) => {
+        this.sitemapCache.set(key, {
+          expiresAt: Date.now() + this.cacheTtlMs,
+          value: result,
+        });
+        this.pruneCache();
+        return result;
+      })
+      .finally(() => {
+        this.inFlight.delete(key);
+      });
+
+    this.inFlight.set(key, promise);
+    return promise;
+  }
+
+  private pruneCache(): void {
+    const now = Date.now();
+    for (const [key, value] of this.sitemapCache) {
+      if (value.expiresAt <= now) {
+        this.sitemapCache.delete(key);
+      }
+    }
+  }
+
+  private getCacheTtlMs(): number {
+    const raw = Number(process.env.SITEMAP_CACHE_TTL_SECONDS ?? 300);
+    if (!Number.isFinite(raw) || raw <= 0) {
+      return 300_000;
+    }
+    return Math.floor(raw * 1000);
   }
 
   private async getSitemapForAutoconnect(): Promise<SitemapItem[]> {

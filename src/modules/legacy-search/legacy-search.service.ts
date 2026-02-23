@@ -2,59 +2,71 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { legacyError, legacySuccess } from '../../common/legacy-response';
 import { decodeCaption } from '../imports/utils/caption-processor';
-
-type FilterTerm = {
-  key: string;
-  value: unknown;
-};
-
-type SearchFilter = {
-  type?: string;
-  keyword?: string;
-  generalSearch?: string;
-  searchTerms?: FilterTerm[];
-  sortTerms?: Array<{ key?: string; order?: string }>;
-  page?: number | string;
-  maxResults?: number | string;
-};
+import { createLogger } from '../../common/logger.util';
+import {
+  LegacySearchQueryBuilder,
+  type FilterTerm,
+  type SearchFilter,
+} from './legacy-search-query-builder';
 
 @Injectable()
 export class LegacySearchService {
   private readonly skipQuickSearchFix = new Set(['benz', 'mercedes']);
+  private readonly logger = createLogger('legacy-search-service');
+  private readonly queryBudgetsMs: Record<string, number> = {
+    search: 350,
+    result_count: 180,
+    price_calculate: 350,
+    most_wanted: 200,
+    post_detail: 120,
+    caption: 150,
+    related_by_id: 220,
+    related_by_filter: 220,
+    resolve_model: 120,
+  };
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly queryBuilder: LegacySearchQueryBuilder,
+  ) {}
 
   async search(filterRaw: string | undefined) {
-    const filter = this.parseFilter(filterRaw);
+    const filter = this.queryBuilder.parseFilter(filterRaw);
     if (!filter) {
       return legacyError('An error occurred while searching for cars', 500);
     }
-    const { whereSql, params } = this.buildWhere(filter);
-    const { orderSql, limit, offset } = this.buildSortAndPagination(filter);
-    const rows = await this.prisma.$queryRawUnsafe<unknown[]>(
-      `SELECT * FROM search ${whereSql} ${orderSql} LIMIT ? OFFSET ?`,
-      ...params,
-      limit,
-      offset,
+    const { whereSql, params } = this.queryBuilder.buildWhere(filter);
+    const { orderSql, limit, offset } =
+      this.queryBuilder.buildSortAndPagination(filter);
+    const rows = await this.timeQuery('search', () =>
+      this.prisma.$queryRawUnsafe<unknown[]>(
+        `SELECT * FROM search ${whereSql} ${orderSql} LIMIT ? OFFSET ?`,
+        ...params,
+        limit,
+        offset,
+      ),
     );
     return legacySuccess(this.normalizeBigInts(rows));
   }
 
   async countResults(filterRaw: string | undefined) {
-    const filter = this.parseFilter(filterRaw);
+    const filter = this.queryBuilder.parseFilter(filterRaw);
     if (!filter) {
       return legacyError('An error occurred while counting results', 500);
     }
-    const { whereSql, params } = this.buildWhere(filter);
-    const rows = await this.prisma.$queryRawUnsafe<
-      Array<{ total: bigint | number }>
-    >(`SELECT COUNT(*) as total FROM search ${whereSql}`, ...params);
+    const { whereSql, params } = this.queryBuilder.buildWhere(filter);
+    const rows = await this.timeQuery('result_count', () =>
+      this.prisma.$queryRawUnsafe<Array<{ total: bigint | number }>>(
+        `SELECT COUNT(*) as total FROM search ${whereSql}`,
+        ...params,
+      ),
+    );
     const count = Number(rows[0]?.total ?? 0);
     return legacySuccess(count);
   }
 
   async priceCalculate(filterRaw: string | undefined) {
-    const filter = this.parseFilter(filterRaw);
+    const filter = this.queryBuilder.parseFilter(filterRaw);
     if (!filter) {
       return legacyError('An error occurred while searching for cars', 500);
     }
@@ -67,7 +79,8 @@ export class LegacySearchService {
     const bodyType = this.toStr(terms.get('bodyType') ?? '');
     const transmission = this.toStr(terms.get('transmission') ?? '');
 
-    const registrationFrom = this.extractRegistrationFrom(registrationRaw);
+    const registrationFrom =
+      this.queryBuilder.extractRegistrationFrom(registrationRaw);
     if (!make || !model || !registrationFrom || !fuelType) {
       return legacySuccess([]);
     }
@@ -111,20 +124,22 @@ export class LegacySearchService {
       params.push(bodyType);
     }
 
-    const rows = await this.prisma.$queryRawUnsafe<unknown[]>(
-      `SELECT cd.price, cd.make, cd.model, cd.variant, cd.registration, p.id
+    const rows = await this.timeQuery('price_calculate', () =>
+      this.prisma.$queryRawUnsafe<unknown[]>(
+        `SELECT cd.price, cd.make, cd.model, cd.variant, cd.registration, p.id
        FROM post p
        LEFT JOIN car_detail cd ON cd.post_id = p.id
        WHERE ${where.join(' AND ')}`,
-      ...params,
+        ...params,
+      ),
     );
 
     return legacySuccess(this.normalizeBigInts(rows));
   }
 
   async mostWanted(excludeIds?: string, excludedAccounts?: string) {
-    const excludeIdValues = this.parseCsvValues(excludeIds);
-    const excludeAccountValues = this.parseCsvValues(excludedAccounts);
+    const excludeIdValues = this.queryBuilder.parseCsvValues(excludeIds);
+    const excludeAccountValues = this.queryBuilder.parseCsvValues(excludedAccounts);
 
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const clauses: string[] = ['sold = 0', "(deleted = '0' OR deleted = 0)"];
@@ -146,14 +161,18 @@ export class LegacySearchService {
       WHERE ${clauses.join(' AND ')}
       ORDER BY mostWantedTo DESC
       LIMIT 4`;
-    const rows = await this.prisma.$queryRawUnsafe<unknown[]>(query, ...params);
+    const rows = await this.timeQuery('most_wanted', () =>
+      this.prisma.$queryRawUnsafe<unknown[]>(query, ...params),
+    );
     return legacySuccess(this.normalizeBigInts(this.withCarDetail(rows)));
   }
 
   async getCarDetails(id: string) {
-    const rows = await this.prisma.$queryRawUnsafe<unknown[]>(
-      'SELECT * FROM search WHERE id = ? LIMIT 1',
-      id,
+    const rows = await this.timeQuery('post_detail', () =>
+      this.prisma.$queryRawUnsafe<unknown[]>(
+        'SELECT * FROM search WHERE id = ? LIMIT 1',
+        id,
+      ),
     );
     if (rows.length === 0) {
       return legacyError('Car details not found', 404);
@@ -162,11 +181,13 @@ export class LegacySearchService {
   }
 
   async getCaption(id: string) {
-    const rows = await this.prisma.$queryRawUnsafe<
-      Array<{ cleanedCaption: string | null; sidecarMedias: unknown }>
-    >(
-      'SELECT cleanedCaption, sidecarMedias FROM search WHERE id = ? LIMIT 1',
-      id,
+    const rows = await this.timeQuery('caption', () =>
+      this.prisma.$queryRawUnsafe<
+        Array<{ cleanedCaption: string | null; sidecarMedias: unknown }>
+      >(
+        'SELECT cleanedCaption, sidecarMedias FROM search WHERE id = ? LIMIT 1',
+        id,
+      ),
     );
     if (rows.length === 0) {
       return legacyError('Car details not found', 404);
@@ -178,25 +199,30 @@ export class LegacySearchService {
   }
 
   async relatedById(id: string, type = 'car', excludedIds?: string) {
-    const row = await this.prisma.$queryRawUnsafe<
-      Array<{ make: string | null; model: string | null }>
-    >('SELECT make, model FROM search WHERE id = ? LIMIT 1', id);
+    const row = await this.timeQuery('related_by_id', () =>
+      this.prisma.$queryRawUnsafe<Array<{ make: string | null; model: string | null }>>(
+        'SELECT make, model FROM search WHERE id = ? LIMIT 1',
+        id,
+      ),
+    );
     const make = row[0]?.make;
     const model = row[0]?.model;
     if (!make || !model) {
       return legacySuccess([]);
     }
 
-    const excludedValues = this.parseCsvValues(excludedIds);
+    const excludedValues = this.queryBuilder.parseCsvValues(excludedIds);
     const excludedClause =
       excludedValues.length > 0
         ? `AND id NOT IN (${excludedValues.map(() => '?').join(',')})`
         : '';
     const params: unknown[] = [make, model, id, type, ...excludedValues];
-    const rows = await this.prisma.$queryRawUnsafe<unknown[]>(
-      `SELECT id, make, model, variant, registration, mileage, price, transmission, fuelType, engineSize, drivetrain, seats, numberOfDoors, bodyType, customsPaid, canExchange, options, emissionGroup, type, sidecarMedias, accountName, profilePicture, vendorId, contact, vendorContact
+    const rows = await this.timeQuery('related_by_id', () =>
+      this.prisma.$queryRawUnsafe<unknown[]>(
+        `SELECT id, make, model, variant, registration, mileage, price, transmission, fuelType, engineSize, drivetrain, seats, numberOfDoors, bodyType, customsPaid, canExchange, options, emissionGroup, type, sidecarMedias, accountName, profilePicture, vendorId, contact, vendorContact
        FROM search WHERE make = ? AND model = ? AND id <> ? AND sold = 0 AND deleted = '0' AND type = ? ${excludedClause} ORDER BY dateUpdated DESC LIMIT 4`,
-      ...params,
+        ...params,
+      ),
     );
     return legacySuccess(this.normalizeBigInts(this.withCarDetail(rows)));
   }
@@ -206,7 +232,7 @@ export class LegacySearchService {
     type = 'car',
     excludedIds?: string,
   ) {
-    const filter = this.parseFilter(filterRaw);
+    const filter = this.queryBuilder.parseFilter(filterRaw);
     if (!filter) {
       return legacyError(
         'An error occurred while getting related searches',
@@ -217,7 +243,7 @@ export class LegacySearchService {
     const terms = this.termMap(filter.searchTerms ?? []);
     const make = this.toStr(terms.get('make1') ?? '');
     const model = this.toStr(terms.get('model1') ?? '');
-    const excludedValues = this.parseCsvValues(excludedIds);
+    const excludedValues = this.queryBuilder.parseCsvValues(excludedIds);
     const excludedClause =
       excludedValues.length > 0
         ? `AND id NOT IN (${excludedValues.map(() => '?').join(',')})`
@@ -234,40 +260,33 @@ export class LegacySearchService {
       params.push(model.replace(' (all)', ''));
     }
 
-    const rows = await this.prisma.$queryRawUnsafe<unknown[]>(
-      `SELECT id, make, model, variant, registration, mileage, price, transmission, fuelType, engineSize, drivetrain, seats, numberOfDoors, bodyType, customsPaid, canExchange, options, emissionGroup, type, sidecarMedias, accountName, profilePicture, vendorId, contact, vendorContact
+    const rows = await this.timeQuery('related_by_filter', () =>
+      this.prisma.$queryRawUnsafe<unknown[]>(
+        `SELECT id, make, model, variant, registration, mileage, price, transmission, fuelType, engineSize, drivetrain, seats, numberOfDoors, bodyType, customsPaid, canExchange, options, emissionGroup, type, sidecarMedias, accountName, profilePicture, vendorId, contact, vendorContact
        FROM search WHERE ${where} ORDER BY dateUpdated DESC LIMIT 4`,
-      ...params,
+        ...params,
+      ),
     );
     return legacySuccess(this.normalizeBigInts(this.withCarDetail(rows)));
   }
 
   private parseFilter(filterRaw: string | undefined): SearchFilter | null {
-    if (!filterRaw || typeof filterRaw !== 'string') return null;
-    try {
-      const parsed = JSON.parse(filterRaw) as SearchFilter;
-      if (!parsed || typeof parsed !== 'object') return null;
-      return parsed;
-    } catch {
-      return null;
-    }
+    return this.queryBuilder.parseFilter(filterRaw);
   }
 
   private extractRegistrationFrom(registrationRaw: unknown): number | null {
-    if (!registrationRaw || typeof registrationRaw !== 'object') return null;
-    const fromValue = (registrationRaw as Record<string, unknown>).from;
-    const from = Number(this.toStr(fromValue));
-    if (!Number.isFinite(from) || from <= 0) return null;
-    return from;
+    return this.queryBuilder.extractRegistrationFrom(registrationRaw);
   }
 
   private async resolveModel(
     make: string,
     model: string,
   ): Promise<{ model: string; variant: string; isVariant: boolean }> {
-    const rows = await this.prisma.$queryRawUnsafe<
-      Array<{ Model: string | null; isVariant: boolean | number | null }>
-    >('SELECT Model, isVariant FROM car_make_model WHERE Make = ?', make);
+    const rows = await this.timeQuery('resolve_model', () =>
+      this.prisma.$queryRawUnsafe<
+        Array<{ Model: string | null; isVariant: boolean | number | null }>
+      >('SELECT Model, isVariant FROM car_make_model WHERE Make = ?', make),
+    );
 
     const normalizedInput = this.normalizeModelToken(model);
     for (const row of rows) {
@@ -353,94 +372,11 @@ export class LegacySearchService {
   }
 
   private buildSortAndPagination(filter: SearchFilter) {
-    const sort =
-      Array.isArray(filter.sortTerms) && filter.sortTerms.length > 0
-        ? filter.sortTerms[0]
-        : {};
-    const allowedSort = new Map([
-      ['renewedTime', 'renewedTime'],
-      ['price', 'price'],
-      ['mileage', 'mileage'],
-      ['registration', 'registration'],
-    ]);
-    const sortKey =
-      allowedSort.get(String(sort?.key ?? 'renewedTime')) ?? 'renewedTime';
-    const sortOrder =
-      String(sort?.order ?? 'DESC').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
-
-    const maxResults = Number(filter.maxResults ?? 24);
-    const page = Number(filter.page ?? 0);
-    const limit =
-      Number.isFinite(maxResults) && maxResults > 0 ? maxResults : 24;
-    const offset =
-      Number.isFinite(page) && page > 0 ? Math.floor(page) * limit : 0;
-
-    return {
-      orderSql: `ORDER BY ${sortKey} ${sortOrder}`,
-      limit,
-      offset,
-    };
+    return this.queryBuilder.buildSortAndPagination(filter);
   }
 
   private buildWhere(filter: SearchFilter) {
-    const terms = this.termMap(filter.searchTerms ?? []);
-    const clauses: string[] = [`sold = 0`, `deleted = '0'`];
-    const params: unknown[] = [];
-    const keyword = this.toStr(filter.keyword ?? '').toLowerCase();
-    const vendorAccountName = this.toStr(terms.get('vendorAccountName') ?? '');
-    const isVendorSearch = Boolean(vendorAccountName);
-    const type = this.toStr(filter.type ?? '');
-    clauses.push('type = ?');
-    params.push(type || 'car');
-
-    const make = this.toStr(terms.get('make1') ?? '');
-    if (make) {
-      clauses.push('make = ?');
-      params.push(make);
-    }
-
-    const model = this.toStr(terms.get('model1') ?? '');
-    if (model) {
-      clauses.push('model = ?');
-      params.push(model.replace(' (all)', ''));
-    }
-
-    this.addRangeClause(
-      clauses,
-      params,
-      'registration',
-      terms.get('registration'),
-    );
-    this.addRangeClause(clauses, params, 'price', terms.get('price'));
-    this.addRangeClause(clauses, params, 'mileage', terms.get('mileage'));
-    this.addInClause(
-      clauses,
-      params,
-      'transmission',
-      terms.get('transmission'),
-    );
-    this.addInClause(clauses, params, 'fuelType', terms.get('fuelType'));
-    this.addInClause(clauses, params, 'bodyType', terms.get('bodyType'));
-    this.addInClause(
-      clauses,
-      params,
-      'emissionGroup',
-      terms.get('emissionGroup'),
-    );
-    this.addCustomsPaidClause(clauses, params, terms.get('customsPaid'));
-    if (vendorAccountName) {
-      clauses.push('accountName = ?');
-      params.push(vendorAccountName);
-    }
-
-    this.applyKeywordClauses(clauses, params, keyword, isVendorSearch);
-    this.applyGeneralSearchClauses(
-      clauses,
-      params,
-      this.toStr(filter.generalSearch ?? ''),
-    );
-
-    return { whereSql: `WHERE ${clauses.join(' AND ')}`, params };
+    return this.queryBuilder.buildWhere(filter);
   }
 
   private applyKeywordClauses(
@@ -692,10 +628,21 @@ export class LegacySearchService {
   }
 
   private parseCsvValues(raw: string | undefined): string[] {
-    return (raw ?? '')
-      .split(',')
-      .map((v) => v.trim())
-      .filter((v) => v.length > 0);
+    return this.queryBuilder.parseCsvValues(raw);
+  }
+
+  private async timeQuery<T>(name: string, task: () => Promise<T>): Promise<T> {
+    const startedAt = Date.now();
+    try {
+      return await task();
+    } finally {
+      const durationMs = Date.now() - startedAt;
+      const budgetMs = this.queryBudgetsMs[name] ?? 250;
+      this.logger.info('query.timing', { name, durationMs, budgetMs });
+      if (durationMs > budgetMs) {
+        this.logger.warn('query.slow', { name, durationMs, budgetMs });
+      }
+    }
   }
 
   private normalizeBigInts<T>(input: T): T {

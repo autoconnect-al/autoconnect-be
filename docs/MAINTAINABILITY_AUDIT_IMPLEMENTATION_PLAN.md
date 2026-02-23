@@ -783,10 +783,25 @@ Priority levels:
 ### Good to have
 
 #### 5.4 Add DTO validation for all `data/*` mutation endpoints
+- **Status**: ✅ Done (2026-02-23)
 - **Implementation**
   - Replace raw unknown objects with explicit DTOs + class-validator.
 - **Acceptance checks**
   - Invalid payloads fail fast with 400 and structured errors.
+- **Implementation progress**
+  - Added explicit DTOs for `data/*` mutation endpoints:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-data/dto/data-mutations.dto.ts`
+    - `CreatePostDto`, `UpdatePostDto`, `CreateUserPostDto` now require `post` object.
+    - `UploadImageDto` defines optional legacy-compatible upload fields (`file`, `image`, `content`, `imageData`, `id`, `filename`).
+  - Wired DTOs into controller mutation endpoints:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-data/legacy-data.controller.ts`
+    - `POST /data/create-post`
+    - `POST /data/update-post`
+    - `POST /data/create-user-post`
+    - `POST /data/upload-image`
+  - Added DTO validation regression tests:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-data/dto/data-mutations.dto.spec.ts`
+    - verifies missing `post` is rejected and valid payloads pass.
 
 ---
 
@@ -831,19 +846,49 @@ Priority levels:
   - Count endpoint behavior is deterministic and documented.
 
 #### 6.3 Extract query builder into isolated tested component
+- **Status**: ✅ Done (2026-02-23)
 - **Implementation**
   - Move filter parsing/building to dedicated utility/repository with exhaustive tests.
 - **Acceptance checks**
   - Query generation tests cover keywords, ranges, quick-search tokenization.
+- **Implementation progress**
+  - Extracted search filter/query composition into dedicated component:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-search/legacy-search-query-builder.ts`
+    - includes:
+      - `parseFilter(...)`
+      - `buildWhere(...)`
+      - `buildSortAndPagination(...)`
+      - `parseCsvValues(...)`
+      - `extractRegistrationFrom(...)`
+  - Wired service to use extracted builder:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-search/legacy-search.service.ts`
+    - search/count/pagination/filter parsing now delegate to `LegacySearchQueryBuilder`.
+  - Registered component in module DI:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-search/legacy-search.module.ts`
+  - Added isolated builder test suite:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-search/legacy-search-query-builder.spec.ts`
+    - covers keyword clauses, pricing formula branches, token normalization, vendor account filtering, sort/paging defaults, and safe parser behavior.
+  - Updated service tests for constructor injection path:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-search/legacy-search.service.spec.ts`
 
 ### Good to have
 
 #### 6.4 Add query performance baselines
+- **Status**: ✅ Done (2026-02-23)
 - **Implementation**
   - Capture timings for most-used search combos.
   - Add indexes for hot filters.
 - **Acceptance checks**
   - P95 search latency target met under expected volume.
+- **Implementation progress**
+  - Added per-query timing baseline instrumentation in:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-search/legacy-search.service.ts`
+  - Implemented `timeQuery(name, task)` wrapper with structured logs:
+    - emits `query.timing` for each DB query with `durationMs` and `budgetMs`.
+    - emits `query.slow` warning when duration exceeds per-query budget.
+  - Added baseline budgets for high-traffic paths:
+    - `search`, `result_count`, `price_calculate`, `most_wanted`, `post_detail`, `caption`, `related_by_id`, `related_by_filter`, `resolve_model`.
+  - Instrumented all core query paths (search/count/details/related/price/model resolution) without altering endpoint contracts.
 
 ---
 
@@ -873,10 +918,29 @@ Priority levels:
 ### Important
 
 #### 7.2 Reduce heavy full-table sitemap generation cost
+- **Status**: ✅ Done (2026-02-23)
 - **Implementation**
   - Add caching/materialized output and incremental updates.
 - **Acceptance checks**
   - Sitemap generation does not perform full heavy scans on every request.
+- **Implementation progress**
+  - Added in-memory sitemap caching with TTL and in-flight deduplication:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-sitemap/legacy-sitemap.service.ts`
+  - Cache behavior:
+    - default sitemap cache key: `autoconnect-default`
+    - article sitemap cache key: `article-app:<appName>`
+    - TTL configurable via `SITEMAP_CACHE_TTL_SECONDS` (default `300s`)
+    - concurrent misses for same key share one in-flight build (`await_inflight`) to avoid duplicate heavy scans.
+  - Added structured cache logs:
+    - `sitemap.cache.hit`
+    - `sitemap.cache.miss`
+    - `sitemap.cache.await_inflight`
+  - Added regression tests:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-sitemap/legacy-sitemap.service.spec.ts`
+    - verifies:
+      - repeated default requests within TTL do not re-query DB
+      - cache expiry triggers rebuild
+      - article sitemap caches per app key.
 
 ### Good to have
 

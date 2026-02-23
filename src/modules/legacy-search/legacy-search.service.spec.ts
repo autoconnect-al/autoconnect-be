@@ -1,9 +1,10 @@
 import { LegacySearchService } from './legacy-search.service';
+import { LegacySearchQueryBuilder } from './legacy-search-query-builder';
 
 describe('LegacySearchService', () => {
   it('buildWhere should apply keyword korea clause', () => {
     const prisma = { $queryRawUnsafe: jest.fn() } as any;
-    const service = new LegacySearchService(prisma);
+    const service = new LegacySearchService(prisma, new LegacySearchQueryBuilder());
 
     const built = (service as any).buildWhere({
       type: 'car',
@@ -21,7 +22,7 @@ describe('LegacySearchService', () => {
 
   it('buildWhere should apply okazion,oferte pricing formula', () => {
     const prisma = { $queryRawUnsafe: jest.fn() } as any;
-    const service = new LegacySearchService(prisma);
+    const service = new LegacySearchService(prisma, new LegacySearchQueryBuilder());
 
     const built = (service as any).buildWhere({
       type: 'car',
@@ -38,7 +39,7 @@ describe('LegacySearchService', () => {
 
   it('buildWhere should apply pricing formula for keyword okazion', () => {
     const prisma = { $queryRawUnsafe: jest.fn() } as any;
-    const service = new LegacySearchService(prisma);
+    const service = new LegacySearchService(prisma, new LegacySearchQueryBuilder());
 
     const built = (service as any).buildWhere({
       type: 'car',
@@ -53,7 +54,7 @@ describe('LegacySearchService', () => {
 
   it('buildWhere should apply pricing formula for keyword oferte', () => {
     const prisma = { $queryRawUnsafe: jest.fn() } as any;
-    const service = new LegacySearchService(prisma);
+    const service = new LegacySearchService(prisma, new LegacySearchQueryBuilder());
 
     const built = (service as any).buildWhere({
       type: 'car',
@@ -68,7 +69,7 @@ describe('LegacySearchService', () => {
 
   it('buildWhere should normalize generalSearch tokens', () => {
     const prisma = { $queryRawUnsafe: jest.fn() } as any;
-    const service = new LegacySearchService(prisma);
+    const service = new LegacySearchService(prisma, new LegacySearchQueryBuilder());
 
     const built = (service as any).buildWhere({
       type: 'car',
@@ -82,7 +83,7 @@ describe('LegacySearchService', () => {
 
   it('buildWhere should support vendorAccountName active listing filter', () => {
     const prisma = { $queryRawUnsafe: jest.fn() } as any;
-    const service = new LegacySearchService(prisma);
+    const service = new LegacySearchService(prisma, new LegacySearchQueryBuilder());
 
     const built = (service as any).buildWhere({
       type: 'car',
@@ -96,7 +97,7 @@ describe('LegacySearchService', () => {
 
   it('buildWhere should apply customsPaid=true as true-or-null', () => {
     const prisma = { $queryRawUnsafe: jest.fn() } as any;
-    const service = new LegacySearchService(prisma);
+    const service = new LegacySearchService(prisma, new LegacySearchQueryBuilder());
 
     const built = (service as any).buildWhere({
       type: 'car',
@@ -116,7 +117,7 @@ describe('LegacySearchService', () => {
         .mockResolvedValueOnce([]),
     } as any;
 
-    const service = new LegacySearchService(prisma);
+    const service = new LegacySearchService(prisma, new LegacySearchQueryBuilder());
     await service.relatedById('1', 'car');
 
     const secondQuery = prisma.$queryRawUnsafe.mock.calls[1][0] as string;
@@ -139,7 +140,7 @@ describe('LegacySearchService', () => {
           },
         ]),
     } as any;
-    const service = new LegacySearchService(prisma);
+    const service = new LegacySearchService(prisma, new LegacySearchQueryBuilder());
 
     const response = await service.relatedById('1', 'car');
     const first = (response.result as Array<Record<string, unknown>>)[0];
@@ -163,7 +164,7 @@ describe('LegacySearchService', () => {
         },
       ]),
     } as any;
-    const service = new LegacySearchService(prisma);
+    const service = new LegacySearchService(prisma, new LegacySearchQueryBuilder());
 
     const response = await service.mostWanted();
     const first = (response.result as Array<Record<string, unknown>>)[0];
@@ -186,7 +187,7 @@ describe('LegacySearchService', () => {
       ]),
     } as any;
 
-    const service = new LegacySearchService(prisma);
+    const service = new LegacySearchService(prisma, new LegacySearchQueryBuilder());
     const response = await service.getCarDetails('42');
 
     expect(response.success).toBe(true);
@@ -203,7 +204,7 @@ describe('LegacySearchService', () => {
     const prisma = {
       $queryRawUnsafe: jest.fn().mockResolvedValue([]),
     } as any;
-    const service = new LegacySearchService(prisma);
+    const service = new LegacySearchService(prisma, new LegacySearchQueryBuilder());
 
     await service.mostWanted("1,2,'3", "foo,bar' OR 1=1 --");
 
@@ -224,7 +225,7 @@ describe('LegacySearchService', () => {
         .mockResolvedValueOnce([{ make: 'BMW', model: 'X5' }])
         .mockResolvedValueOnce([]),
     } as any;
-    const service = new LegacySearchService(prisma);
+    const service = new LegacySearchService(prisma, new LegacySearchQueryBuilder());
 
     await service.relatedById('1', 'car', "2,3,'4");
 
@@ -240,7 +241,7 @@ describe('LegacySearchService', () => {
     const prisma = {
       $queryRawUnsafe: jest.fn().mockResolvedValue([]),
     } as any;
-    const service = new LegacySearchService(prisma);
+    const service = new LegacySearchService(prisma, new LegacySearchQueryBuilder());
 
     await service.relatedByFilter(
       JSON.stringify({ searchTerms: [{ key: 'make1', value: 'BMW' }] }),

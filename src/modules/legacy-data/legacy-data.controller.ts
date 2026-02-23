@@ -15,6 +15,12 @@ import { LegacyDataService } from './legacy-data.service';
 import { LocalPostOrderService } from '../legacy-group-b/local-post-order.service';
 import { LocalMediaService } from './local-media.service';
 import { LegacyJwtEmail } from '../../common/decorators/legacy-auth.decorators';
+import {
+  CreatePostDto,
+  CreateUserPostDto,
+  UpdatePostDto,
+  UploadImageDto,
+} from './dto/data-mutations.dto';
 
 @Controller('data')
 export class LegacyDataController {
@@ -133,7 +139,7 @@ export class LegacyDataController {
   @Post('create-post')
   @HttpCode(200)
   async createPost(
-    @Body() body: unknown,
+    @Body() body: CreatePostDto,
     @LegacyJwtEmail() jwtEmail?: string,
   ) {
     const response = await this.localPostOrderService.createPost(
@@ -148,7 +154,7 @@ export class LegacyDataController {
   @Post('update-post')
   @HttpCode(200)
   async updatePost(
-    @Body() body: unknown,
+    @Body() body: UpdatePostDto,
     @LegacyJwtEmail() jwtEmail?: string,
   ) {
     const response = await this.localPostOrderService.updatePost(
@@ -163,7 +169,7 @@ export class LegacyDataController {
   @Post('create-user-post')
   @HttpCode(200)
   async createUserPost(
-    @Body() body: unknown,
+    @Body() body: CreateUserPostDto,
     @LegacyJwtEmail() jwtEmail?: string,
   ) {
     const response = await this.localPostOrderService.createUserAndPost(
@@ -178,7 +184,10 @@ export class LegacyDataController {
   @Post('upload-image')
   @HttpCode(200)
   @UseInterceptors(AnyFilesInterceptor())
-  uploadImage(@Body() body: unknown, @UploadedFiles() files: Express.Multer.File[]) {
+  uploadImage(
+    @Body() body: UploadImageDto,
+    @UploadedFiles() files: Express.Multer.File[],
+  ) {
     return this.localMediaService.uploadImage(body, files);
   }
 }
