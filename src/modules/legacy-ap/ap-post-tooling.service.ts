@@ -268,9 +268,13 @@ export class ApPostToolingService {
 
   private async rebuildSearchFromPosts(): Promise<void> {
     const runStartedAt = new Date();
-    const horizon = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+    const rebuildHorizonDays = this.getSearchRebuildHorizonDays();
+    const horizon = new Date(
+      Date.now() - rebuildHorizonDays * 24 * 60 * 60 * 1000,
+    );
     const batchSize = 500;
     let lastSeenId: bigint | null = null;
+    let upsertedCount = 0;
 
     while (true) {
       const posts = await this.prisma.post.findMany({
@@ -351,6 +355,7 @@ export class ApPostToolingService {
               ...searchWriteData,
             },
           });
+          upsertedCount += 1;
           publishedPostIds.push(post.id);
         } catch (error) {
           const message =
@@ -378,12 +383,37 @@ export class ApPostToolingService {
       lastSeenId = posts[posts.length - 1]?.id ?? null;
     }
 
+    if (upsertedCount === 0) {
+      this.logger.warn('rebuild-search.skip-cleanup.no-upserts', {
+        horizonDays: rebuildHorizonDays,
+      });
+      return;
+    }
+
+    const shouldCleanup =
+      String(process.env.SEARCH_REBUILD_PRUNE_STALE ?? '').toLowerCase() ===
+      'true';
+    if (!shouldCleanup) {
+      this.logger.info('rebuild-search.skip-cleanup.disabled', {
+        upsertedCount,
+      });
+      return;
+    }
+
     await this.prisma.search.deleteMany({
       where: {
         dateCreated: { gte: horizon },
         dateUpdated: { lt: runStartedAt },
       },
     });
+  }
+
+  private getSearchRebuildHorizonDays(): number {
+    const parsed = Number(process.env.SEARCH_REBUILD_HORIZON_DAYS ?? 3650);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return 3650;
+    }
+    return Math.floor(parsed);
   }
 
   private async calculateSearchPriceRange(

@@ -231,5 +231,26 @@ describe('ApPostToolingService', () => {
         }),
       }),
     );
+    expect(prisma.search.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('movePostsToSearch does not prune search when no rows were upserted', async () => {
+    const prisma = {
+      post: {
+        findMany: jest.fn().mockResolvedValue([]),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+      search: {
+        upsert: jest.fn(),
+        deleteMany: jest.fn(),
+      },
+    } as any;
+
+    const service = new ApPostToolingService(prisma, {} as any);
+    const response = await service.movePostsToSearch();
+
+    expect(response.success).toBe(true);
+    expect(prisma.search.upsert).not.toHaveBeenCalled();
+    expect(prisma.search.deleteMany).not.toHaveBeenCalled();
   });
 });
