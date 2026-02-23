@@ -461,6 +461,11 @@ export class LegacySearchService {
     keyword: string,
     isVendorSearch: boolean,
   ) {
+    const options = keyword
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+
     if (!keyword) {
       if (!isVendorSearch) {
         clauses.push('(vendorId != 1 OR vendorId IS NULL)');
@@ -474,11 +479,25 @@ export class LegacySearchService {
       clauses.push('(vendorId != 1 OR vendorId IS NULL)');
     }
 
-    if (keyword === 'okazion,oferte') {
+    const hasOfferKeyword = options.some(
+      (option) => option === 'okazion' || option === 'oferte',
+    );
+    if (hasOfferKeyword) {
       clauses.push('price > 1');
       clauses.push('minPrice > 1');
       clauses.push('maxPrice > 1');
       clauses.push('((price - minPrice) / (maxPrice - price) < 0.25)');
+      const remainingOptions = options.filter(
+        (option) => option !== 'okazion' && option !== 'oferte',
+      );
+      if (remainingOptions.length > 0) {
+        clauses.push(
+          `(${remainingOptions.map(() => 'cleanedCaption LIKE ?').join(' OR ')})`,
+        );
+        for (const option of remainingOptions) {
+          params.push(`%${option}%`);
+        }
+      }
       return;
     }
 
@@ -495,10 +514,6 @@ export class LegacySearchService {
     }
 
     if (keyword !== 'elektrike') {
-      const options = keyword
-        .split(',')
-        .map((item) => item.trim())
-        .filter(Boolean);
       if (options.length > 0) {
         clauses.push(
           `(${options.map(() => 'cleanedCaption LIKE ?').join(' OR ')})`,

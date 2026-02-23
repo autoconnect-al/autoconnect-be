@@ -273,6 +273,7 @@ Priority levels:
     - `/Users/reipano/Personal/vehicle-api/src/modules/imports/post.controller.spec.ts`
 
 #### 1.5 Make Encar parsing/mapping resilient
+- **Status**: ✅ Done (2026-02-22)
 - **Issue**
   - Large procedural mapper with many assumptions.
 - **Implementation**
@@ -280,6 +281,14 @@ Priority levels:
   2. Add unit tests for each mapping function and edge-case payloads.
 - **Acceptance checks**
   - Mapping tests pass for representative samples.
+- **Implementation progress**
+  - Extracted ENCAR mapping into pure utility functions:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/imports/encar-import/encar-mapper.util.ts`
+    - Functions: `mapMake`, `mapModel`, `mapVariant`, `mapBodyType`, `mapFuelType`, `mapDrivetrain`, `calculatePrice`, `buildEncarCaption`.
+  - Updated scraper mapper wiring to use extracted functions:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/imports/encar-import/save-from-encar.ts`
+  - Added dedicated unit tests for mapping behaviors and edge-cases:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/imports/encar-import/encar-mapper.util.spec.ts`
 
 ### Good to have
 

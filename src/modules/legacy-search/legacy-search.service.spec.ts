@@ -36,6 +36,36 @@ describe('LegacySearchService', () => {
     expect(built.whereSql).toContain('maxPrice > 1');
   });
 
+  it('buildWhere should apply pricing formula for keyword okazion', () => {
+    const prisma = { $queryRawUnsafe: jest.fn() } as any;
+    const service = new LegacySearchService(prisma);
+
+    const built = (service as any).buildWhere({
+      type: 'car',
+      keyword: 'okazion',
+      searchTerms: [],
+    });
+
+    expect(built.whereSql).toContain(
+      '((price - minPrice) / (maxPrice - price) < 0.25)',
+    );
+  });
+
+  it('buildWhere should apply pricing formula for keyword oferte', () => {
+    const prisma = { $queryRawUnsafe: jest.fn() } as any;
+    const service = new LegacySearchService(prisma);
+
+    const built = (service as any).buildWhere({
+      type: 'car',
+      keyword: 'oferte',
+      searchTerms: [],
+    });
+
+    expect(built.whereSql).toContain(
+      '((price - minPrice) / (maxPrice - price) < 0.25)',
+    );
+  });
+
   it('buildWhere should normalize generalSearch tokens', () => {
     const prisma = { $queryRawUnsafe: jest.fn() } as any;
     const service = new LegacySearchService(prisma);

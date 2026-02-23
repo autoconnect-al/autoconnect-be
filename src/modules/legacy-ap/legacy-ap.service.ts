@@ -1985,6 +1985,8 @@ export class LegacyApService {
     for (const post of posts) {
       const details = post.car_detail_car_detail_post_idTopost?.[0];
       if (!details || details.deleted) continue;
+      const { minPrice, maxPrice } =
+        await this.calculateSearchPriceRange(details);
 
       try {
         await this.prisma.search.create({
@@ -2031,6 +2033,8 @@ export class LegacyApService {
             renewedTime:
               post.renewedTime ?? Number.parseInt(post.createdTime ?? '0', 10),
             mostWantedTo: post.mostWantedTo,
+            minPrice,
+            maxPrice,
           },
         });
       } catch (error) {
@@ -2042,6 +2046,132 @@ export class LegacyApService {
         });
       }
     }
+  }
+
+  private async calculateSearchPriceRange(
+    details: AnyRecord,
+  ): Promise<{ minPrice: number | null; maxPrice: number | null }> {
+    const registration = this.toNullableInt(details.registration);
+    const currentPrice = this.toNullableInt(details.price);
+    if (!registration || !currentPrice || currentPrice === 0) {
+      return { minPrice: null, maxPrice: null };
+    }
+
+    const make = this.toSafeString(details.make);
+    const model = this.toSafeString(details.model);
+    if (!make || !model) {
+      return { minPrice: null, maxPrice: null };
+    }
+
+    const oneYearAgo = Math.floor(Date.now() / 1000) - 365 * 24 * 60 * 60;
+    const whereClauses = [
+      'CAST(p.createdTime AS UNSIGNED) > ?',
+      'cd.price > 0',
+      'cd.make = ?',
+      'cd.model = ?',
+      '(cd.customsPaid = 1 OR cd.customsPaid IS NULL)',
+    ];
+    const params: unknown[] = [oneYearAgo, make, model];
+
+    const variantCondition = await this.buildVariantPriceRangeCondition(
+      make,
+      this.toSafeNullableString(details.variant),
+    );
+    if (variantCondition) {
+      whereClauses.push(variantCondition.clause);
+      params.push(...variantCondition.params);
+    }
+
+    whereClauses.push('cd.registration >= ?');
+    whereClauses.push('cd.registration <= ?');
+    params.push(String(registration - 1), String(registration + 1));
+
+    const fuelType = this.toSafeNullableString(details.fuelType);
+    if (fuelType) {
+      whereClauses.push('cd.fuelType = ?');
+      params.push(fuelType);
+    }
+
+    const bodyType = this.toSafeNullableString(details.bodyType);
+    if (bodyType) {
+      whereClauses.push('cd.bodyType = ?');
+      params.push(bodyType);
+    }
+
+    const similarRows = await this.prisma.$queryRawUnsafe<
+      Array<{ price: number | null }>
+    >(
+      `
+      SELECT cd.price
+      FROM post p
+      LEFT JOIN car_detail cd ON cd.post_id = p.id
+      LEFT JOIN vendor v ON v.id = p.vendor_id
+      WHERE ${whereClauses.join(' AND ')}
+    `,
+      ...params,
+    );
+
+    const prices = similarRows
+      .map((row) => this.toNullableInt(row.price))
+      .filter((value): value is number => value !== null);
+
+    if (prices.length < 3) {
+      return { minPrice: null, maxPrice: null };
+    }
+
+    const minKnownPrice = Math.min(...prices);
+    const maxKnownPrice = Math.max(...prices);
+    let minPrice: number | null = null;
+    let maxPrice: number | null = null;
+
+    if (minKnownPrice !== maxKnownPrice) {
+      minPrice = minKnownPrice;
+      maxPrice = maxKnownPrice;
+    }
+    if (currentPrice < minKnownPrice) {
+      minPrice = currentPrice;
+    }
+    if (currentPrice > maxKnownPrice) {
+      maxPrice = currentPrice;
+    }
+
+    return { minPrice, maxPrice };
+  }
+
+  private async buildVariantPriceRangeCondition(
+    make: string,
+    variant: string | null,
+  ): Promise<{ clause: string; params: string[] } | null> {
+    if (!variant) return null;
+    if (!['mercedes-benz', 'bmw', 'volkswagen'].includes(make.toLowerCase())) {
+      return null;
+    }
+
+    const modelRows = await this.prisma.$queryRawUnsafe<
+      Array<{
+        Model: string | null;
+        isVariant: number | boolean | string | null;
+      }>
+    >('SELECT Model, isVariant FROM car_make_model WHERE Make = ?', make);
+
+    const normalizedVariant = variant.replace(/\s+/g, '-').toLowerCase();
+    for (const row of modelRows) {
+      const model = this.toSafeString(row.Model);
+      if (!model) continue;
+      const normalizedModel = model.replace(/\s+/g, '-').toLowerCase();
+      const isVariant =
+        row.isVariant === true ||
+        row.isVariant === 1 ||
+        row.isVariant === '1';
+      if (isVariant && normalizedVariant.includes(normalizedModel)) {
+        return {
+          clause: '(cd.variant LIKE ? OR cd.variant LIKE ?)',
+          params: [`% ${model} %`, `${model} %`],
+        };
+      }
+    }
+
+    return null;
   }
 
   private toNullableBigInt(value: unknown): bigint | null {

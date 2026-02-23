@@ -105,6 +105,69 @@ describe('LegacyApService createdTime conversion', () => {
   });
 });
 
+describe('LegacyApService price range enrichment', () => {
+  it('calculates minPrice/maxPrice from similar posts', async () => {
+    const prisma = {
+      $queryRawUnsafe: jest.fn().mockResolvedValue([
+        { price: 8000 },
+        { price: 10000 },
+        { price: 12000 },
+      ]),
+    } as any;
+
+    const service = new LegacyApService(
+      prisma,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    const result = await (service as any).calculateSearchPriceRange({
+      make: 'Audi',
+      model: 'A4',
+      variant: null,
+      registration: '2018',
+      fuelType: 'diesel',
+      bodyType: 'Sedan',
+      price: 9000,
+    });
+
+    expect(result).toEqual({ minPrice: 8000, maxPrice: 12000 });
+    expect(prisma.$queryRawUnsafe).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps unknown maxPrice when all similar prices are equal and current price is lower', async () => {
+    const prisma = {
+      $queryRawUnsafe: jest.fn().mockResolvedValue([
+        { price: 10000 },
+        { price: 10000 },
+        { price: 10000 },
+      ]),
+    } as any;
+
+    const service = new LegacyApService(
+      prisma,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    const result = await (service as any).calculateSearchPriceRange({
+      make: 'Audi',
+      model: 'A4',
+      variant: null,
+      registration: '2018',
+      fuelType: 'diesel',
+      bodyType: 'Sedan',
+      price: 9000,
+    });
+
+    expect(result).toEqual({ minPrice: 9000, maxPrice: null });
+  });
+});
+
 describe('LegacyApService.importPromptResults promotion guards', () => {
   it('does not update promotion fields from car-details import payload', async () => {
     const prisma = {
