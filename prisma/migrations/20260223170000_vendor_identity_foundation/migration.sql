@@ -25,18 +25,18 @@ CREATE TABLE IF NOT EXISTS vendor_role (
 UPDATE vendor v
 INNER JOIN user u ON u.id = v.id
 SET
-  v.name = COALESCE(v.name, u.name),
-  v.username = COALESCE(v.username, u.username),
+  v.name = COALESCE(NULLIF(v.name, ''), NULLIF(u.name, '')),
+  v.username = COALESCE(NULLIF(v.username, ''), NULLIF(u.username, '')),
   v.blocked = COALESCE(v.blocked, u.blocked),
   v.attemptedLogin = COALESCE(v.attemptedLogin, u.attemptedLogin),
-  v.password = COALESCE(v.password, u.password),
-  v.email = COALESCE(v.email, u.email),
-  v.profileImage = COALESCE(v.profileImage, u.profileImage),
+  v.password = COALESCE(NULLIF(v.password, ''), NULLIF(u.password, '')),
+  v.email = COALESCE(NULLIF(v.email, ''), NULLIF(u.email, '')),
+  v.profileImage = COALESCE(NULLIF(v.profileImage, ''), NULLIF(u.profileImage, '')),
   v.verified = COALESCE(v.verified, u.verified),
-  v.verificationCode = COALESCE(v.verificationCode, u.verificationCode),
-  v.phoneNumber = COALESCE(v.phoneNumber, u.phone),
-  v.whatsAppNumber = COALESCE(v.whatsAppNumber, u.whatsapp),
-  v.location = COALESCE(v.location, u.location),
+  v.verificationCode = COALESCE(NULLIF(v.verificationCode, ''), NULLIF(u.verificationCode, '')),
+  v.phoneNumber = COALESCE(NULLIF(v.phoneNumber, ''), NULLIF(u.phone, '')),
+  v.whatsAppNumber = COALESCE(NULLIF(v.whatsAppNumber, ''), NULLIF(u.whatsapp, '')),
+  v.location = COALESCE(NULLIF(v.location, ''), NULLIF(u.location, '')),
   v.dateUpdated = NOW();
 
 -- Backfill roles from user_role to vendor_role only for existing vendors.
@@ -44,6 +44,37 @@ INSERT IGNORE INTO vendor_role (vendor_id, role_id)
 SELECT ur.user_id, ur.role_id
 FROM user_role ur
 INNER JOIN vendor v ON v.id = ur.user_id;
+
+-- Normalize empty auth identifiers so unique indexes can be created safely.
+UPDATE vendor
+SET username = NULL
+WHERE username IS NOT NULL AND TRIM(username) = '';
+
+UPDATE vendor
+SET email = NULL
+WHERE email IS NOT NULL AND TRIM(email) = '';
+
+-- Resolve duplicate non-empty usernames by suffixing with vendor id.
+UPDATE vendor v
+INNER JOIN (
+  SELECT username, MIN(id) AS keep_id
+  FROM vendor
+  WHERE username IS NOT NULL
+  GROUP BY username
+  HAVING COUNT(*) > 1
+) d ON d.username = v.username AND v.id <> d.keep_id
+SET v.username = CONCAT(v.username, '_', v.id);
+
+-- Resolve duplicate non-empty emails by assigning deterministic placeholder.
+UPDATE vendor v
+INNER JOIN (
+  SELECT email, MIN(id) AS keep_id
+  FROM vendor
+  WHERE email IS NOT NULL
+  GROUP BY email
+  HAVING COUNT(*) > 1
+) d ON d.email = v.email AND v.id <> d.keep_id
+SET v.email = CONCAT('vendor+', v.id, '@local.invalid');
 
 -- Optional uniqueness constraints for cutover safety.
 CREATE UNIQUE INDEX vendor_username_uq ON vendor (username);

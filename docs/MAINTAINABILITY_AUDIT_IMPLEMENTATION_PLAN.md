@@ -406,6 +406,7 @@ Priority levels:
 ### Critical / Must do
 
 #### 3.1 Close SSRF/LFI vectors in media ingestion
+- **Status**: ✅ Done (2026-02-23)
 - **Issue**
   - Service accepts arbitrary URLs and local file paths.
   - File: `/Users/reipano/Personal/vehicle-api/src/modules/legacy-group-b/local-post-order.service.ts`
@@ -422,8 +423,22 @@ Priority levels:
   3. Enforce max content length + MIME checks.
 - **Acceptance checks**
   - Requests to `http://127.0.0.1`, `http://169.254.*`, file paths outside allowed dirs are rejected.
+- **Implementation progress**
+  - Hardened media ingestion in:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-group-b/local-post-order.service.ts`
+  - Remote URL controls:
+    - only `https://` allowed
+    - host allowlist enforcement (`MEDIA_FETCH_ALLOWED_HOSTS`, with safe defaults)
+    - DNS resolution + private/local IP rejection (loopback, RFC1918, link-local, ULA)
+    - strict image MIME validation + max size cap (15MB)
+  - Local path controls:
+    - removed arbitrary relative/absolute file reads from API input
+    - allow only paths inside controlled media roots (`/media/tmp/*`, `/media/*`, or absolute paths under media root)
+    - path traversal prevented via root-bound path resolution checks
+  - Added buffer-level image verification before processing via `sharp`.
 
 #### 3.2 Make post save atomic
+- **Status**: ✅ Done (2026-02-23)
 - **Issue**
   - Post, car_detail, and search are updated independently.
 - **Risk**
@@ -432,16 +447,35 @@ Priority levels:
   - Wrap write sequence in a Prisma transaction.
 - **Acceptance checks**
   - Fault injection during write leaves no partial updates.
+- **Implementation progress**
+  - Wrapped `post`, `car_detail`, and `search` persistence in one Prisma transaction in:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-group-b/local-post-order.service.ts`
+  - Behavior:
+    - update/create post + detail upsert + search upsert now commit or fail together
+    - prevents partial post state when any downstream write fails
+  - Kept existing endpoint response contract and validation/error behavior.
 
 ### Important
 
 #### 3.3 Remove fallback vendor identity
+- **Status**: ✅ Done (2026-02-23)
 - **Issue**
   - Uses default vendor ID when missing.
 - **Implementation**
   - Require authenticated vendor context or explicit valid vendor id.
 - **Acceptance checks**
   - Missing/invalid vendor context returns 400/401.
+- **Implementation progress**
+  - Removed hardcoded vendor fallback in:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-group-b/local-post-order.service.ts`
+  - `savePostInternal` now enforces:
+    - numeric validation for payload `vendorId`
+    - required vendor identity (`JWT` context or explicit `vendorId`)
+    - mismatch protection when both JWT and payload vendor IDs are provided
+  - Error behavior:
+    - missing vendor identity -> `400`
+    - invalid vendor id format -> `400`
+    - JWT/payload vendor mismatch -> `403`
 
 #### 3.4 Harden payment capture flow
 - **Issue**

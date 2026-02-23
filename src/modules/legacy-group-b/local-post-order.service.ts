@@ -8,20 +8,44 @@ import {
 import { LocalUserVendorService } from '../legacy-group-a/local-user-vendor.service';
 import { JwtService } from '@nestjs/jwt';
 import { mkdir, readFile } from 'fs/promises';
-import { isAbsolute, join, resolve } from 'path';
+import { isAbsolute, join, relative, resolve } from 'path';
 import sharp from 'sharp';
 import { getMediaRootPath } from '../../common/media-path.util';
 import { requireEnv } from '../../common/require-env.util';
 import { getUserRoleNames } from '../../common/user-roles.util';
+import { lookup } from 'dns/promises';
+import { isIP } from 'net';
 
 type AnyRecord = Record<string, unknown>;
 
 const jwtSecret = requireEnv('JWT_SECRET');
+const MAX_MEDIA_BYTES = 15 * 1024 * 1024; // 15MB hard limit for incoming media
+const DEFAULT_ALLOWED_MEDIA_HOSTS = [
+  'cdninstagram.com',
+  'scontent.cdninstagram.com',
+  '*.fbcdn.net',
+];
+const ALLOWED_MEDIA_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/avif',
+  'image/heic',
+  'image/heif',
+  'image/bmp',
+  'image/tiff',
+]);
 
 @Injectable()
 export class LocalPostOrderService {
   private readonly jwtService: JwtService;
   private readonly mediaRoot = getMediaRootPath();
+  private readonly mediaTmpRoot = resolve(this.mediaRoot, 'tmp');
+  private readonly allowedMediaHosts = this.parseAllowedHosts(
+    process.env.MEDIA_FETCH_ALLOWED_HOSTS,
+  );
 
   constructor(
     private readonly prisma: PrismaService,
@@ -360,11 +384,30 @@ export class LocalPostOrderService {
       const vendorIdRaw =
         this.toSafeString(payload.vendorId) ||
         this.toSafeString(postInput.vendorId);
-      const vendorId = vendorIdFromJwt
-        ? vendorIdFromJwt
-        : vendorIdRaw
-          ? BigInt(vendorIdRaw)
-          : BigInt(14261202907);
+      let vendorIdFromPayload: bigint | null = null;
+      if (vendorIdRaw) {
+        if (!/^\d+$/.test(vendorIdRaw)) {
+          return legacyError('Invalid vendor id.', 400);
+        }
+        vendorIdFromPayload = BigInt(vendorIdRaw);
+      }
+
+      if (!vendorIdFromJwt && !vendorIdFromPayload) {
+        return legacyError('Vendor id is required.', 400);
+      }
+
+      if (
+        vendorIdFromJwt &&
+        vendorIdFromPayload &&
+        vendorIdFromJwt !== vendorIdFromPayload
+      ) {
+        return legacyError('Vendor id mismatch for authenticated user.', 403);
+      }
+
+      const vendorId = vendorIdFromJwt ?? vendorIdFromPayload;
+      if (!vendorId) {
+        return legacyError('Vendor id is required.', 400);
+      }
 
       const vendor = await this.prisma.vendor.findUnique({
         where: { id: vendorId },
@@ -404,180 +447,182 @@ export class LocalPostOrderService {
         return legacyError('Post data are required.', 400);
       }
 
-      if (existing) {
-        if (existing.vendor_id !== vendorId) {
-          return legacyError('Error while saving post. Please try again', 500);
-        }
-
-        await this.prisma.post.update({
-          where: { id: postIdBigInt },
-          data: {
-            caption: Buffer.from(captionText, 'utf8').toString('base64'),
-            cleanedCaption,
-            sidecarMedias: JSON.stringify(sidecar),
-            dateUpdated: now,
-            likesCount: Number.isFinite(likesCount)
-              ? Math.max(0, likesCount)
-              : 0,
-            viewsCount: 0,
-            origin,
-            status,
-          },
-        });
-      } else {
-        await this.prisma.post.create({
-          data: {
-            id: postIdBigInt,
-            dateCreated: now,
-            deleted: false,
-            caption: Buffer.from(captionText, 'utf8').toString('base64'),
-            createdTime,
-            sidecarMedias: JSON.stringify(sidecar),
-            vendor_id: vendorId,
-            live: false,
-            likesCount: Number.isFinite(likesCount)
-              ? Math.max(0, likesCount)
-              : 0,
-            viewsCount: 0,
-            cleanedCaption,
-            revalidate: false,
-            origin,
-            status,
-          },
-        });
-      }
-
       const detailsSource =
         ((postInput.cardDetails ?? postInput.details ?? {}) as AnyRecord) || {};
       if (Object.keys(detailsSource).length === 0) {
         return legacyError('Error while saving post. Please try again', 500);
       }
       const sold = this.booleanFrom(detailsSource.sold, false);
+      if (existing && existing.vendor_id !== vendorId) {
+        return legacyError('Error while saving post. Please try again', 500);
+      }
 
-      await this.prisma.car_detail.upsert({
-        where: { id: postIdBigInt },
-        update: {
-          dateUpdated: now,
-          post_id: postIdBigInt,
-          make: this.toNullableString(detailsSource.make),
-          model: this.toNullableString(detailsSource.model),
-          variant: this.toNullableString(detailsSource.variant),
-          registration: this.toNullableString(detailsSource.registration),
-          mileage: this.toNullableFloat(detailsSource.mileage),
-          transmission: this.toNullableString(detailsSource.transmission),
-          fuelType: this.toNullableString(detailsSource.fuelType),
-          engineSize:
-            this.toNullableString(detailsSource.engine) ??
-            this.toNullableString(detailsSource.engineSize),
-          drivetrain: this.toNullableString(detailsSource.drivetrain),
-          seats: this.toNullableInt(detailsSource.seats),
-          numberOfDoors: this.toNullableInt(detailsSource.numberOfDoors),
-          bodyType: this.toNullableString(detailsSource.bodyType),
-          sold,
-          price: this.toNullableFloat(detailsSource.price) ?? 0,
-          emissionGroup: this.toNullableString(detailsSource.emissionGroup),
-          type: this.toNullableString(detailsSource.type) ?? 'car',
-          contact: JSON.stringify(this.extractContact(detailsSource)),
-          customsPaid: this.nullableBooleanFrom(detailsSource.customsPaid),
-          published: this.booleanFrom(detailsSource.published, false),
-        },
-        create: {
-          id: postIdBigInt,
-          dateCreated: now,
-          post_id: postIdBigInt,
-          make: this.toNullableString(detailsSource.make),
-          model: this.toNullableString(detailsSource.model),
-          variant: this.toNullableString(detailsSource.variant),
-          registration: this.toNullableString(detailsSource.registration),
-          mileage: this.toNullableFloat(detailsSource.mileage),
-          transmission: this.toNullableString(detailsSource.transmission),
-          fuelType: this.toNullableString(detailsSource.fuelType),
-          engineSize:
-            this.toNullableString(detailsSource.engine) ??
-            this.toNullableString(detailsSource.engineSize),
-          drivetrain: this.toNullableString(detailsSource.drivetrain),
-          seats: this.toNullableInt(detailsSource.seats),
-          numberOfDoors: this.toNullableInt(detailsSource.numberOfDoors),
-          bodyType: this.toNullableString(detailsSource.bodyType),
-          sold,
-          price: this.toNullableFloat(detailsSource.price) ?? 0,
-          emissionGroup: this.toNullableString(detailsSource.emissionGroup),
-          type: this.toNullableString(detailsSource.type) ?? 'car',
-          contact: JSON.stringify(this.extractContact(detailsSource)),
-          customsPaid: this.nullableBooleanFrom(detailsSource.customsPaid),
-          published: this.booleanFrom(detailsSource.published, false),
-        },
-      });
+      const encodedCaption = Buffer.from(captionText, 'utf8').toString('base64');
+      const normalizedLikes = Number.isFinite(likesCount)
+        ? Math.max(0, likesCount)
+        : 0;
+      const normalizedEngineSize =
+        this.toNullableString(detailsSource.engine) ??
+        this.toNullableString(detailsSource.engineSize);
+      const normalizedType = this.toNullableString(detailsSource.type) ?? 'car';
+      const normalizedContact = JSON.stringify(this.extractContact(detailsSource));
+      const normalizedCustomsPaid = this.nullableBooleanFrom(
+        detailsSource.customsPaid,
+      );
 
-      await this.prisma.search.upsert({
-        where: { id: postIdBigInt },
-        update: {
-          dateUpdated: now,
-          deleted: sold ? '1' : '0',
-          caption: Buffer.from(captionText, 'utf8').toString('base64'),
-          cleanedCaption,
-          createdTime: BigInt(createdTime),
-          sidecarMedias: JSON.stringify(sidecar),
-          likesCount: Number.isFinite(likesCount) ? Math.max(0, likesCount) : 0,
-          viewsCount: 0,
-          accountName: vendor.accountName,
-          vendorId,
-          profilePicture: vendor.profilePicture,
-          make: this.toNullableString(detailsSource.make),
-          model: this.toNullableString(detailsSource.model),
-          variant: this.toNullableString(detailsSource.variant),
-          registration: this.toNullableString(detailsSource.registration),
-          mileage: this.toNullableInt(detailsSource.mileage),
-          price: this.toNullableInt(detailsSource.price),
-          transmission: this.toNullableString(detailsSource.transmission),
-          fuelType: this.toNullableString(detailsSource.fuelType),
-          engineSize:
-            this.toNullableString(detailsSource.engine) ??
-            this.toNullableString(detailsSource.engineSize),
-          drivetrain: this.toNullableString(detailsSource.drivetrain),
-          seats: this.toNullableInt(detailsSource.seats),
-          numberOfDoors: this.toNullableInt(detailsSource.numberOfDoors),
-          bodyType: this.toNullableString(detailsSource.bodyType),
-          emissionGroup: this.toNullableString(detailsSource.emissionGroup),
-          contact: JSON.stringify(this.extractContact(detailsSource)),
-          customsPaid: this.nullableBooleanFrom(detailsSource.customsPaid),
-          sold,
-          type: this.toNullableString(detailsSource.type) ?? 'car',
-        },
-        create: {
-          id: postIdBigInt,
-          dateCreated: now,
-          deleted: sold ? '1' : '0',
-          caption: Buffer.from(captionText, 'utf8').toString('base64'),
-          cleanedCaption,
-          createdTime: BigInt(createdTime),
-          sidecarMedias: JSON.stringify(sidecar),
-          likesCount: Number.isFinite(likesCount) ? Math.max(0, likesCount) : 0,
-          viewsCount: 0,
-          accountName: vendor.accountName,
-          vendorId,
-          profilePicture: vendor.profilePicture,
-          make: this.toNullableString(detailsSource.make),
-          model: this.toNullableString(detailsSource.model),
-          variant: this.toNullableString(detailsSource.variant),
-          registration: this.toNullableString(detailsSource.registration),
-          mileage: this.toNullableInt(detailsSource.mileage),
-          price: this.toNullableInt(detailsSource.price),
-          transmission: this.toNullableString(detailsSource.transmission),
-          fuelType: this.toNullableString(detailsSource.fuelType),
-          engineSize:
-            this.toNullableString(detailsSource.engine) ??
-            this.toNullableString(detailsSource.engineSize),
-          drivetrain: this.toNullableString(detailsSource.drivetrain),
-          seats: this.toNullableInt(detailsSource.seats),
-          numberOfDoors: this.toNullableInt(detailsSource.numberOfDoors),
-          bodyType: this.toNullableString(detailsSource.bodyType),
-          emissionGroup: this.toNullableString(detailsSource.emissionGroup),
-          contact: JSON.stringify(this.extractContact(detailsSource)),
-          customsPaid: this.nullableBooleanFrom(detailsSource.customsPaid),
-          sold,
-          type: this.toNullableString(detailsSource.type) ?? 'car',
-        },
+      await this.prisma.$transaction(async (tx) => {
+        if (existing) {
+          await tx.post.update({
+            where: { id: postIdBigInt },
+            data: {
+              caption: encodedCaption,
+              cleanedCaption,
+              sidecarMedias: JSON.stringify(sidecar),
+              dateUpdated: now,
+              likesCount: normalizedLikes,
+              viewsCount: 0,
+              origin,
+              status,
+            },
+          });
+        } else {
+          await tx.post.create({
+            data: {
+              id: postIdBigInt,
+              dateCreated: now,
+              deleted: false,
+              caption: encodedCaption,
+              createdTime,
+              sidecarMedias: JSON.stringify(sidecar),
+              vendor_id: vendorId,
+              live: false,
+              likesCount: normalizedLikes,
+              viewsCount: 0,
+              cleanedCaption,
+              revalidate: false,
+              origin,
+              status,
+            },
+          });
+        }
+
+        await tx.car_detail.upsert({
+          where: { id: postIdBigInt },
+          update: {
+            dateUpdated: now,
+            post_id: postIdBigInt,
+            make: this.toNullableString(detailsSource.make),
+            model: this.toNullableString(detailsSource.model),
+            variant: this.toNullableString(detailsSource.variant),
+            registration: this.toNullableString(detailsSource.registration),
+            mileage: this.toNullableFloat(detailsSource.mileage),
+            transmission: this.toNullableString(detailsSource.transmission),
+            fuelType: this.toNullableString(detailsSource.fuelType),
+            engineSize: normalizedEngineSize,
+            drivetrain: this.toNullableString(detailsSource.drivetrain),
+            seats: this.toNullableInt(detailsSource.seats),
+            numberOfDoors: this.toNullableInt(detailsSource.numberOfDoors),
+            bodyType: this.toNullableString(detailsSource.bodyType),
+            sold,
+            price: this.toNullableFloat(detailsSource.price) ?? 0,
+            emissionGroup: this.toNullableString(detailsSource.emissionGroup),
+            type: normalizedType,
+            contact: normalizedContact,
+            customsPaid: normalizedCustomsPaid,
+            published: this.booleanFrom(detailsSource.published, false),
+          },
+          create: {
+            id: postIdBigInt,
+            dateCreated: now,
+            post_id: postIdBigInt,
+            make: this.toNullableString(detailsSource.make),
+            model: this.toNullableString(detailsSource.model),
+            variant: this.toNullableString(detailsSource.variant),
+            registration: this.toNullableString(detailsSource.registration),
+            mileage: this.toNullableFloat(detailsSource.mileage),
+            transmission: this.toNullableString(detailsSource.transmission),
+            fuelType: this.toNullableString(detailsSource.fuelType),
+            engineSize: normalizedEngineSize,
+            drivetrain: this.toNullableString(detailsSource.drivetrain),
+            seats: this.toNullableInt(detailsSource.seats),
+            numberOfDoors: this.toNullableInt(detailsSource.numberOfDoors),
+            bodyType: this.toNullableString(detailsSource.bodyType),
+            sold,
+            price: this.toNullableFloat(detailsSource.price) ?? 0,
+            emissionGroup: this.toNullableString(detailsSource.emissionGroup),
+            type: normalizedType,
+            contact: normalizedContact,
+            customsPaid: normalizedCustomsPaid,
+            published: this.booleanFrom(detailsSource.published, false),
+          },
+        });
+
+        await tx.search.upsert({
+          where: { id: postIdBigInt },
+          update: {
+            dateUpdated: now,
+            deleted: sold ? '1' : '0',
+            caption: encodedCaption,
+            cleanedCaption,
+            createdTime: BigInt(createdTime),
+            sidecarMedias: JSON.stringify(sidecar),
+            likesCount: normalizedLikes,
+            viewsCount: 0,
+            accountName: vendor.accountName,
+            vendorId,
+            profilePicture: vendor.profilePicture,
+            make: this.toNullableString(detailsSource.make),
+            model: this.toNullableString(detailsSource.model),
+            variant: this.toNullableString(detailsSource.variant),
+            registration: this.toNullableString(detailsSource.registration),
+            mileage: this.toNullableInt(detailsSource.mileage),
+            price: this.toNullableInt(detailsSource.price),
+            transmission: this.toNullableString(detailsSource.transmission),
+            fuelType: this.toNullableString(detailsSource.fuelType),
+            engineSize: normalizedEngineSize,
+            drivetrain: this.toNullableString(detailsSource.drivetrain),
+            seats: this.toNullableInt(detailsSource.seats),
+            numberOfDoors: this.toNullableInt(detailsSource.numberOfDoors),
+            bodyType: this.toNullableString(detailsSource.bodyType),
+            emissionGroup: this.toNullableString(detailsSource.emissionGroup),
+            contact: normalizedContact,
+            customsPaid: normalizedCustomsPaid,
+            sold,
+            type: normalizedType,
+          },
+          create: {
+            id: postIdBigInt,
+            dateCreated: now,
+            deleted: sold ? '1' : '0',
+            caption: encodedCaption,
+            cleanedCaption,
+            createdTime: BigInt(createdTime),
+            sidecarMedias: JSON.stringify(sidecar),
+            likesCount: normalizedLikes,
+            viewsCount: 0,
+            accountName: vendor.accountName,
+            vendorId,
+            profilePicture: vendor.profilePicture,
+            make: this.toNullableString(detailsSource.make),
+            model: this.toNullableString(detailsSource.model),
+            variant: this.toNullableString(detailsSource.variant),
+            registration: this.toNullableString(detailsSource.registration),
+            mileage: this.toNullableInt(detailsSource.mileage),
+            price: this.toNullableInt(detailsSource.price),
+            transmission: this.toNullableString(detailsSource.transmission),
+            fuelType: this.toNullableString(detailsSource.fuelType),
+            engineSize: normalizedEngineSize,
+            drivetrain: this.toNullableString(detailsSource.drivetrain),
+            seats: this.toNullableInt(detailsSource.seats),
+            numberOfDoors: this.toNullableInt(detailsSource.numberOfDoors),
+            bodyType: this.toNullableString(detailsSource.bodyType),
+            emissionGroup: this.toNullableString(detailsSource.emissionGroup),
+            contact: normalizedContact,
+            customsPaid: normalizedCustomsPaid,
+            sold,
+            type: normalizedType,
+          },
+        });
       });
 
       return legacySuccess({ postId }, 'Post saved successfully');
@@ -746,10 +791,20 @@ export class LocalPostOrderService {
     if (sourceUrl.startsWith('data:')) {
       const commaIndex = sourceUrl.indexOf(',');
       if (commaIndex < 0) return null;
+      const header = sourceUrl.slice(0, commaIndex);
+      const mimeMatch = header.match(/^data:([^;,]+)/i);
+      const mime = (mimeMatch?.[1] ?? '').toLowerCase();
+      if (!this.isAllowedImageMimeType(mime)) {
+        return null;
+      }
       const payload = sourceUrl.slice(commaIndex + 1);
-      const isBase64 = sourceUrl.slice(0, commaIndex).includes(';base64');
+      const isBase64 = header.includes(';base64');
       try {
-        return Buffer.from(payload, isBase64 ? 'base64' : 'utf8');
+        const buffer = Buffer.from(payload, isBase64 ? 'base64' : 'utf8');
+        if (!this.isWithinMediaSizeLimit(buffer)) {
+          return null;
+        }
+        return (await this.isLikelyImageBuffer(buffer)) ? buffer : null;
       } catch {
         return null;
       }
@@ -757,28 +812,57 @@ export class LocalPostOrderService {
 
     if (/^https?:\/\//i.test(sourceUrl)) {
       try {
+        const parsed = new URL(sourceUrl);
+        if (parsed.protocol !== 'https:') {
+          return null;
+        }
+
+        if (!this.isAllowedRemoteHost(parsed.hostname)) {
+          return null;
+        }
+
+        const addresses = await lookup(parsed.hostname, {
+          all: true,
+          verbatim: true,
+        });
+        if (addresses.some((address) => this.isPrivateOrLocalAddress(address.address))) {
+          return null;
+        }
+
         const response = await fetch(sourceUrl);
         if (!response.ok) return null;
+        const contentType = (
+          response.headers.get('content-type') ?? ''
+        ).split(';')[0].trim().toLowerCase();
+        if (!this.isAllowedImageMimeType(contentType)) {
+          return null;
+        }
+        const contentLength = Number(response.headers.get('content-length'));
+        if (Number.isFinite(contentLength) && contentLength > MAX_MEDIA_BYTES) {
+          return null;
+        }
         const bytes = await response.arrayBuffer();
-        return Buffer.from(bytes);
+        const buffer = Buffer.from(bytes);
+        if (!this.isWithinMediaSizeLimit(buffer)) {
+          return null;
+        }
+        return (await this.isLikelyImageBuffer(buffer)) ? buffer : null;
       } catch {
         return null;
       }
     }
 
-    const relativeTmpPrefix = '/media/tmp/';
-    const sourcePath = sourceUrl.includes(relativeTmpPrefix)
-      ? resolve(
-          this.mediaRoot,
-          'tmp',
-          sourceUrl.split(relativeTmpPrefix)[1] ?? '',
-        )
-      : isAbsolute(sourceUrl)
-        ? sourceUrl
-        : resolve(process.cwd(), sourceUrl.replace(/^\/+/, ''));
+    const sourcePath = this.resolveAllowedLocalMediaPath(sourceUrl);
+    if (!sourcePath) {
+      return null;
+    }
 
     try {
-      return await readFile(sourcePath);
+      const buffer = await readFile(sourcePath);
+      if (!this.isWithinMediaSizeLimit(buffer)) {
+        return null;
+      }
+      return (await this.isLikelyImageBuffer(buffer)) ? buffer : null;
     } catch {
       return null;
     }
@@ -799,5 +883,130 @@ export class LocalPostOrderService {
       email,
     );
     return rows[0] ?? null;
+  }
+
+  private parseAllowedHosts(raw: string | undefined): string[] {
+    const parsed = (raw ?? '')
+      .split(',')
+      .map((value) => value.trim().toLowerCase())
+      .filter((value) => value.length > 0);
+    if (parsed.length > 0) {
+      return parsed;
+    }
+    return DEFAULT_ALLOWED_MEDIA_HOSTS;
+  }
+
+  private isAllowedRemoteHost(hostname: string): boolean {
+    const host = hostname.trim().toLowerCase();
+    if (!host) return false;
+
+    return this.allowedMediaHosts.some((pattern) => {
+      if (pattern.startsWith('*.')) {
+        const suffix = pattern.slice(1); // includes dot
+        return host.endsWith(suffix);
+      }
+      return host === pattern;
+    });
+  }
+
+  private isPrivateOrLocalAddress(address: string): boolean {
+    const normalized = address.trim().toLowerCase();
+    if (!normalized) return true;
+
+    if (normalized.startsWith('::ffff:')) {
+      return this.isPrivateOrLocalAddress(normalized.slice(7));
+    }
+
+    const version = isIP(normalized);
+    if (version === 4) {
+      const parts = normalized.split('.').map((part) => Number(part));
+      if (parts.length !== 4 || parts.some((part) => Number.isNaN(part))) {
+        return true;
+      }
+      const [a, b] = parts;
+      if (a === 10 || a === 127 || a === 0) return true;
+      if (a === 169 && b === 254) return true;
+      if (a === 172 && b >= 16 && b <= 31) return true;
+      if (a === 192 && b === 168) return true;
+      if (a === 100 && b >= 64 && b <= 127) return true;
+      if (a === 198 && (b === 18 || b === 19)) return true;
+      return false;
+    }
+
+    if (version === 6) {
+      if (normalized === '::1') return true;
+      if (normalized.startsWith('fe80:')) return true; // link-local
+      if (normalized.startsWith('fc') || normalized.startsWith('fd')) return true; // unique-local
+      return false;
+    }
+
+    return true;
+  }
+
+  private resolveAllowedLocalMediaPath(sourceUrl: string): string | null {
+    const trimmed = sourceUrl.trim();
+    if (!trimmed) return null;
+
+    if (trimmed.startsWith('/media/tmp/')) {
+      return this.safeResolveInsideRoot(
+        this.mediaTmpRoot,
+        trimmed.slice('/media/tmp/'.length),
+      );
+    }
+
+    if (trimmed.startsWith('media/tmp/')) {
+      return this.safeResolveInsideRoot(
+        this.mediaTmpRoot,
+        trimmed.slice('media/tmp/'.length),
+      );
+    }
+
+    if (trimmed.startsWith('/media/')) {
+      return this.safeResolveInsideRoot(
+        this.mediaRoot,
+        trimmed.slice('/media/'.length),
+      );
+    }
+
+    if (trimmed.startsWith('media/')) {
+      return this.safeResolveInsideRoot(
+        this.mediaRoot,
+        trimmed.slice('media/'.length),
+      );
+    }
+
+    if (isAbsolute(trimmed)) {
+      return this.isPathInsideRoot(trimmed, this.mediaRoot) ? trimmed : null;
+    }
+
+    // Relative arbitrary paths are not allowed.
+    return null;
+  }
+
+  private safeResolveInsideRoot(root: string, childPath: string): string | null {
+    const resolved = resolve(root, childPath);
+    return this.isPathInsideRoot(resolved, root) ? resolved : null;
+  }
+
+  private isPathInsideRoot(targetPath: string, root: string): boolean {
+    const rel = relative(root, targetPath);
+    return rel.length > 0 && !rel.startsWith('..') && !isAbsolute(rel);
+  }
+
+  private isAllowedImageMimeType(mimeType: string): boolean {
+    return ALLOWED_MEDIA_MIME_TYPES.has(mimeType.toLowerCase());
+  }
+
+  private isWithinMediaSizeLimit(buffer: Buffer): boolean {
+    return buffer.length > 0 && buffer.length <= MAX_MEDIA_BYTES;
+  }
+
+  private async isLikelyImageBuffer(buffer: Buffer): Promise<boolean> {
+    try {
+      const metadata = await sharp(buffer).metadata();
+      return Boolean(metadata.format);
+    } catch {
+      return false;
+    }
   }
 }
