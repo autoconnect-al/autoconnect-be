@@ -7,13 +7,16 @@ import {
   HttpException,
   Post,
   Query,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { AnyFilesInterceptor } from '@nestjs/platform-express';
+import { Throttle, seconds } from '@nestjs/throttler';
 import { LegacyAuthService } from './legacy-auth.service';
 import type { LegacyResponse } from '../../common/legacy-response';
 import { legacyError } from '../../common/legacy-response';
 import { createLogger } from '../../common/logger.util';
+import { AuthRateLimitGuard } from '../../common/guards/auth-rate-limit.guard';
 
 @Controller()
 export class LegacyAuthController {
@@ -39,6 +42,8 @@ export class LegacyAuthController {
   @Post('authentication/login')
   @HttpCode(200)
   @UseInterceptors(AnyFilesInterceptor())
+  @UseGuards(AuthRateLimitGuard)
+  @Throttle({ default: { limit: 10, ttl: seconds(60) } })
   async authenticationLogin(
     @Body() body: unknown,
     @Headers('content-type') contentType?: string,
@@ -80,6 +85,8 @@ export class LegacyAuthController {
   @Post('user/login')
   @HttpCode(200)
   @UseInterceptors(AnyFilesInterceptor())
+  @UseGuards(AuthRateLimitGuard)
+  @Throttle({ default: { limit: 10, ttl: seconds(60) } })
   async userLogin(
     @Body() body: unknown,
     @Headers('content-type') contentType?: string,
@@ -139,6 +146,8 @@ export class LegacyAuthController {
 
   @Post('user/reset-password')
   @HttpCode(200)
+  @UseGuards(AuthRateLimitGuard)
+  @Throttle({ default: { limit: 5, ttl: seconds(60) } })
   async resetPassword(@Body() body: unknown) {
     const response = await this.service.resetPasswordLocal(body);
     if (!response.success) {
@@ -149,6 +158,8 @@ export class LegacyAuthController {
 
   @Post('user/verify-password')
   @HttpCode(200)
+  @UseGuards(AuthRateLimitGuard)
+  @Throttle({ default: { limit: 5, ttl: seconds(60) } })
   async verifyPassword(@Body() body: unknown) {
     const response = await this.service.verifyPasswordLocal(body);
     if (!response.success) {

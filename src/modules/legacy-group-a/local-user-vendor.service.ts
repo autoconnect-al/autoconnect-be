@@ -50,63 +50,75 @@ export class LocalUserVendorService {
     try {
       const request = this.extractUser(raw);
       if (!request) {
-        return legacyError('ERROR: Something went wrong', 500);
+        return legacyError('Invalid user payload', 400);
       }
       const validityError = this.validateCreateOrUpdateRequest(request);
       if (validityError) {
-        return legacyError('ERROR: Something went wrong', 500);
+        return validityError;
       }
 
       const isUnique = await this.isUserUnique(request.username, request.email);
       if (!isUnique) {
-        return legacyError('ERROR: Something went wrong', 500);
+        return legacyError('User with provided username/email already exists', 409);
       }
 
       const userId = await this.generateUniqueNumericUserId();
       const now = new Date();
       const passwordHash = await this.encryptPassword(request.password);
 
-      await this.prisma.user.create({
-        data: {
-          id: userId,
-          name: request.name,
-          username: request.username,
+      await this.prisma.$transaction(async (tx) => {
+        await tx.user.create({
+          data: {
+            id: userId,
+            name: request.name,
+            username: request.username,
+            email: request.email,
+            phone: request.phone,
+            whatsapp: request.whatsapp,
+            location: request.location,
+            blocked: false,
+            attemptedLogin: 0,
+            password: passwordHash,
+            profileImage: '',
+            dateCreated: now,
+            deleted: false,
+            verified: true,
+            verificationCode: null,
+          },
+        });
+
+        await tx.$executeRawUnsafe(
+          'INSERT IGNORE INTO user_role (user_id, role_id) VALUES (?, ?)',
+          userId,
+          1,
+        );
+
+        await tx.vendor.create({
+          data: {
+            id: userId,
+            dateCreated: now,
+            deleted: false,
+            accountExists: false,
+            initialised: false,
+            profilePicture: '',
+            accountName: `new vendor ${userId.toString()}`,
+            biography: '',
+            contact: '{"phone_number":"","email":"","whatsapp":""}',
+          },
+        });
+      });
+
+      try {
+        await this.sendRegistrationEmail(request.email, request.password);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Unknown email error';
+        this.logger.warn('createUser.registration_email_failed', {
+          userId: String(userId),
           email: request.email,
-          phone: request.phone,
-          whatsapp: request.whatsapp,
-          location: request.location,
-          blocked: false,
-          attemptedLogin: 0,
-          password: passwordHash,
-          profileImage: '',
-          dateCreated: now,
-          deleted: false,
-          verified: true,
-          verificationCode: null,
-        },
-      });
-
-      await this.prisma.$executeRawUnsafe(
-        'INSERT IGNORE INTO user_role (user_id, role_id) VALUES (?, ?)',
-        userId,
-        1,
-      );
-
-      await this.prisma.vendor.create({
-        data: {
-          id: userId,
-          dateCreated: now,
-          deleted: false,
-          accountExists: false,
-          initialised: false,
-          profilePicture: '',
-          accountName: `new vendor ${userId.toString()}`,
-          biography: '',
-          contact: '{"phone_number":"","email":"","whatsapp":""}',
-        },
-      });
-
-      await this.sendRegistrationEmail(request.email, request.password);
+          message,
+        });
+      }
       return legacySuccess(true);
     } catch {
       return legacyError('ERROR: Something went wrong', 500);
@@ -128,10 +140,7 @@ export class LocalUserVendorService {
           hasUsernameOrEmail: Boolean(usernameOrEmail),
           hasPassword: Boolean(password),
         });
-        return legacyError(
-          'Could not login user. Please check your credentials.',
-          500,
-        );
+        return legacyError('Username/email and password are required.', 400);
       }
 
       const user = await this.prisma.user.findFirst({
@@ -148,7 +157,7 @@ export class LocalUserVendorService {
         });
         return legacyError(
           'Could not login user. Please check your credentials.',
-          500,
+          401,
         );
       }
 
@@ -164,7 +173,7 @@ export class LocalUserVendorService {
         });
         return legacyError(
           'Could not login user. Please check your credentials.',
-          500,
+          401,
         );
       }
       this.log('login.password_verified', {
@@ -172,6 +181,30 @@ export class LocalUserVendorService {
         username: user.username,
         strategy: verification.strategy,
       });
+
+      if (verification.needsRehash) {
+        try {
+          const upgradedHash = await this.encryptPassword(password);
+          await this.prisma.user.update({
+            where: { id: user.id },
+            data: {
+              password: upgradedHash,
+              dateUpdated: new Date(),
+            },
+          });
+          this.log('login.password_rehashed', {
+            userId: String(user.id),
+            strategy: verification.strategy,
+          });
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : 'Unknown rehash error';
+          this.logger.warn('login.password_rehash_failed', {
+            userId: String(user.id),
+            message,
+          });
+        }
+      }
 
       const jwt = await this.jwtService.signAsync({
         iat: Math.floor(Date.now() / 1000),
@@ -205,13 +238,13 @@ export class LocalUserVendorService {
   private async verifyPasswordWithLegacyFallbacks(
     plainPassword: string,
     storedPassword: string,
-  ): Promise<{ ok: boolean; strategy: string }> {
+  ): Promise<{ ok: boolean; strategy: string; needsRehash: boolean }> {
     // Legacy crypt($6$...) compatibility.
     try {
-      const unixcrypt = await import('unixcrypt');
+      const unixcrypt = require('unixcrypt') as typeof import('unixcrypt');
       const hashedInput = unixcrypt.encrypt(plainPassword, storedPassword);
       if (hashedInput === storedPassword) {
-        return { ok: true, strategy: 'unixcrypt' };
+        return { ok: true, strategy: 'unixcrypt', needsRehash: true };
       }
     } catch {
       // Continue to next strategy.
@@ -224,27 +257,32 @@ export class LocalUserVendorService {
       storedPassword.startsWith('$2b$')
     ) {
       try {
-        const bcrypt = await import('bcrypt');
+        const bcrypt = require('bcrypt') as typeof import('bcrypt');
         const normalizedHash = storedPassword.startsWith('$2y$')
           ? `$2b$${storedPassword.slice(4)}`
           : storedPassword;
         const ok = await bcrypt.compare(plainPassword, normalizedHash);
         if (ok) {
-          return { ok: true, strategy: 'bcrypt' };
+          const rounds = this.getBcryptRounds(normalizedHash);
+          const needsRehash =
+            storedPassword.startsWith('$2y$') ||
+            storedPassword.startsWith('$2a$') ||
+            (rounds !== null && rounds < 12);
+          return { ok: true, strategy: 'bcrypt', needsRehash };
         }
       } catch {
         // Continue to next strategy.
       }
     }
 
-    return { ok: false, strategy: 'all_failed' };
+    return { ok: false, strategy: 'all_failed', needsRehash: false };
   }
 
   async resetPassword(raw: unknown): Promise<LegacyResponse> {
     try {
       const email = this.extractEmail(raw);
       if (!email) {
-        return legacyError('Email is required', 500);
+        return legacyError('Email is required', 400);
       }
 
       const user = await this.prisma.user.findFirst({
@@ -252,7 +290,7 @@ export class LocalUserVendorService {
         select: { id: true, email: true },
       });
       if (!user) {
-        return legacyError('Failed to reset password', 500);
+        return legacyError('User not found', 404);
       }
 
       const code = this.generateRandomCode(15);
@@ -316,7 +354,7 @@ export class LocalUserVendorService {
         decoded.exp >= now;
 
       if (!isCodeValid) {
-        return legacyError('Password could not be reset', 500);
+        return legacyError('Invalid or expired reset code', 401);
       }
 
       await this.prisma.user.update({
@@ -330,7 +368,7 @@ export class LocalUserVendorService {
 
       return legacySuccess(true);
     } catch {
-      return legacyError('Could not create user', 500);
+      return legacyError('Password could not be reset', 500);
     }
   }
 
@@ -338,17 +376,17 @@ export class LocalUserVendorService {
     try {
       const request = this.extractUser({ user: rawUser });
       if (!request) {
-        return legacyError('Could not update user.', 500);
+        return legacyError('Invalid user payload', 400);
       }
 
       if (request.id && String(request.id) !== String(userId)) {
-        return legacyError('Could not update user.', 500);
+        return legacyError('User id mismatch', 400);
       }
       request.id = String(userId);
 
       const validityError = this.validateCreateOrUpdateRequest(request);
       if (validityError) {
-        return legacyError('Could not update user.', 500);
+        return validityError;
       }
 
       const isUnique = await this.isUsernameAndEmailUnique(
@@ -357,7 +395,7 @@ export class LocalUserVendorService {
         request.id,
       );
       if (!isUnique) {
-        return legacyError('Could not update user.', 500);
+        return legacyError('User with provided username/email already exists', 409);
       }
 
       await this.prisma.user.update({
@@ -396,20 +434,20 @@ export class LocalUserVendorService {
     try {
       const request = this.extractUser({ user: rawUser });
       if (!request) {
-        return legacyError('Could not update user.', 500);
+        return legacyError('Invalid user payload', 400);
       }
 
       if (request.id && String(request.id) !== String(userId)) {
-        return legacyError('Could not update user.', 500);
+        return legacyError('User id mismatch', 400);
       }
 
       const validityError = this.validateCreateOrUpdateRequest(request);
       if (validityError) {
-        return legacyError('Could not update user.', 500);
+        return validityError;
       }
 
       if (!request.password || request.password !== request.rewritePassword) {
-        return legacyError('Could not update user.', 500);
+        return legacyError('Provided passwords were not the same.', 400);
       }
 
       await this.prisma.user.update({
@@ -537,10 +575,10 @@ export class LocalUserVendorService {
     roles: unknown[];
   }): LegacyResponse | null {
     if (user.password !== user.rewritePassword) {
-      return legacyError('Provided password were not the same.', 500);
+      return legacyError('Provided passwords were not the same.', 400);
     }
     if (!Array.isArray(user.roles) || user.roles.length === 0) {
-      return legacyError('No role was provided for the user', 500);
+      return legacyError('No role was provided for the user', 400);
     }
     return null;
   }
@@ -599,8 +637,16 @@ export class LocalUserVendorService {
   }
 
   private async encryptPassword(password: string): Promise<string> {
-    const unixcrypt = await import('unixcrypt');
-    return unixcrypt.encrypt(password, '$6$');
+    const bcrypt = require('bcrypt') as typeof import('bcrypt');
+    return bcrypt.hash(password, 12);
+  }
+
+  private getBcryptRounds(hash: string): number | null {
+    const match = hash.match(/^\$2[aby]\$(\d{2})\$/);
+    if (!match) {
+      return null;
+    }
+    return Number(match[1]);
   }
 
   private generateRandomCode(length: number, onlyNumbers = false): string {

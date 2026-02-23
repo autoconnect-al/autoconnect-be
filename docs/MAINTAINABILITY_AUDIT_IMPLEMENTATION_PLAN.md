@@ -318,6 +318,7 @@ Priority levels:
 ### Critical / Must do
 
 #### 2.1 Migrate password hashing from legacy deterministic crypt
+- **Status**: ✅ Done (2026-02-22)
 - **Issue**
   - `unixcrypt.encrypt(password, '$6$')` uses static salt pattern.
   - File: `/Users/reipano/Personal/vehicle-api/src/modules/legacy-group-a/local-user-vendor.service.ts`
@@ -331,10 +332,18 @@ Priority levels:
 - **Acceptance checks**
   - New users store modern hash format only.
   - Existing legacy users can login once and become upgraded.
+- **Implementation progress**
+  - Switched password writes to bcrypt (cost 12) in:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-group-a/local-user-vendor.service.ts`
+  - Kept legacy verification compatibility (`unixcrypt` + historical bcrypt variants).
+  - Added transparent rehash-on-login when legacy hash strategy is detected.
+  - Added dedicated password migration tests:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-group-a/local-user-vendor.service.spec.ts`
 
 ### Important
 
 #### 2.2 Wrap create-user flow in transaction
+- **Status**: ✅ Done (2026-02-23)
 - **Issue**
   - Creates user, role, vendor, and sends email in separate steps.
 - **Risk**
@@ -345,22 +354,50 @@ Priority levels:
   3. Add retry-safe outbox event for email.
 - **Acceptance checks**
   - No half-created records when failures are injected.
+- **Implementation progress**
+  - Wrapped user + user_role + vendor writes in a single Prisma transaction in:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-group-a/local-user-vendor.service.ts`
+  - Kept registration email outside the transaction so side effects run only after commit.
+  - Added warning log on registration email failure without rolling back committed user creation.
 
 #### 2.3 Improve error precision
+- **Status**: ✅ Done (2026-02-23)
 - **Issue**
   - Generic 500 messages for validation/auth outcomes.
 - **Implementation**
   - Return specific legacy-compatible messages + correct status code.
 - **Acceptance checks**
   - API clients can distinguish invalid credentials vs internal errors.
+- **Implementation progress**
+  - Updated validation/auth/conflict status mapping in:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-group-a/local-user-vendor.service.ts`
+  - Main changes:
+    - login payload validation -> `400`
+    - login invalid credentials -> `401`
+    - create/update uniqueness conflict -> `409`
+    - reset password payload/code issues -> `400/401/404` as applicable
+  - Kept legacy response body contract (`success`, `message`, `statusCode`) unchanged.
 
 ### Good to have
 
 #### 2.4 Add rate limiting for login/reset endpoints
+- **Status**: ✅ Done (2026-02-23)
 - **Implementation**
   - Add throttling by IP + identifier to reduce brute force.
 - **Acceptance checks**
   - Burst invalid attempts get 429.
+- **Implementation progress**
+  - Added dedicated auth throttling guard that keys by `IP + email/username`:
+    - `/Users/reipano/Personal/vehicle-api/src/common/guards/auth-rate-limit.guard.ts`
+  - Enabled throttler module for auth stack with default policy window:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-auth/legacy-auth.module.ts`
+  - Applied endpoint-specific throttle limits to:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-auth/legacy-auth.controller.ts`
+      - `POST /authentication/login` -> `10/min`
+      - `POST /user/login` -> `10/min`
+      - `POST /user/reset-password` -> `5/min`
+      - `POST /user/verify-password` -> `5/min`
+  - Rate-limit violations now return legacy-style `429` payload.
 
 ---
 
