@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ApCodeGuard } from '../../common/guards/ap-code.guard';
 import { LegacyJwtAdminGuard } from '../../common/guards/legacy-jwt-admin.guard';
 import { LegacyJwtGuard } from '../../common/guards/legacy-jwt.guard';
 import { LegacyDataService } from '../legacy-data/legacy-data.service';
@@ -17,12 +18,15 @@ import {
   VendorAdminController,
   VendorManagementController,
 } from './legacy-ap-admin.controller';
-import { LegacyApAuthController } from './legacy-ap-auth.controller';
+import { ApArticleService } from './ap-article.service';
+import { ApPostToolingService } from './ap-post-tooling.service';
+import { ApPromptService } from './ap-prompt.service';
+import { ApRoleService } from './ap-role.service';
+import { ApUserVendorService } from './ap-user-vendor.service';
 import { LegacyApService } from './legacy-ap.service';
 
 @Module({
   controllers: [
-    LegacyApAuthController,
     RoleManagementController,
     UserManagementController,
     VendorAdminController,
@@ -36,10 +40,16 @@ import { LegacyApService } from './legacy-ap.service';
   ],
   providers: [
     LegacyApService,
+    ApPostToolingService,
+    ApPromptService,
+    ApArticleService,
+    ApRoleService,
+    ApUserVendorService,
     LocalUserVendorService,
     LocalPostOrderService,
     LegacyDataService,
     LegacySitemapService,
+    ApCodeGuard,
     LegacyJwtGuard,
     LegacyJwtAdminGuard,
   ],

@@ -528,6 +528,7 @@ Priority levels:
 ### Critical / Must do
 
 #### 4.1 Replace destructive full search rebuild
+- **Status**: ✅ Done (2026-02-23)
 - **Issue**
   - `rebuildSearchFromPosts` does `search.deleteMany({})` then rebuilds with limit 5000.
   - File: `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/legacy-ap.service.ts`
@@ -542,8 +543,20 @@ Priority levels:
 - **Acceptance checks**
   - Rebuild with >5000 posts preserves full dataset.
   - No empty search window during rebuild.
+- **Implementation progress**
+  - Replaced destructive rebuild path in:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/legacy-ap.service.ts`
+  - Main changes:
+    - removed `search.deleteMany({})` full wipe
+    - removed hard batch cap behavior by introducing paginated `post` scan (`id` cursor, batch size 500)
+    - changed rebuild writes from create-only to `search.upsert` per post
+    - added stale-prune cleanup only for unmanaged rows in current horizon (`dateUpdated < runStartedAt`)
+  - Result:
+    - no empty-search window during rebuild
+    - rebuild scales by batches and processes all eligible rows.
 
 #### 4.2 Replace login-with-code admin token flow
+- **Status**: ✅ Done (2026-02-23)
 - **Issue**
   - `/authentication/login-with-code` grants admin JWT from shared code.
 - **Risk**
@@ -554,10 +567,24 @@ Priority levels:
   3. Add audit log on privileged actions with actor identity.
 - **Acceptance checks**
   - No endpoint can mint admin JWT without user identity.
+- **Implementation progress**
+  - Removed legacy login-with-code API surface:
+    - deleted `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/legacy-ap-auth.controller.ts`
+    - removed controller wiring from `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/legacy-ap.module.ts`
+    - removed `loginWithCode` minting method from `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/legacy-ap.service.ts`
+  - Updated internal automation path to avoid JWT mint-by-code bootstrap:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/imports/remote-post-saver.service.ts`
+      - removed `/authentication/login-with-code` dependency
+      - uses direct admin header auth for post tooling calls
+  - Updated AP post tooling guard path to support direct trusted-admin header/JWT:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/legacy-ap-admin.controller.ts` (`ApCodeGuard`)
+  - Removed stale OpenAPI route entry for `/authentication/login-with-code`:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-docs/openapi-routes.ts`
 
 ### Important
 
 #### 4.3 Split mega service by domain
+- **Status**: 🟡 In progress (phase 4 done: 2026-02-23)
 - **Issue**
   - `legacy-ap.service.ts` combines many unrelated domains.
 - **Implementation**
@@ -570,6 +597,36 @@ Priority levels:
     - `ApPromptService`
 - **Acceptance checks**
   - Each service < ~300 lines and independently tested.
+- **Implementation progress**
+  - Extracted role management domain into:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/ap-role.service.ts`
+  - Extracted user/vendor-admin domain into:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/ap-user-vendor.service.ts`
+  - Extracted post tooling domain into:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/ap-post-tooling.service.ts`
+  - Extracted article domain into:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/ap-article.service.ts`
+  - Added prompt domain service with moved prompt internals:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/ap-prompt.service.ts`
+      - now owns `generatePrompt` + `generate*Prompt` SQL builders
+      - now owns prompt result import + cache cleaning logic
+  - Rewired admin controllers to consume split services (instead of `LegacyApService`) for these domains:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/legacy-ap-admin.controller.ts`
+      - `RoleManagementController` -> `ApRoleService`
+      - `UserManagementController` -> `ApUserVendorService`
+      - `VendorAdminController` -> `ApUserVendorService`
+      - `PostToolingController` -> `ApPostToolingService`
+      - `CarDetailsAdminController` -> `ApPromptService`
+      - `ArticleAdminController` -> `ApArticleService`
+  - Registered new providers in:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/legacy-ap.module.ts`
+  - Verification:
+    - `npm test -- --runInBand` ✅
+    - `npm run build` ✅
+  - Remaining split scope:
+    - ✅ Pruned duplicated prompt methods/helpers from `LegacyApService`.
+    - ✅ Added focused unit tests in `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/ap-prompt.service.spec.ts` and retired prompt tests from `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/legacy-ap.service.spec.ts`.
+    - Remaining cleanup: prune duplicated role/user/vendor/post/article methods from `LegacyApService` and shrink/remove the class once all callers are migrated.
 
 #### 4.4 Reduce raw SQL surface where possible
 - **Implementation**

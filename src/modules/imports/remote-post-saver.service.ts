@@ -33,23 +33,7 @@ export class RemotePostSaverService {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment,@typescript-eslint/no-require-imports,@typescript-eslint/no-unsafe-member-access
   private readonly PostModel = require('./types/instagram').PostModel;
 
-  async getJwt(): Promise<string> {
-    const resp = await fetch(`${this.basePath}/authentication/login-with-code`, {
-      headers: {
-        'X-Admin-Code': this.code,
-      },
-    });
-    if (!resp.ok) {
-      throw new Error(`Login failed: ${resp.status} ${resp.statusText}`);
-    }
-    const data = (await resp.json()) as { result?: string };
-    if (!data?.result) throw new Error('Login succeeded but no JWT returned');
-    return data.result;
-    // This matches your script’s behavior:
-    // GET `${basePath}/authentication/login-with-code` + X-Admin-Code header then jwt = result
-  }
-
-  async savePost(post: Post, jwt: string): Promise<string> {
+  async savePost(post: Post): Promise<string> {
     // Keep script gate:
     if (
       post['product_type'] !== 'carousel_container' &&
@@ -89,12 +73,11 @@ export class RemotePostSaverService {
       vendorId: post.user?.pk ?? 1,
     };
 
-    // Same request as script (note header name):
+    // Direct admin header auth; no login-with-code bootstrap.
     const response = await fetch(`${this.basePath}/post/save-post`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Http-Authorization': 'Bearer ' + jwt,
         'X-Admin-Code': this.code,
       },
       body: JSON.stringify(body),

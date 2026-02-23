@@ -17,6 +17,12 @@ import { AnyFilesInterceptor } from '@nestjs/platform-express';
 import type { Request } from 'express';
 import { LegacyJwtAdminGuard } from '../../common/guards/legacy-jwt-admin.guard';
 import { LegacyJwtGuard } from '../../common/guards/legacy-jwt.guard';
+import { ApCodeGuard } from '../../common/guards/ap-code.guard';
+import { ApArticleService } from './ap-article.service';
+import { ApPostToolingService } from './ap-post-tooling.service';
+import { ApPromptService } from './ap-prompt.service';
+import { ApRoleService } from './ap-role.service';
+import { ApUserVendorService } from './ap-user-vendor.service';
 import { LegacyApService } from './legacy-ap.service';
 
 type AnyRecord = Record<string, unknown>;
@@ -24,7 +30,7 @@ type AnyRecord = Record<string, unknown>;
 @Controller('role-management')
 @UseGuards(LegacyJwtAdminGuard)
 export class RoleManagementController {
-  constructor(private readonly service: LegacyApService) {}
+  constructor(private readonly service: ApRoleService) {}
 
   @Get()
   getRoles() {
@@ -91,7 +97,7 @@ export class RoleManagementController {
 @Controller('user-management')
 @UseGuards(LegacyJwtAdminGuard)
 export class UserManagementController {
-  constructor(private readonly service: LegacyApService) {}
+  constructor(private readonly service: ApUserVendorService) {}
 
   @Get()
   getUsers() {
@@ -144,7 +150,7 @@ export class UserManagementController {
 @Controller('vendor')
 @UseGuards(LegacyJwtAdminGuard)
 export class VendorAdminController {
-  constructor(private readonly service: LegacyApService) {}
+  constructor(private readonly service: ApUserVendorService) {}
 
   @Post('update')
   @HttpCode(200)
@@ -172,9 +178,9 @@ export class VendorAdminController {
 }
 
 @Controller('post')
-@UseGuards(LegacyJwtAdminGuard)
+@UseGuards(ApCodeGuard)
 export class PostToolingController {
-  constructor(private readonly service: LegacyApService) {}
+  constructor(private readonly service: ApPostToolingService) {}
 
   @Post('save-post')
   @HttpCode(200)
@@ -311,7 +317,7 @@ export class VendorManagementController {
 @Controller('car-details')
 @UseGuards(LegacyJwtAdminGuard)
 export class CarDetailsAdminController {
-  constructor(private readonly service: LegacyApService) {}
+  constructor(private readonly service: ApPromptService) {}
 
   @Get('generate-prompt')
   generatePrompt(@Query('length') length?: string) {
@@ -409,7 +415,7 @@ export class MakeModelDataController {
 @Controller('article')
 @UseGuards(LegacyJwtAdminGuard)
 export class ArticleAdminController {
-  constructor(private readonly service: LegacyApService) {}
+  constructor(private readonly service: ApArticleService) {}
 
   @Get('all')
   getAll() {

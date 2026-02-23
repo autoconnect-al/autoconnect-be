@@ -205,11 +205,6 @@ export const legacyRoutes: LegacyRoute[] = [
   },
   {
     method: 'get',
-    path: '/authentication/login-with-code',
-    summary: 'Admin login with code',
-  },
-  {
-    method: 'get',
     path: '/role-management',
     summary: 'Role list',
     security: true,
