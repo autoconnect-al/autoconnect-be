@@ -42,6 +42,18 @@ describe('LocalPostOrderService.markAsDeleted', () => {
 
 describe('LocalPostOrderService.captureOrder promotion writes', () => {
   it('updates promotion windows for package 1113', async () => {
+    const tx = {
+      customer_orders: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findUnique: jest.fn(),
+      },
+      post: {
+        update: jest.fn().mockResolvedValue({}),
+      },
+      search: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
     const prisma = {
       customer_orders: {
         findFirst: jest.fn().mockResolvedValue({
@@ -49,23 +61,24 @@ describe('LocalPostOrderService.captureOrder promotion writes', () => {
           paypalId: 'LOCAL-1',
           postId: '100',
           packages: '1113',
+          status: 'CREATED',
         }),
-        update: jest.fn().mockResolvedValue({}),
       },
       post: {
-        findUnique: jest.fn().mockResolvedValue({ id: 100n }),
-        update: jest.fn().mockResolvedValue({}),
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ id: 100n, vendor_id: 200n, deleted: false }),
       },
-      search: {
-        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
-      },
+      $transaction: jest
+        .fn()
+        .mockImplementation(async (fn: (tx: any) => Promise<unknown>) => fn(tx)),
     } as any;
 
     const service = new LocalPostOrderService(prisma, {} as any);
     const response = await service.captureOrder('LOCAL-1');
 
     expect((response as any).status).toBe('COMPLETED');
-    expect(prisma.post.update).toHaveBeenCalledWith(
+    expect(tx.post.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 100n },
         data: expect.objectContaining({
@@ -73,5 +86,31 @@ describe('LocalPostOrderService.captureOrder promotion writes', () => {
         }),
       }),
     );
+  });
+
+  it('is idempotent when order is already completed', async () => {
+    const prisma = {
+      customer_orders: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 1n,
+          paypalId: 'LOCAL-1',
+          postId: '100',
+          packages: '1113',
+          status: 'COMPLETED',
+        }),
+      },
+      post: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ id: 100n, vendor_id: 200n, deleted: false }),
+      },
+      $transaction: jest.fn(),
+    } as any;
+
+    const service = new LocalPostOrderService(prisma, {} as any);
+    const response = await service.captureOrder('LOCAL-1');
+
+    expect((response as any).status).toBe('COMPLETED');
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });

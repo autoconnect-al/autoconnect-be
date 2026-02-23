@@ -216,6 +216,9 @@ export class LocalPostOrderService {
       const payload = (raw ?? {}) as AnyRecord;
       const postId = this.toSafeString(payload.post_id);
       const cart = Array.isArray(payload.cart) ? payload.cart : [];
+      const ownerEmail = this.toSafeString(payload.email);
+      const phoneNumber = this.toSafeString(payload.phoneNumber);
+      const fullName = this.toSafeString(payload.fullName);
       if (!postId || cart.length === 0) {
         return legacyError('ERROR: Something went wrong', 500);
       }
@@ -237,6 +240,21 @@ export class LocalPostOrderService {
         return legacyError('ERROR: Something went wrong', 500);
       }
 
+      const post = await this.prisma.post.findUnique({
+        where: { id: BigInt(postId) },
+        select: { id: true, vendor_id: true, deleted: true },
+      });
+      if (!post || post.deleted) {
+        return legacyError('ERROR: Something went wrong', 500);
+      }
+
+      if (ownerEmail) {
+        const owner = await this.findVendorAuthByEmail(ownerEmail);
+        if (!owner || owner.id !== post.vendor_id) {
+          return legacyError('ERROR: Something went wrong', 500);
+        }
+      }
+
       const orderId = BigInt(this.generateRandomCode(8, true));
       const paypalId = `LOCAL-${orderId.toString()}`;
       await this.prisma.customer_orders.create({
@@ -247,6 +265,9 @@ export class LocalPostOrderService {
           paypalId,
           postId,
           packages: packages.map((p) => p.id).join(', '),
+          email: ownerEmail || null,
+          phoneNumber: phoneNumber || null,
+          fullName: fullName || null,
           status: 'CREATED',
         },
       });
@@ -288,13 +309,24 @@ export class LocalPostOrderService {
         return legacyError('ERROR: Something went wrong', 500);
       }
 
-      await this.prisma.customer_orders.update({
-        where: { id: order.id },
-        data: {
+      const normalizedStatus = this.toSafeString(order.status).toUpperCase();
+      if (normalizedStatus === 'COMPLETED') {
+        return {
+          id: orderID,
           status: 'COMPLETED',
-          dateUpdated: new Date(),
-        },
-      });
+        };
+      }
+      if (normalizedStatus && normalizedStatus !== 'CREATED') {
+        return legacyError('ERROR: Something went wrong', 409);
+      }
+
+      const ownerEmail = this.toSafeString(order.email);
+      if (ownerEmail) {
+        const owner = await this.findVendorAuthByEmail(ownerEmail);
+        if (!owner || owner.id !== post.vendor_id) {
+          return legacyError('ERROR: Something went wrong', 403);
+        }
+      }
 
       const packageIds = (order.packages ?? '')
         .split(',')
@@ -327,27 +359,57 @@ export class LocalPostOrderService {
         }
       }
 
-      if (Object.keys(postUpdates).length > 0) {
-        await this.prisma.post.update({
-          where: { id: post.id },
-          data: postUpdates,
-        });
-
-        await this.prisma.search.updateMany({
-          where: { id: post.id },
+      const captureState = await this.prisma.$transaction(async (tx) => {
+        const transition = await tx.customer_orders.updateMany({
+          where: { id: order.id, status: 'CREATED' },
           data: {
-            promotionTo:
-              (postUpdates.promotionTo as number | undefined) ?? undefined,
-            highlightedTo:
-              (postUpdates.highlightedTo as number | undefined) ?? undefined,
-            renewTo: (postUpdates.renewTo as number | undefined) ?? undefined,
-            mostWantedTo:
-              (postUpdates.mostWantedTo as number | undefined) ?? undefined,
-            renewedTime: postUpdates.renewTo
-              ? Math.floor(Date.now() / 1000)
-              : undefined,
+            status: 'COMPLETED',
+            dateUpdated: new Date(),
           },
         });
+
+        if (transition.count === 0) {
+          const latest = await tx.customer_orders.findUnique({
+            where: { id: order.id },
+            select: { status: true },
+          });
+          if (this.toSafeString(latest?.status).toUpperCase() === 'COMPLETED') {
+            return 'already-completed' as const;
+          }
+          throw new Error('Order transition failed');
+        }
+
+        if (Object.keys(postUpdates).length > 0) {
+          await tx.post.update({
+            where: { id: post.id },
+            data: postUpdates,
+          });
+
+          await tx.search.updateMany({
+            where: { id: post.id },
+            data: {
+              promotionTo:
+                (postUpdates.promotionTo as number | undefined) ?? undefined,
+              highlightedTo:
+                (postUpdates.highlightedTo as number | undefined) ?? undefined,
+              renewTo: (postUpdates.renewTo as number | undefined) ?? undefined,
+              mostWantedTo:
+                (postUpdates.mostWantedTo as number | undefined) ?? undefined,
+              renewedTime: postUpdates.renewTo
+                ? Math.floor(Date.now() / 1000)
+                : undefined,
+            },
+          });
+        }
+
+        return 'captured' as const;
+      });
+
+      if (captureState === 'already-completed') {
+        return {
+          id: orderID,
+          status: 'COMPLETED',
+        };
       }
 
       return {

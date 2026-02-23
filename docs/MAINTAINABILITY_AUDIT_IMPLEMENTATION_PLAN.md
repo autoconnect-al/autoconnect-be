@@ -478,6 +478,7 @@ Priority levels:
     - JWT/payload vendor mismatch -> `403`
 
 #### 3.4 Harden payment capture flow
+- **Status**: ✅ Done (2026-02-23)
 - **Issue**
   - Limited transition validation/idempotency around order capture.
 - **Implementation**
@@ -486,6 +487,20 @@ Priority levels:
   3. Ensure order ownership checks where relevant.
 - **Acceptance checks**
   - Repeated capture of same order is safe/idempotent.
+- **Implementation progress**
+  - Hardened order flow in:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-group-b/local-post-order.service.ts`
+  - Added strict capture transition checks:
+    - allows `CREATED -> COMPLETED`
+    - rejects invalid transitions with `409`
+  - Added idempotent capture behavior:
+    - repeated capture on completed order returns `COMPLETED` without reapplying side effects
+  - Added ownership checks where available:
+    - when order `email` is present, capture validates order owner maps to the post vendor
+  - Wrapped capture side effects in one transaction:
+    - status transition + promotion writes (`post` + `search`) commit atomically.
+  - Added/updated tests:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-group-b/local-post-order.service.spec.ts`
 
 ### Good to have
 
