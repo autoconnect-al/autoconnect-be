@@ -367,7 +367,21 @@ export class CarDetailsAdminController {
       (typeof (req.body as AnyRecord)?.result === 'string'
         ? ((req.body as AnyRecord).result as string)
         : '');
-    return this.handleLegacy(this.service.importPromptResults(text));
+    const runId = typeof body.runId === 'string' ? body.runId : undefined;
+    const timeoutMs = this.toOptionalNumber(body.timeoutMs);
+    const maxItems = this.toOptionalNumber(body.maxItems);
+    return this.handleLegacy(
+      this.service.importPromptResults(text, {
+        runId,
+        timeoutMs: timeoutMs ?? undefined,
+        maxItems: maxItems ?? undefined,
+      }),
+    );
+  }
+
+  @Get('import-status/:runId')
+  importStatus(@Param('runId') runId: string) {
+    return this.handleLegacy(this.service.getPromptImportStatus(runId));
   }
 
   @Get('clean-cache')
@@ -383,6 +397,13 @@ export class CarDetailsAdminController {
       throw new HttpException(response, Number(response.statusCode) || 500);
     }
     return response;
+  }
+
+  private toOptionalNumber(value: unknown): number | null {
+    if (value === null || value === undefined || value === '') return null;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return null;
+    return Math.trunc(parsed);
   }
 }
 

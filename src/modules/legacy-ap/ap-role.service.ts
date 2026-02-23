@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import {
   legacyError,
   legacySuccess,
-  type LegacyResponse,
 } from '../../common/legacy-response';
 
 type AnyRecord = Record<string, unknown>;
@@ -118,11 +118,10 @@ export class ApRoleService {
       return legacyError('ADMIN role is not configured.', 500);
     }
 
-    await this.prisma.$executeRawUnsafe(
-      'INSERT IGNORE INTO vendor_role (vendor_id, role_id) VALUES (?, ?)',
-      parsedUserId,
-      adminRole.id,
-    );
+    await this.prisma.$executeRaw`
+      INSERT IGNORE INTO vendor_role (vendor_id, role_id)
+      VALUES (${parsedUserId}, ${adminRole.id})
+    `;
 
     return legacySuccess(true, 'Admin role granted successfully');
   }
@@ -149,16 +148,21 @@ export class ApRoleService {
       return legacyError('ADMIN role is not configured.', 500);
     }
 
-    const adminLinks = await this.prisma.$queryRawUnsafe<Array<{ total: bigint }>>(
-      'SELECT COUNT(*) AS total FROM vendor_role WHERE role_id = ?',
-      adminRole.id,
+    const adminLinks = await this.prisma.$queryRaw<Array<{ total: bigint }>>(
+      Prisma.sql`
+        SELECT COUNT(*) AS total
+        FROM vendor_role
+        WHERE role_id = ${adminRole.id}
+      `,
     );
     const totalAdmins = Number(adminLinks[0]?.total ?? 0n);
 
-    const targetLink = await this.prisma.$queryRawUnsafe<Array<{ total: bigint }>>(
-      'SELECT COUNT(*) AS total FROM vendor_role WHERE vendor_id = ? AND role_id = ?',
-      parsedUserId,
-      adminRole.id,
+    const targetLink = await this.prisma.$queryRaw<Array<{ total: bigint }>>(
+      Prisma.sql`
+        SELECT COUNT(*) AS total
+        FROM vendor_role
+        WHERE vendor_id = ${parsedUserId} AND role_id = ${adminRole.id}
+      `,
     );
     const targetHasAdmin = Number(targetLink[0]?.total ?? 0n) > 0;
 
@@ -166,11 +170,10 @@ export class ApRoleService {
       return legacyError('Cannot remove the last ADMIN user.', 409);
     }
 
-    await this.prisma.$executeRawUnsafe(
-      'DELETE FROM vendor_role WHERE vendor_id = ? AND role_id = ?',
-      parsedUserId,
-      adminRole.id,
-    );
+    await this.prisma.$executeRaw`
+      DELETE FROM vendor_role
+      WHERE vendor_id = ${parsedUserId} AND role_id = ${adminRole.id}
+    `;
 
     return legacySuccess(true, 'Admin role revoked successfully');
   }

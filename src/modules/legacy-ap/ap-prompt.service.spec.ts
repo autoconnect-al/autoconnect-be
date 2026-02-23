@@ -1,5 +1,39 @@
 import { ApPromptService } from './ap-prompt.service';
 
+function createPromptImportJobMock() {
+  let job: any = null;
+  return {
+    findUnique: jest.fn().mockImplementation(async ({ where }: any) => {
+      if (!job) return null;
+      return where?.runId === job.runId ? job : null;
+    }),
+    create: jest.fn().mockImplementation(async ({ data }: any) => {
+      job = {
+        id: 1n,
+        runId: data.runId,
+        status: data.status ?? 'RUNNING',
+        totalItems: data.totalItems ?? 0,
+        checkpointIndex: data.checkpointIndex ?? 0,
+        processedItems: data.processedItems ?? 0,
+        lastError: data.lastError ?? null,
+        dateCreated: new Date(),
+        dateUpdated: new Date(),
+        dateFinished: data.dateFinished ?? null,
+      };
+      return job;
+    }),
+    update: jest.fn().mockImplementation(async ({ data }: any) => {
+      if (!job) throw new Error('job not initialized');
+      job = {
+        ...job,
+        ...data,
+        dateUpdated: new Date(),
+      };
+      return job;
+    }),
+  };
+}
+
 describe('ApPromptService.importPromptResults promotion guards', () => {
   it('does not update promotion fields from car-details import payload', async () => {
     const prisma = {
@@ -35,9 +69,10 @@ describe('ApPromptService.importPromptResults promotion guards', () => {
         findUnique: jest.fn(),
         update: jest.fn().mockResolvedValue({}),
       },
+      prompt_import_job: createPromptImportJobMock(),
     } as any;
 
-    const service = new ApPromptService(prisma);
+    const service = new ApPromptService(prisma, {} as any);
 
     await service.importPromptResults(
       JSON.stringify([
@@ -117,9 +152,10 @@ describe('ApPromptService.importPromptResults promotion guards', () => {
         findUnique: jest.fn(),
         update: jest.fn().mockResolvedValue({}),
       },
+      prompt_import_job: createPromptImportJobMock(),
     } as any;
 
-    const service = new ApPromptService(prisma);
+    const service = new ApPromptService(prisma, {} as any);
 
     await service.importPromptResults(
       JSON.stringify([
@@ -183,9 +219,10 @@ describe('ApPromptService.importPromptResults promotion guards', () => {
         }),
         update: jest.fn().mockResolvedValue({}),
       },
+      prompt_import_job: createPromptImportJobMock(),
     } as any;
 
-    const service = new ApPromptService(prisma);
+    const service = new ApPromptService(prisma, {} as any);
 
     await service.importPromptResults(
       JSON.stringify([
@@ -246,9 +283,10 @@ describe('ApPromptService.importPromptResults promotion guards', () => {
         findUnique: jest.fn(),
         update: jest.fn().mockResolvedValue({}),
       },
+      prompt_import_job: createPromptImportJobMock(),
     } as any;
 
-    const service = new ApPromptService(prisma);
+    const service = new ApPromptService(prisma, {} as any);
 
     await service.importPromptResults(
       JSON.stringify([
@@ -302,9 +340,10 @@ describe('ApPromptService.importPromptResults promotion guards', () => {
         findUnique: jest.fn(),
         update: jest.fn().mockResolvedValue({}),
       },
+      prompt_import_job: createPromptImportJobMock(),
     } as any;
 
-    const service = new ApPromptService(prisma);
+    const service = new ApPromptService(prisma, {} as any);
 
     await service.importPromptResults(
       JSON.stringify([
@@ -323,29 +362,127 @@ describe('ApPromptService.importPromptResults promotion guards', () => {
       customsPaid: false,
     });
   });
+
+  it('saves checkpoint when maxItems budget is reached and resumes by runId', async () => {
+    const prisma = {
+      post: {
+        update: jest.fn().mockResolvedValue({}),
+      },
+      car_detail: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findFirst: jest
+          .fn()
+          .mockResolvedValueOnce({
+            id: 1n,
+            post_id: 1n,
+            make: 'BMW',
+            model: 'X5',
+            variant: null,
+            registration: null,
+            mileage: null,
+            transmission: null,
+            fuelType: null,
+            engineSize: null,
+            drivetrain: null,
+            seats: null,
+            numberOfDoors: null,
+            bodyType: null,
+            price: null,
+            sold: false,
+            customsPaid: false,
+            priceVerified: false,
+            mileageVerified: false,
+            fuelVerified: false,
+            contact: null,
+            type: 'car',
+          })
+          .mockResolvedValueOnce({
+            id: 2n,
+            post_id: 2n,
+            make: 'Audi',
+            model: 'A4',
+            variant: null,
+            registration: null,
+            mileage: null,
+            transmission: null,
+            fuelType: null,
+            engineSize: null,
+            drivetrain: null,
+            seats: null,
+            numberOfDoors: null,
+            bodyType: null,
+            price: null,
+            sold: false,
+            customsPaid: false,
+            priceVerified: false,
+            mileageVerified: false,
+            fuelVerified: false,
+            contact: null,
+            type: 'car',
+          }),
+        findUnique: jest.fn(),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      prompt_import_job: createPromptImportJobMock(),
+    } as any;
+    const service = new ApPromptService(prisma, {} as any);
+
+    const payload = JSON.stringify([
+      { id: '1', make: 'BMW', model: 'X5' },
+      { id: '2', make: 'Audi', model: 'A4' },
+    ]);
+
+    const first = await service.importPromptResults(payload, {
+      runId: 'run-1',
+      maxItems: 1,
+      timeoutMs: 60_000,
+    });
+    expect(first.success).toBe(true);
+    expect(first.message).toContain('Checkpoint saved');
+    expect(prisma.car_detail.update).toHaveBeenCalledTimes(1);
+
+    const midStatus = await service.getPromptImportStatus('run-1');
+    expect(midStatus.success).toBe(true);
+    expect((midStatus.result as any).checkpointIndex).toBe(1);
+
+    const second = await service.importPromptResults(payload, {
+      runId: 'run-1',
+      maxItems: 10,
+      timeoutMs: 60_000,
+    });
+    expect(second.success).toBe(true);
+    expect(second.message).toBe('Updated car detail');
+    expect(prisma.car_detail.update).toHaveBeenCalledTimes(2);
+
+    const finalStatus = await service.getPromptImportStatus('run-1');
+    expect(finalStatus.success).toBe(true);
+    expect((finalStatus.result as any).status).toBe('COMPLETED');
+    expect((finalStatus.result as any).checkpointIndex).toBe(2);
+  });
 });
 
 describe('ApPromptService.generatePrompt variant path', () => {
   it('serializes bigint ids safely when building variant prompt payload', async () => {
-    const prisma = {
-      $queryRawUnsafe: jest
+    const prisma = {} as any;
+    const promptRepository = {
+      findVariantProblematicMakes: jest.fn().mockResolvedValue([{ make: 'BMW' }]),
+      findMakeModels: jest
         .fn()
-        .mockResolvedValueOnce([{ make: 'BMW' }])
-        .mockResolvedValueOnce([{ model: 'X5', isVariant: 0 }])
-        .mockResolvedValueOnce([
-          {
-            id: 123n,
-            make: 'BMW',
-            model: 'X5',
-            variant: 'xDrive',
-            bodyType: 'SUV',
-            fuelType: 'diesel',
-            engineSize: '2.0',
-          },
-        ]),
+        .mockResolvedValue([{ model: 'X5', isVariant: 0 }]),
+      findVariantProblemsByMake: jest.fn().mockResolvedValue([
+        {
+          id: 123n,
+          make: 'BMW',
+          model: 'X5',
+          variant: 'xDrive',
+          bodyType: 'SUV',
+          fuelType: 'diesel',
+          engineSize: '2.0',
+        },
+      ]),
     } as any;
 
-    const service = new ApPromptService(prisma);
+    const service = new ApPromptService(prisma, promptRepository);
     const result = await service.generatePrompt(10, 'variant');
 
     expect(result.size).toBe(1);

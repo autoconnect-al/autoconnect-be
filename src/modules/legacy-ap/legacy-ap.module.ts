@@ -20,6 +20,7 @@ import {
 } from './legacy-ap-admin.controller';
 import { ApArticleService } from './ap-article.service';
 import { ApPostToolingService } from './ap-post-tooling.service';
+import { ApPromptRepository } from './ap-prompt.repository';
 import { ApPromptService } from './ap-prompt.service';
 import { ApRoleService } from './ap-role.service';
 import { ApUserVendorService } from './ap-user-vendor.service';
@@ -41,6 +42,7 @@ import { LegacyApService } from './legacy-ap.service';
   providers: [
     LegacyApService,
     ApPostToolingService,
+    ApPromptRepository,
     ApPromptService,
     ApArticleService,
     ApRoleService,

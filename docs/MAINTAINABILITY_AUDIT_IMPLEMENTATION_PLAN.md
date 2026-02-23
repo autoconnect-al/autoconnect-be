@@ -584,7 +584,7 @@ Priority levels:
 ### Important
 
 #### 4.3 Split mega service by domain
-- **Status**: 🟡 In progress (phase 4 done: 2026-02-23)
+- **Status**: 🟡 In progress (phase 5 done: 2026-02-23)
 - **Issue**
   - `legacy-ap.service.ts` combines many unrelated domains.
 - **Implementation**
@@ -626,22 +626,78 @@ Priority levels:
   - Remaining split scope:
     - ✅ Pruned duplicated prompt methods/helpers from `LegacyApService`.
     - ✅ Added focused unit tests in `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/ap-prompt.service.spec.ts` and retired prompt tests from `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/legacy-ap.service.spec.ts`.
-    - Remaining cleanup: prune duplicated role/user/vendor/post/article methods from `LegacyApService` and shrink/remove the class once all callers are migrated.
+    - ✅ Pruned duplicated role/user/vendor-admin/post/article methods from `LegacyApService` and moved test coverage to:
+      - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/ap-role.service.spec.ts`
+      - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/ap-post-tooling.service.spec.ts`
+    - `LegacyApService` is now reduced to still-owned domains (vendor-management, make/model pass-through, sitemap generation, payment reminders).
+    - Remaining optional cleanup: split remaining `LegacyApService` domains into dedicated services and retire class entirely.
 
 #### 4.4 Reduce raw SQL surface where possible
+- **Status**: ✅ Done (2026-02-23)
 - **Implementation**
   - Keep only unavoidable raw SQL in repository layer.
   - Parameterize all dynamic values.
 - **Acceptance checks**
   - No query string interpolation for user input.
+- **Implementation progress**
+  - Removed `unsafe` raw SQL usage from split `legacy-ap` services:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/ap-user-vendor.service.ts`
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/ap-role.service.ts`
+  - Replaced `$queryRawUnsafe` / `$executeRawUnsafe` with parameterized calls:
+    - `$queryRaw` + `Prisma.sql` + `Prisma.join(...)`
+    - `$executeRaw` tagged templates
+  - Result:
+    - no query-string interpolation in these domains
+    - dynamic values are bound as parameters
+  - Verification:
+    - `npm test -- --runInBand` ✅
+    - `npm run build` ✅
+  - Follow-up progress (phase 2):
+    - Removed remaining `unsafe` raw SQL from:
+      - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/ap-prompt.service.ts`
+      - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/ap-post-tooling.service.ts`
+    - Refactored dynamic price-range SQL in `ap-post-tooling` to structured `Prisma.sql` fragments (no interpolated SQL strings for values).
+    - Updated tests to match safe query interfaces:
+      - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/ap-post-tooling.service.spec.ts`
+      - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/ap-prompt.service.spec.ts`
+    - Verification:
+      - `npm test -- --runInBand` ✅
+      - `npm run build` ✅
+  - Follow-up progress (phase 3):
+    - Moved heavy prompt SQL out of service orchestration layer into dedicated repository:
+      - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/ap-prompt.repository.ts`
+    - Updated service to consume repository methods:
+      - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/ap-prompt.service.ts`
+    - Registered repository provider:
+      - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/legacy-ap.module.ts`
+    - Updated tests for new service dependency shape:
+      - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/ap-prompt.service.spec.ts`
+    - Verified no `unsafe` raw SQL remains in `legacy-ap` module services.
 
 ### Good to have
 
 #### 4.5 Add batch job safeguards (timeouts, progress checkpoints)
+- **Status**: ✅ Done (2026-02-23)
 - **Implementation**
   - For long prompt-generation/fix routines, add progress persistence and resume support.
 - **Acceptance checks**
   - Interrupted jobs can resume from checkpoint.
+- **Implementation progress**
+  - Added persistent prompt import checkpoint table:
+    - `/Users/reipano/Personal/vehicle-api/prisma/migrations/20260223213000_add_prompt_import_job_checkpoints/migration.sql`
+    - `/Users/reipano/Personal/vehicle-api/prisma/schema.prisma` (`prompt_import_job`)
+  - Added timeout + max-items safeguards with checkpoint persistence to prompt import flow:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/ap-prompt.service.ts`
+    - `importPromptResults(resultJson, { runId, timeoutMs, maxItems })` now:
+      - persists progress per item (`checkpointIndex`, `processedItems`)
+      - stops safely on timeout/item budget (`CHECKPOINTED`)
+      - resumes from last checkpoint when reusing same `runId`
+      - marks run `COMPLETED` or `FAILED` with error context
+  - Added prompt import run status endpoint:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/legacy-ap-admin.controller.ts`
+    - `GET /car-details/import-status/:runId`
+  - Extended unit tests for checkpoint/resume and status:
+    - `/Users/reipano/Personal/vehicle-api/src/modules/legacy-ap/ap-prompt.service.spec.ts`
 
 ---
 

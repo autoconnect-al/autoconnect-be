@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { LocalUserVendorService } from '../legacy-group-a/local-user-vendor.service';
 import { legacyError, legacySuccess } from '../../common/legacy-response';
@@ -13,8 +14,7 @@ export class ApUserVendorService {
   ) {}
 
   async getUsers() {
-    const users = await this.prisma.$queryRawUnsafe<AnyRecord[]>(
-      `
+    const users = await this.prisma.$queryRaw<AnyRecord[]>(Prisma.sql`
       SELECT
         id,
         name,
@@ -27,8 +27,7 @@ export class ApUserVendorService {
       WHERE deleted = 0
       ORDER BY dateCreated DESC
       LIMIT 500
-      `,
-    );
+    `);
     const roleMap = await this.getRoleMap(
       users.map((row) => BigInt(String(row.id))),
     );
@@ -36,8 +35,7 @@ export class ApUserVendorService {
   }
 
   async getUserById(id: string) {
-    const users = await this.prisma.$queryRawUnsafe<AnyRecord[]>(
-      `
+    const users = await this.prisma.$queryRaw<AnyRecord[]>(Prisma.sql`
       SELECT
         id,
         name,
@@ -47,11 +45,9 @@ export class ApUserVendorService {
         whatsAppNumber AS whatsapp,
         location
       FROM vendor
-      WHERE id = ? AND deleted = 0
+      WHERE id = ${BigInt(id)} AND deleted = 0
       LIMIT 1
-      `,
-      BigInt(id),
-    );
+    `);
     const user = users[0];
     if (!user) {
       return legacyError(`No user could be found for id: ${id}`);
@@ -61,8 +57,7 @@ export class ApUserVendorService {
   }
 
   async getUserByUsername(username: string) {
-    const users = await this.prisma.$queryRawUnsafe<AnyRecord[]>(
-      `
+    const users = await this.prisma.$queryRaw<AnyRecord[]>(Prisma.sql`
       SELECT
         id,
         name,
@@ -72,11 +67,9 @@ export class ApUserVendorService {
         whatsAppNumber AS whatsapp,
         location
       FROM vendor
-      WHERE username = ? AND deleted = 0
+      WHERE username = ${username} AND deleted = 0
       LIMIT 1
-      `,
-      username,
-    );
+    `);
     const user = users[0];
     if (!user) {
       return legacyError(`No user could be found for username: ${username}`);
@@ -136,19 +129,16 @@ export class ApUserVendorService {
     const map = new Map<string, Array<{ id: number; name: string }>>();
     if (userIds.length === 0) return map;
 
-    const rows = await this.prisma.$queryRawUnsafe<
+    const links = await this.prisma.$queryRaw<
       Array<{ vendor_id: bigint; role_id: number; role_name: string }>
-    >(
-      `
+    >(Prisma.sql`
       SELECT vr.vendor_id, vr.role_id, r.name as role_name
       FROM vendor_role vr
       INNER JOIN role r ON r.id = vr.role_id
-      WHERE vr.vendor_id IN (${userIds.map(() => '?').join(',')})
-      `,
-      ...userIds,
-    );
+      WHERE vr.vendor_id IN (${Prisma.join(userIds)})
+    `);
 
-    for (const row of rows) {
+    for (const row of links) {
       const key = String(row.vendor_id);
       const current = map.get(key) ?? [];
       current.push({ id: Number(row.role_id), name: row.role_name });

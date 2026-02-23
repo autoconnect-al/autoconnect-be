@@ -1,16 +1,149 @@
 -- Vendor-only identity foundation
 -- Phase 1: Add auth fields to vendor, add vendor_role, backfill from user/user_role.
 
-ALTER TABLE vendor
-  ADD COLUMN IF NOT EXISTS name VARCHAR(255) NULL,
-  ADD COLUMN IF NOT EXISTS username VARCHAR(255) NULL,
-  ADD COLUMN IF NOT EXISTS blocked BOOLEAN NULL DEFAULT FALSE,
-  ADD COLUMN IF NOT EXISTS attemptedLogin INT NULL DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS password TEXT NULL,
-  ADD COLUMN IF NOT EXISTS email VARCHAR(255) NULL,
-  ADD COLUMN IF NOT EXISTS profileImage LONGTEXT NULL,
-  ADD COLUMN IF NOT EXISTS verified BOOLEAN NULL DEFAULT TRUE,
-  ADD COLUMN IF NOT EXISTS verificationCode VARCHAR(255) NULL;
+SET @has_vendor_name := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'vendor'
+    AND COLUMN_NAME = 'name'
+);
+SET @sql := IF(
+  @has_vendor_name = 0,
+  'ALTER TABLE `vendor` ADD COLUMN `name` VARCHAR(255) NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_vendor_username := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'vendor'
+    AND COLUMN_NAME = 'username'
+);
+SET @sql := IF(
+  @has_vendor_username = 0,
+  'ALTER TABLE `vendor` ADD COLUMN `username` VARCHAR(255) NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_vendor_blocked := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'vendor'
+    AND COLUMN_NAME = 'blocked'
+);
+SET @sql := IF(
+  @has_vendor_blocked = 0,
+  'ALTER TABLE `vendor` ADD COLUMN `blocked` BOOLEAN NULL DEFAULT FALSE',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_vendor_attempted_login := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'vendor'
+    AND COLUMN_NAME = 'attemptedLogin'
+);
+SET @sql := IF(
+  @has_vendor_attempted_login = 0,
+  'ALTER TABLE `vendor` ADD COLUMN `attemptedLogin` INT NULL DEFAULT 0',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_vendor_password := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'vendor'
+    AND COLUMN_NAME = 'password'
+);
+SET @sql := IF(
+  @has_vendor_password = 0,
+  'ALTER TABLE `vendor` ADD COLUMN `password` TEXT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_vendor_email := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'vendor'
+    AND COLUMN_NAME = 'email'
+);
+SET @sql := IF(
+  @has_vendor_email = 0,
+  'ALTER TABLE `vendor` ADD COLUMN `email` VARCHAR(255) NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_vendor_profile_image := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'vendor'
+    AND COLUMN_NAME = 'profileImage'
+);
+SET @sql := IF(
+  @has_vendor_profile_image = 0,
+  'ALTER TABLE `vendor` ADD COLUMN `profileImage` LONGTEXT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_vendor_verified := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'vendor'
+    AND COLUMN_NAME = 'verified'
+);
+SET @sql := IF(
+  @has_vendor_verified = 0,
+  'ALTER TABLE `vendor` ADD COLUMN `verified` BOOLEAN NULL DEFAULT TRUE',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_vendor_verification_code := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'vendor'
+    AND COLUMN_NAME = 'verificationCode'
+);
+SET @sql := IF(
+  @has_vendor_verification_code = 0,
+  'ALTER TABLE `vendor` ADD COLUMN `verificationCode` VARCHAR(255) NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 CREATE TABLE IF NOT EXISTS vendor_role (
   vendor_id BIGINT UNSIGNED NOT NULL,
@@ -22,22 +155,153 @@ CREATE TABLE IF NOT EXISTS vendor_role (
 );
 
 -- Backfill vendor auth fields from user where IDs match.
-UPDATE vendor v
-INNER JOIN user u ON u.id = v.id
+SET @has_user_name := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user' AND COLUMN_NAME = 'name'
+);
+SET @sql := IF(
+  @has_user_name = 1,
+  'UPDATE vendor v INNER JOIN user u ON u.id = v.id SET v.name = COALESCE(NULLIF(v.name, ''''''), NULLIF(u.name, ''''''))',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_user_username := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user' AND COLUMN_NAME = 'username'
+);
+SET @sql := IF(
+  @has_user_username = 1,
+  'UPDATE vendor v INNER JOIN user u ON u.id = v.id SET v.username = COALESCE(NULLIF(v.username, ''''''), NULLIF(u.username, ''''''))',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_user_blocked := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user' AND COLUMN_NAME = 'blocked'
+);
+SET @sql := IF(
+  @has_user_blocked = 1,
+  'UPDATE vendor v INNER JOIN user u ON u.id = v.id SET v.blocked = COALESCE(v.blocked, u.blocked)',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_user_attempted_login := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user' AND COLUMN_NAME = 'attemptedLogin'
+);
+SET @sql := IF(
+  @has_user_attempted_login = 1,
+  'UPDATE vendor v INNER JOIN user u ON u.id = v.id SET v.attemptedLogin = COALESCE(v.attemptedLogin, u.attemptedLogin)',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_user_password := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user' AND COLUMN_NAME = 'password'
+);
+SET @sql := IF(
+  @has_user_password = 1,
+  'UPDATE vendor v INNER JOIN user u ON u.id = v.id SET v.password = COALESCE(NULLIF(v.password, ''''''), NULLIF(u.password, ''''''))',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_user_email := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user' AND COLUMN_NAME = 'email'
+);
+SET @sql := IF(
+  @has_user_email = 1,
+  'UPDATE vendor v INNER JOIN user u ON u.id = v.id SET v.email = COALESCE(NULLIF(v.email, ''''''), NULLIF(u.email, ''''''))',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_user_profile_image := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user' AND COLUMN_NAME = 'profileImage'
+);
+SET @sql := IF(
+  @has_user_profile_image = 1,
+  'UPDATE vendor v INNER JOIN user u ON u.id = v.id SET v.profileImage = COALESCE(NULLIF(v.profileImage, ''''''), NULLIF(u.profileImage, ''''''))',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_user_phone := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user' AND COLUMN_NAME = 'phone'
+);
+SET @sql := IF(
+  @has_user_phone = 1,
+  'UPDATE vendor v INNER JOIN user u ON u.id = v.id SET v.phoneNumber = COALESCE(NULLIF(v.phoneNumber, ''''''), NULLIF(u.phone, ''''''))',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_user_whatsapp := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user' AND COLUMN_NAME = 'whatsapp'
+);
+SET @sql := IF(
+  @has_user_whatsapp = 1,
+  'UPDATE vendor v INNER JOIN user u ON u.id = v.id SET v.whatsAppNumber = COALESCE(NULLIF(v.whatsAppNumber, ''''''), NULLIF(u.whatsapp, ''''''))',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_user_location := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user' AND COLUMN_NAME = 'location'
+);
+SET @sql := IF(
+  @has_user_location = 1,
+  'UPDATE vendor v INNER JOIN user u ON u.id = v.id SET v.location = COALESCE(NULLIF(v.location, ''''''), NULLIF(u.location, ''''''))',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Some legacy DBs do not have user.verified / user.verificationCode.
+-- Keep vendor defaults for those fields in this baseline backfill.
+UPDATE vendor
 SET
-  v.name = COALESCE(NULLIF(v.name, ''), NULLIF(u.name, '')),
-  v.username = COALESCE(NULLIF(v.username, ''), NULLIF(u.username, '')),
-  v.blocked = COALESCE(v.blocked, u.blocked),
-  v.attemptedLogin = COALESCE(v.attemptedLogin, u.attemptedLogin),
-  v.password = COALESCE(NULLIF(v.password, ''), NULLIF(u.password, '')),
-  v.email = COALESCE(NULLIF(v.email, ''), NULLIF(u.email, '')),
-  v.profileImage = COALESCE(NULLIF(v.profileImage, ''), NULLIF(u.profileImage, '')),
-  v.verified = COALESCE(v.verified, u.verified),
-  v.verificationCode = COALESCE(NULLIF(v.verificationCode, ''), NULLIF(u.verificationCode, '')),
-  v.phoneNumber = COALESCE(NULLIF(v.phoneNumber, ''), NULLIF(u.phone, '')),
-  v.whatsAppNumber = COALESCE(NULLIF(v.whatsAppNumber, ''), NULLIF(u.whatsapp, '')),
-  v.location = COALESCE(NULLIF(v.location, ''), NULLIF(u.location, '')),
-  v.dateUpdated = NOW();
+  verified = COALESCE(verified, TRUE),
+  verificationCode = COALESCE(NULLIF(verificationCode, ''), NULL),
+  dateUpdated = NOW();
 
 -- Backfill roles from user_role to vendor_role only for existing vendors.
 INSERT IGNORE INTO vendor_role (vendor_id, role_id)
@@ -77,5 +341,34 @@ INNER JOIN (
 SET v.email = CONCAT('vendor+', v.id, '@local.invalid');
 
 -- Optional uniqueness constraints for cutover safety.
-CREATE UNIQUE INDEX vendor_username_uq ON vendor (username);
-CREATE UNIQUE INDEX vendor_email_uq ON vendor (email);
+SET @has_vendor_username_uq := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'vendor'
+    AND INDEX_NAME = 'vendor_username_uq'
+);
+SET @sql := IF(
+  @has_vendor_username_uq = 0,
+  'CREATE UNIQUE INDEX `vendor_username_uq` ON `vendor` (`username`)',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_vendor_email_uq := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'vendor'
+    AND INDEX_NAME = 'vendor_email_uq'
+);
+SET @sql := IF(
+  @has_vendor_email_uq = 0,
+  'CREATE UNIQUE INDEX `vendor_email_uq` ON `vendor` (`email`)',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;

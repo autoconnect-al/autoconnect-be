@@ -3,10 +3,23 @@ import { PrismaService } from '../../database/prisma.service';
 import { legacyError, legacySuccess } from '../../common/legacy-response';
 import { decodeCaption, isCustomsPaid } from '../imports/utils/caption-processor';
 import { sanitizePostUpdateDataForSource } from '../../common/promotion-field-guard.util';
+import { ApPromptRepository } from './ap-prompt.repository';
+
+interface PromptImportOptions {
+  runId?: string;
+  timeoutMs?: number;
+  maxItems?: number;
+}
+
+const DEFAULT_PROMPT_IMPORT_TIMEOUT_MS = 20_000;
+const DEFAULT_PROMPT_IMPORT_MAX_ITEMS = 250;
 
 @Injectable()
 export class ApPromptService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly promptRepository: ApPromptRepository,
+  ) {}
 
   async generatePrompt(length: number, mode: string) {
     const safeLength =
@@ -66,7 +79,10 @@ export class ApPromptService {
     );
   }
 
-  async importPromptResults(resultJson: string) {
+  async importPromptResults(
+    resultJson: string,
+    options?: PromptImportOptions,
+  ) {
     let parsed: Array<Record<string, unknown>> = [];
     try {
       const value = JSON.parse(resultJson);
@@ -77,113 +93,142 @@ export class ApPromptService {
       return legacyError('Exception occurred while importing result');
     }
 
-    for (const result of parsed) {
-      const id = this.toSafeString(result.id);
-      if (!id) continue;
+    const normalized = this.normalizePromptImportOptions(options);
+    const runId = normalized.runId || this.generatePromptImportRunId();
+    const totalItems = parsed.length;
 
-      const model = this.toSafeNullableString(result.model);
-      const make = this.toSafeNullableString(result.make);
-      const sold = this.booleanFrom(result.sold, false);
-      if ((!model && !make) || sold) {
-        await this.prisma.post.update({
-          where: { id: BigInt(id) },
-          data: { deleted: true, dateUpdated: new Date() },
-        });
-        await this.prisma.car_detail.updateMany({
-          where: {
-            OR: [{ id: BigInt(id) }, { post_id: BigInt(id) }],
-          },
-          data: { deleted: true, dateUpdated: new Date() },
-        });
-        continue;
-      }
-
-      const postId = BigInt(id);
-      // Prefer the row linked by post_id because /post/posts reads from that relation.
-      const carDetail =
-        (await this.prisma.car_detail.findFirst({
-          where: { post_id: postId },
-          orderBy: [{ dateUpdated: 'desc' }, { id: 'desc' }],
-        })) ??
-        (await this.prisma.car_detail.findUnique({
-          where: { id: postId },
-        }));
-      if (!carDetail) continue;
-
-      await this.prisma.car_detail.update({
-        where: { id: carDetail.id },
+    let job = await this.prisma.prompt_import_job.findUnique({
+      where: { runId },
+    });
+    if (!job) {
+      job = await this.prisma.prompt_import_job.create({
         data: {
-          make: make ?? carDetail.make,
-          model: model ?? carDetail.model,
-          variant:
-            this.toSafeNullableString(result.variant) ?? carDetail.variant,
-          registration:
-            (this.toNullableInt(result.registration)?.toString() ??
-              this.toSafeNullableString(result.registration)) ??
-            carDetail.registration,
-          mileage: this.toNullableFloat(result.mileage) ?? carDetail.mileage,
-          transmission:
-            this.toSafeNullableString(result.transmission) ??
-            carDetail.transmission,
-          fuelType:
-            this.toSafeNullableString(result.fuelType) ?? carDetail.fuelType,
-          engineSize:
-            this.toSafeNullableNumericString(result.engineSize) ??
-            carDetail.engineSize,
-          drivetrain:
-            this.toSafeNullableString(result.drivetrain) ??
-            carDetail.drivetrain,
-          seats: this.toNullableInt(result.seats) ?? carDetail.seats,
-          numberOfDoors:
-            this.toNullableInt(result.numberOfDoors) ?? carDetail.numberOfDoors,
-          bodyType:
-            this.toSafeNullableString(result.bodyType) ?? carDetail.bodyType,
-          price: this.toNullableFloat(result.price) ?? carDetail.price,
-          sold: this.booleanFrom(result.sold, carDetail.sold ?? false),
-          customsPaid: this.resolveCustomsPaid(result),
-          priceVerified: this.booleanFrom(
-            result.priceVerified,
-            carDetail.priceVerified ?? false,
-          ),
-          mileageVerified: this.booleanFrom(
-            result.mileageVerified,
-            carDetail.mileageVerified ?? false,
-          ),
-          fuelVerified: this.booleanFrom(
-            result.fuelVerified,
-            carDetail.fuelVerified ?? false,
-          ),
-          contact: result.contact
-            ? JSON.stringify(result.contact)
-            : carDetail.contact,
-          published: true,
-          type: this.toSafeString(result.type) || carDetail.type,
-          dateUpdated: new Date(),
+          runId,
+          status: 'RUNNING',
+          totalItems,
+          checkpointIndex: 0,
+          processedItems: 0,
+          dateFinished: null,
+          lastError: null,
         },
       });
-
-      const postUpdateData = sanitizePostUpdateDataForSource(
-        {
-          live: true,
-          revalidate: false,
-          origin: this.toSafeString(result.origin) || undefined,
-          status: this.toSafeString(result.status) || undefined,
-          renewTo: this.toNullableInt(result.renewTo) ?? undefined,
-          highlightedTo: this.toNullableInt(result.highlightedTo) ?? undefined,
-          promotionTo: this.toNullableInt(result.promotionTo) ?? undefined,
-          mostWantedTo: this.toNullableInt(result.mostWantedTo) ?? undefined,
-          dateUpdated: new Date(),
+    } else if (job.totalItems !== totalItems) {
+      return legacyError('Payload size does not match existing run checkpoint', 409);
+    } else {
+      await this.prisma.prompt_import_job.update({
+        where: { runId },
+        data: {
+          status: 'RUNNING',
+          dateFinished: null,
+          lastError: null,
         },
-        'untrusted',
-      );
-      await this.prisma.post.update({
-        where: { id: BigInt(id) },
-        data: postUpdateData,
       });
     }
 
-    // await this.rebuildSearchFromPosts();
-    return legacySuccess(null, 'Updated car detail');
+    if (job.checkpointIndex >= totalItems) {
+      const status = await this.getPromptImportStatus(runId);
+      return legacySuccess(status.result, 'Prompt import already completed');
+    }
+
+    const startedAt = Date.now();
+    let checkpointIndex = Math.max(0, Math.min(job.checkpointIndex, totalItems));
+    let processedInThisRun = 0;
+    let stopReason: 'timeout' | 'max-items' | null = null;
+
+    try {
+      for (let index = checkpointIndex; index < totalItems; index += 1) {
+        if (Date.now() - startedAt >= normalized.timeoutMs) {
+          stopReason = 'timeout';
+          break;
+        }
+        if (processedInThisRun >= normalized.maxItems) {
+          stopReason = 'max-items';
+          break;
+        }
+
+        await this.processPromptImportResult(parsed[index] ?? {});
+        checkpointIndex = index + 1;
+        processedInThisRun += 1;
+
+        await this.prisma.prompt_import_job.update({
+          where: { runId },
+          data: {
+            checkpointIndex,
+            processedItems: checkpointIndex,
+            dateUpdated: new Date(),
+          },
+        });
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unknown prompt import error';
+      await this.prisma.prompt_import_job.update({
+        where: { runId },
+        data: {
+          status: 'FAILED',
+          checkpointIndex,
+          processedItems: checkpointIndex,
+          lastError: message,
+          dateUpdated: new Date(),
+        },
+      });
+      return legacyError(`Exception occurred while importing result: ${message}`);
+    }
+
+    const completed = checkpointIndex >= totalItems;
+    await this.prisma.prompt_import_job.update({
+      where: { runId },
+      data: {
+        status: completed ? 'COMPLETED' : 'CHECKPOINTED',
+        checkpointIndex,
+        processedItems: checkpointIndex,
+        lastError: null,
+        dateUpdated: new Date(),
+        dateFinished: completed ? new Date() : null,
+      },
+    });
+
+    const status = await this.getPromptImportStatus(runId);
+    if (completed) {
+      return legacySuccess(status.result, 'Updated car detail');
+    }
+
+    return legacySuccess(
+      {
+        ...(status.result as Record<string, unknown>),
+        stopReason,
+        processedInThisRun,
+      },
+      'Checkpoint saved. Resume by reusing the same runId',
+    );
+  }
+
+  async getPromptImportStatus(runIdInput: string) {
+    const runId = this.toSafeString(runIdInput);
+    if (!runId) {
+      return legacyError('runId is required', 400);
+    }
+
+    const job = await this.prisma.prompt_import_job.findUnique({
+      where: { runId },
+    });
+    if (!job) {
+      return legacyError('Prompt import run not found', 404);
+    }
+
+    const result = {
+      runId: job.runId,
+      status: job.status,
+      totalItems: job.totalItems,
+      checkpointIndex: job.checkpointIndex,
+      processedItems: job.processedItems,
+      remainingItems: Math.max(job.totalItems - job.checkpointIndex, 0),
+      dateCreated: job.dateCreated,
+      dateUpdated: job.dateUpdated,
+      dateFinished: job.dateFinished,
+      lastError: job.lastError,
+    };
+    return legacySuccess(result, 'Prompt import status loaded');
   }
 
   async cleanCache() {
@@ -230,125 +275,160 @@ export class ApPromptService {
     }
   }
 
+  private normalizePromptImportOptions(
+    options?: PromptImportOptions,
+  ): Required<PromptImportOptions> {
+    const timeoutMs = this.toBoundedInt(
+      options?.timeoutMs,
+      DEFAULT_PROMPT_IMPORT_TIMEOUT_MS,
+      5_000,
+      120_000,
+    );
+    const maxItems = this.toBoundedInt(
+      options?.maxItems,
+      DEFAULT_PROMPT_IMPORT_MAX_ITEMS,
+      1,
+      5_000,
+    );
+
+    return {
+      runId: this.toSafeString(options?.runId),
+      timeoutMs,
+      maxItems,
+    };
+  }
+
+  private toBoundedInt(
+    value: unknown,
+    fallback: number,
+    min: number,
+    max: number,
+  ): number {
+    const parsed = this.toNullableInt(value);
+    if (parsed === null) return fallback;
+    if (parsed < min) return min;
+    if (parsed > max) return max;
+    return parsed;
+  }
+
+  private generatePromptImportRunId(): string {
+    return `prompt-import-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  private async processPromptImportResult(result: Record<string, unknown>) {
+    const id = this.toSafeString(result.id);
+    if (!id) return;
+
+    const model = this.toSafeNullableString(result.model);
+    const make = this.toSafeNullableString(result.make);
+    const sold = this.booleanFrom(result.sold, false);
+    if ((!model && !make) || sold) {
+      await this.prisma.post.update({
+        where: { id: BigInt(id) },
+        data: { deleted: true, dateUpdated: new Date() },
+      });
+      await this.prisma.car_detail.updateMany({
+        where: {
+          OR: [{ id: BigInt(id) }, { post_id: BigInt(id) }],
+        },
+        data: { deleted: true, dateUpdated: new Date() },
+      });
+      return;
+    }
+
+    const postId = BigInt(id);
+    // Prefer the row linked by post_id because /post/posts reads from that relation.
+    const carDetail =
+      (await this.prisma.car_detail.findFirst({
+        where: { post_id: postId },
+        orderBy: [{ dateUpdated: 'desc' }, { id: 'desc' }],
+      })) ??
+      (await this.prisma.car_detail.findUnique({
+        where: { id: postId },
+      }));
+    if (!carDetail) return;
+
+    await this.prisma.car_detail.update({
+      where: { id: carDetail.id },
+      data: {
+        make: make ?? carDetail.make,
+        model: model ?? carDetail.model,
+        variant: this.toSafeNullableString(result.variant) ?? carDetail.variant,
+        registration:
+          (this.toNullableInt(result.registration)?.toString() ??
+            this.toSafeNullableString(result.registration)) ??
+          carDetail.registration,
+        mileage: this.toNullableFloat(result.mileage) ?? carDetail.mileage,
+        transmission:
+          this.toSafeNullableString(result.transmission) ??
+          carDetail.transmission,
+        fuelType: this.toSafeNullableString(result.fuelType) ?? carDetail.fuelType,
+        engineSize:
+          this.toSafeNullableNumericString(result.engineSize) ??
+          carDetail.engineSize,
+        drivetrain:
+          this.toSafeNullableString(result.drivetrain) ?? carDetail.drivetrain,
+        seats: this.toNullableInt(result.seats) ?? carDetail.seats,
+        numberOfDoors:
+          this.toNullableInt(result.numberOfDoors) ?? carDetail.numberOfDoors,
+        bodyType: this.toSafeNullableString(result.bodyType) ?? carDetail.bodyType,
+        price: this.toNullableFloat(result.price) ?? carDetail.price,
+        sold: this.booleanFrom(result.sold, carDetail.sold ?? false),
+        customsPaid: this.resolveCustomsPaid(result),
+        priceVerified: this.booleanFrom(
+          result.priceVerified,
+          carDetail.priceVerified ?? false,
+        ),
+        mileageVerified: this.booleanFrom(
+          result.mileageVerified,
+          carDetail.mileageVerified ?? false,
+        ),
+        fuelVerified: this.booleanFrom(
+          result.fuelVerified,
+          carDetail.fuelVerified ?? false,
+        ),
+        contact: result.contact ? JSON.stringify(result.contact) : carDetail.contact,
+        published: true,
+        type: this.toSafeString(result.type) || carDetail.type,
+        dateUpdated: new Date(),
+      },
+    });
+
+    const postUpdateData = sanitizePostUpdateDataForSource(
+      {
+        live: true,
+        revalidate: false,
+        origin: this.toSafeString(result.origin) || undefined,
+        status: this.toSafeString(result.status) || undefined,
+        renewTo: this.toNullableInt(result.renewTo) ?? undefined,
+        highlightedTo: this.toNullableInt(result.highlightedTo) ?? undefined,
+        promotionTo: this.toNullableInt(result.promotionTo) ?? undefined,
+        mostWantedTo: this.toNullableInt(result.mostWantedTo) ?? undefined,
+        dateUpdated: new Date(),
+      },
+      'untrusted',
+    );
+    await this.prisma.post.update({
+      where: { id: BigInt(id) },
+      data: postUpdateData,
+    });
+  }
+
   private async generateVariantPrompt(length: number): Promise<{
     prompt: string;
     size: number;
   }> {
-    const problematicMakes = await this.prisma.$queryRawUnsafe<
-      Array<{ make: string | null }>
-    >(
-      `
-      SELECT cd.make
-      FROM car_detail cd
-      LEFT JOIN post p ON p.id = post_id
-      WHERE FROM_UNIXTIME(p.createdTime) > DATE_SUB(NOW(), INTERVAL 3 MONTH)
-        AND p.deleted = 0
-        AND p.live = 1
-        AND cd.deleted = 0
-        AND cd.published = 1
-        AND cd.sold = 0
-        AND p.origin != 'manual'
-        AND (
-          (cd.model NOT IN (SELECT REPLACE(cmm.Model, ' (all)', '') FROM car_make_model cmm WHERE cmm.isVariant = 0) AND cd.model != 'Others')
-          OR (
-            cd.make IN ('Mercedes-Benz', 'BMW', 'Lexus', 'Porsche', 'Citroen')
-            AND cd.variant NOT RLIKE (
-              SELECT GROUP_CONCAT(REPLACE(cmm.Model, '  ', '') SEPARATOR '|')
-              FROM car_make_model cmm
-              WHERE cmm.Make = cd.make
-                AND cmm.isVariant = 1
-                AND (
-                  cmm.Model LIKE CONCAT(REPLACE(cd.model, '-Class', ''), ' %')
-                  OR cmm.Model LIKE CONCAT(REPLACE(cd.model, '-Class', ''), '%')
-                )
-            )
-          )
-          OR engineSize > 10
-          OR bodyType IS NULL
-          OR (
-            type = 'car'
-            AND bodyType NOT IN ('Compact', 'Convertible', 'Coupe', 'SUV/Off-Road/Pick-up', 'Station wagon', 'Sedans', 'Van', 'Transporter', 'Other')
-          )
-          OR (
-            type = 'motorcycle'
-            AND bodyType NOT IN ('Supersport', 'Sport touring', 'Chopper/Cruiser', 'Touring Enduro', 'Streetfighter', 'Enduro Bike', 'Motocrosser', 'Sidecar', 'Classic', 'Three Wheeler', 'Scooter', 'Moped', 'Super Moto', 'Minibike', 'Naked Bike', 'Quad', 'Rally', 'Trials Bike', 'Racing', 'Tourer', 'Others')
-          )
-          OR fuelType NOT IN ('petrol', 'petrol-gas', 'gas', 'diesel', 'electric', 'hybrid')
-          OR fuelType IS NULL
-        )
-      ORDER BY cd.make
-      `,
-    );
+    const problematicMakes = await this.promptRepository.findVariantProblematicMakes();
 
     const chunkSize = Math.max(1, length);
     for (const makeRow of problematicMakes) {
       const make = this.toSafeString(makeRow.make);
       if (!make) continue;
 
-      const models = await this.prisma.$queryRawUnsafe<
-        Array<{ model: string | null; isVariant: number | boolean | null }>
-      >(
-        'SELECT DISTINCT model, isVariant FROM car_make_model WHERE make = ? ORDER BY id',
-        make,
-      );
+      const models = await this.promptRepository.findMakeModels(make);
       if (models.length === 0) continue;
 
-      const problems = await this.prisma.$queryRawUnsafe<
-        Array<{
-          id: bigint;
-          make: string | null;
-          model: string | null;
-          variant: string | null;
-          bodyType: string | null;
-          fuelType: string | null;
-          engineSize: string | null;
-        }>
-      >(
-        `
-        SELECT cd.id, cd.make, cd.model, cd.variant, bodyType, fuelType, engineSize
-        FROM car_detail cd
-        LEFT JOIN post p ON p.id = post_id
-        WHERE FROM_UNIXTIME(p.createdTime) > DATE_SUB(NOW(), INTERVAL 3 MONTH)
-          AND p.deleted = 0
-          AND p.live = 1
-          AND cd.deleted = 0
-          AND cd.published = 1
-          AND cd.sold = 0
-          AND cd.make = ?
-          AND p.vendor_id != 1
-          AND (
-            (cd.model NOT IN (SELECT REPLACE(cmm.Model, ' (all)', '') FROM car_make_model cmm WHERE cmm.Make = ? AND cmm.isVariant = 0) AND cd.model != 'Other')
-            OR (
-              cd.make IN ('Mercedes-Benz', 'BMW', 'Lexus', 'Porsche', 'Citroen')
-              AND cd.variant IS NOT NULL
-              AND cd.variant NOT RLIKE (
-                SELECT GROUP_CONCAT(REPLACE(cmm.Model, '  ', '') SEPARATOR '|')
-                FROM car_make_model cmm
-                WHERE cmm.Make = cd.make
-                  AND cmm.isVariant = 1
-                  AND (
-                    cmm.Model LIKE CONCAT(REPLACE(cd.model, '-Class', ''), ' %')
-                    OR cmm.Model LIKE CONCAT(REPLACE(cd.model, '-Class', ''), '%')
-                  )
-              )
-            )
-            OR engineSize > 10
-            OR bodyType IS NULL
-            OR (
-              type = 'car'
-              AND bodyType NOT IN ('Compact', 'Convertible', 'Coupe', 'SUV/Off-Road/Pick-up', 'Station wagon', 'Sedans', 'Van', 'Transporter', 'Other')
-            )
-            OR (
-              type = 'motorcycle'
-              AND bodyType NOT IN ('Supersport', 'Sport touring', 'Chopper/Cruiser', 'Touring Enduro', 'Streetfighter', 'Enduro Bike', 'Motocrosser', 'Sidecar', 'Classic', 'Three Wheeler', 'Scooter', 'Moped', 'Super Moto', 'Minibike', 'Naked Bike', 'Quad', 'Rally', 'Trials Bike', 'Racing', 'Tourer', 'Others')
-            )
-            OR fuelType NOT IN ('petrol', 'petrol-gas', 'gas', 'diesel', 'electric', 'hybrid')
-            OR fuelType IS NULL
-          )
-        `,
-        make,
-        make,
-      );
+      const problems = await this.promptRepository.findVariantProblemsByMake(make);
 
       if (problems.length === 0) continue;
 
@@ -440,21 +520,7 @@ export class ApPromptService {
     If the type is motorcycle, body type should be one of: [Supersport, Sport touring, Chopper/Cruiser, Touring Enduro, Streetfighter, Enduro Bike, Motocrosser, Sidecar, Classic, Three Wheeler, Scooter, Moped, Super Moto, Minibike, Naked Bike, Quad, Rally, Trials Bike, Racing, Tourer, Others].
     Try to fill the unknown values based on your knowledge of the make and model. 
 `;
-    const rows = await this.prisma.$queryRawUnsafe<
-      Array<{ id: bigint; cleanedCaption: string | null }>
-    >(
-      `
-      SELECT p.id, p.cleanedCaption
-      FROM post p
-      LEFT JOIN car_detail cd ON cd.post_id = p.id
-      WHERE (cd.published = 0 OR cd.published IS NULL OR p.revalidate = 1)
-        AND (cd.sold = 0 OR cd.sold IS NULL)
-        AND (cd.deleted = 0 OR cd.deleted IS NULL)
-        AND (p.origin = 'manual' OR p.origin = 'instagram')
-        AND (p.deleted = 0 OR p.deleted IS NULL)
-      ORDER BY p.dateCreated DESC
-      `,
-    );
+    const rows = await this.promptRepository.findGeneralPromptRows();
     const captions = rows.map(
       (row) =>
         `" id: ${String(row.id)} - ${this.toSafeString(row.cleanedCaption)}"`,
@@ -488,151 +554,7 @@ export class ApPromptService {
             drivetrain: 2WD, 4WD, AWD, FWD, RWD or 4x4,
             engineSize: float,
         }. `;
-    const rows = await this.prisma.$queryRawUnsafe<
-      Array<{
-        id: bigint;
-        make: string | null;
-        model: string | null;
-        cleanedCaption: string | null;
-        contact: string | null;
-      }>
-    >(
-      `
-      SELECT
-        cd.id,
-        cd.make,
-        cd.model,
-        p.cleanedCaption,
-        cd.contact
-      FROM post p
-      JOIN car_detail cd ON cd.post_id = p.id
-      WHERE
-        cd.deleted = 0
-        AND cd.published = 1
-        AND cd.sold = 0
-        AND cd.type = 'car'
-        AND p.deleted = 0
-        AND p.live = 1
-        AND p.origin <> 'manual'
-        AND p.vendor_id <> 1
-        AND p.createdTime >= UNIX_TIMESTAMP(NOW() - INTERVAL 3 MONTH)
-        AND (
-          p.status = 'DRAFT'
-          OR cd.contact IS NULL
-          OR cd.contact NOT LIKE '%{%'
-          OR cd.contact LIKE '%unknown%'
-          OR cd.contact LIKE '%provided%'
-          OR cd.contact LIKE '%null%'
-          OR cd.contact LIKE '%www%'
-          OR cd.contact LIKE '%http%'
-          OR (
-            cd.contact LIKE '%"phone_number": "%'
-            AND cd.contact NOT LIKE '%"phone_number": ""%'
-            AND (
-              (
-                cd.contact NOT LIKE '%"phone_number": "+355%'
-                AND cd.contact NOT LIKE '%"phone_number": "068%'
-                AND cd.contact NOT LIKE '%"phone_number": "069%'
-                AND cd.contact NOT LIKE '%"phone_number": "067%'
-                AND cd.contact NOT LIKE '%"phone_number": "06%'
-                AND cd.contact NOT LIKE '%"phone_number": "04%'
-                AND cd.contact NOT LIKE '%"phone_number": "+49%'
-                AND cd.contact NOT LIKE '%"phone_number": "+44%'
-                AND cd.contact NOT LIKE '%"phone_number": "+82%'
-                AND cd.contact NOT LIKE '%"phone_number": "+1%'
-                AND cd.contact NOT LIKE '%"phone_number": "+39%'
-                AND cd.contact NOT LIKE '%"phone_number": "+38%'
-                AND cd.contact NOT LIKE '%"phone_number": "+97%'
-                AND cd.contact NOT LIKE '%"phone_number": "+46%'
-                AND cd.contact NOT LIKE '%"phone_number": "+43%'
-                AND cd.contact NOT LIKE '%"phone_number": "+79%'
-                AND cd.contact NOT LIKE '%"phone_number": "+34%'
-                AND cd.contact NOT LIKE '%"phone_number": "+32%'
-                AND cd.contact NOT LIKE '%"phone_number": "+30%'
-                AND cd.contact NOT LIKE '%"phone_number": "+33%'
-              )
-              OR cd.contact LIKE '%"phone_number": "+35506%'
-              OR cd.contact LIKE '%"phone_number": "+3869%'
-              OR cd.contact LIKE '%"phone_number": "+3868%'
-              OR cd.contact LIKE '%"phone_number": "+3867%'
-              OR cd.contact LIKE '%"phone_number": "+3969%'
-            )
-          )
-          OR cd.drivetrain IS NULL
-          OR cd.drivetrain = ''
-          OR cd.drivetrain NOT IN ('2WD','4WD','AWD','FWD','RWD','4x4')
-          OR cd.numberOfDoors IS NULL
-          OR cd.numberOfDoors = ''
-          OR cd.seats IS NULL
-          OR cd.seats = ''
-          OR cd.bodyType IS NULL
-          OR cd.bodyType = ''
-          OR cd.bodyType = 'other'
-          OR (
-            cd.registration < 2022
-            AND cd.mileage > 0
-            AND cd.mileage < 10000
-            AND (cd.mileageVerified = 0 OR cd.mileageVerified IS NULL)
-          )
-          OR (
-            cd.registration < 2022
-            AND cd.price > 0
-            AND cd.price < 1100
-            AND (cd.priceVerified = 0 OR cd.priceVerified IS NULL)
-          )
-          OR (
-            cd.registration < 2022
-            AND cd.price > 100000
-            AND (cd.priceVerified = 0 OR cd.priceVerified IS NULL)
-          )
-          OR cd.variant LIKE '%viti%'
-          OR cd.contact LIKE '%viti%'
-          OR (
-            cd.fuelType = 'diesel'
-            AND (cd.fuelVerified = 0 OR cd.fuelVerified IS NULL)
-            AND p.cleanedCaption NOT REGEXP '[0-9]+ *d'
-            AND cd.model NOT REGEXP '[0-9]+ *d'
-            AND cd.variant NOT REGEXP '[0-9]+ *d'
-            AND (
-              LOWER(p.cleanedCaption) NOT REGEXP '(naft(e|a)?|dizel|diezel|diesel|tdi|cdi|tdci|hdi|dci|cdti|jtd|multijet|crdi|d-4d|d4d|sdv6|tdv6|(^|[^a-z0-9])d4([^a-z0-9]|$))'
-              AND LOWER(cd.variant) NOT REGEXP '(dizel|diezel|diesel|tdi|cdi|tdci|hdi|dci|cdti|jtd|multijet|crdi|d-4d|d4d|sdv6|tdv6|(^|[^a-z0-9])d4([^a-z0-9]|$))'
-            )
-          )
-          OR (
-            cd.fuelType = 'petrol'
-            AND (cd.fuelVerified = 0 OR cd.fuelVerified IS NULL)
-            AND p.cleanedCaption NOT REGEXP '[0-9]+ *(i|li)'
-            AND cd.model NOT REGEXP '[0-9]+ *(i|li)'
-            AND cd.variant NOT REGEXP '[0-9]+ *(i|li)'
-            AND p.cleanedCaption NOT REGEXP '(SQ|RS Q|RS|S)[0-9]'
-            AND cd.model NOT REGEXP '(SQ|RS Q|RS|S)[0-9]'
-            AND cd.variant NOT REGEXP '(SQ|RS Q|RS|S)[0-9]'
-            AND LOWER(p.cleanedCaption) NOT REGEXP '(^|[^a-z0-9])(amg|v8|v10|v12)([^a-z0-9]|$)'
-            AND LOWER(cd.variant) NOT REGEXP '(^|[^a-z0-9])(amg|v8|v10|v12)([^a-z0-9]|$)'
-            AND LOWER(p.cleanedCaption) NOT REGEXP '(^|[^0-9])(6\\.2|6\\.3|5\\.5|5\\.0|4\\.0)([^0-9]|$)'
-            AND LOWER(cd.variant) NOT REGEXP '(^|[^0-9])(6\\.2|6\\.3|5\\.5|5\\.0|4\\.0)([^0-9]|$)'
-            AND NOT (
-              LOWER(cd.variant) REGEXP '(^|[^0-9])63([^0-9]|$)'
-              AND LOWER(cd.variant) REGEXP 'amg'
-            )
-            AND (
-              LOWER(p.cleanedCaption) NOT REGEXP '(benzin|benzine|petrol|gasoline|bencin|benxin|benzina|essence)'
-              AND LOWER(cd.model) NOT REGEXP '(benzin|benzine|petrol|gasoline|bencin|benxin|benzina|essence)'
-              AND LOWER(cd.variant) NOT REGEXP '(benzin|benzine|petrol|gasoline|bencin|benxin|benzina|essence)'
-              AND LOWER(p.cleanedCaption) NOT REGEXP '(^|[^a-z0-9])(fsi|tfsi|tsi|gti|t-?jet|ecoboost|turbo|kompressor|skyactiv-g|vtec|valvematic|vvt-i)([^a-z0-9]|$)'
-              AND LOWER(cd.model) NOT REGEXP '(^|[^a-z0-9])(fsi|tfsi|tsi|gti|t-?jet|ecoboost|turbo|kompressor|skyactiv-g|vtec|valvematic|vvt-i)([^a-z0-9]|$)'
-              AND LOWER(cd.variant) NOT REGEXP '(^|[^a-z0-9])(fsi|tfsi|tsi|gti|t-?jet|ecoboost|turbo|kompressor|skyactiv-g|vtec|valvematic|vvt-i)([^a-z0-9]|$)'
-              AND LOWER(p.cleanedCaption) NOT REGEXP '(^|[^0-9])([0-9]\\.[0-9]|[1-6]\\.[0-9])\\s*(i|fsi|tfsi|tsi)([^a-z0-9]|$)'
-              AND LOWER(cd.model) NOT REGEXP '(^|[^0-9])([0-9]\\.[0-9]|[1-6]\\.[0-9])\\s*(i|fsi|tfsi|tsi)([^a-z0-9]|$)'
-              AND LOWER(cd.variant) NOT REGEXP '(^|[^0-9])([0-9]\\.[0-9]|[1-6]\\.[0-9])\\s*(i|fsi|tfsi|tsi)([^a-z0-9]|$)'
-              AND LOWER(p.cleanedCaption) NOT REGEXP '(^|[^0-9])(16i|18i|20i|23i|25i|28i|30i|35i|40i|45i|50i)([^a-z0-9]|$)'
-              AND LOWER(cd.model) NOT REGEXP '(^|[^0-9])(16i|18i|20i|23i|25i|28i|30i|35i|40i|45i|50i)([^a-z0-9]|$)'
-              AND LOWER(cd.variant) NOT REGEXP '(^|[^0-9])(16i|18i|20i|23i|25i|28i|30i|35i|40i|45i|50i)([^a-z0-9]|$)'
-            )
-          )
-        )
-      `,
-    );
+    const rows = await this.promptRepository.findRegistrationPromptRows();
     const captions = rows.map(
       (row) => `{
                             id: ${String(row.id)}
@@ -666,65 +588,7 @@ export class ApPromptService {
             mileage: int,
             emissionGroup: one of Euro 1, Euro 2, Euro 3, Euro 4, Euro 5, Euro 6,
         }. `;
-    const rows = await this.prisma.$queryRawUnsafe<
-      Array<{
-        id: bigint;
-        cleanedCaption: string | null;
-        make: string | null;
-        model: string | null;
-        registration: string | number | null;
-        fuelType: string | null;
-      }>
-    >(
-      `
-      SELECT
-        p.id,
-        p.cleanedCaption,
-        cd.mileage,
-        cd.price,
-        cd.sold,
-        cd.make,
-        cd.model,
-        cd.registration,
-        cd.fuelType,
-        cd.emissionGroup
-      FROM car_detail cd
-      LEFT JOIN post p ON cd.post_id = p.id
-      WHERE
-        FROM_UNIXTIME(p.createdTime) > DATE_SUB(NOW(), INTERVAL 3 MONTH)
-        AND cd.deleted = 0
-        AND cd.published = 1
-        AND p.deleted = 0
-        AND p.live = 1
-        AND cd.mileage > 0
-        AND cd.mileage < 1000
-        AND cd.sold = 0
-        AND p.origin != 'manual'
-        AND (cd.mileageVerified = 0 OR cd.mileageVerified IS NULL)
-        AND (
-          cd.price = cd.mileage
-          OR (
-            p.cleanedCaption NOT LIKE CONCAT('%', FORMAT(cd.mileage, 0, 'de_DE'), '%')
-            AND p.cleanedCaption NOT LIKE CONCAT('%', FORMAT(cd.mileage, 0, 'en_US'), '%')
-            AND p.cleanedCaption NOT LIKE CONCAT('%', cd.mileage, '%')
-            AND REPLACE(p.cleanedCaption, ' ', '') NOT LIKE CONCAT('%', cd.mileage, '%')
-            AND p.cleanedCaption NOT REGEXP CONCAT('(^|[^0-9])', cd.mileage DIV 1000, '\\s*mij([^a-zA-Z]|$)')
-            AND p.cleanedCaption NOT REGEXP CONCAT('(^|[^0-9])', cd.mileage DIV 1000, '\\s*mi([^a-zA-Z]|$)')
-            AND p.cleanedCaption NOT REGEXP CONCAT('(^|[^0-9])', cd.mileage DIV 1000, '\\s*Mij([^a-zA-Z]|$)')
-            AND p.cleanedCaption NOT REGEXP CONCAT('(^|[^0-9])', cd.mileage DIV 1000, '\\s*mije([^a-zA-Z]|$)')
-            AND p.cleanedCaption NOT REGEXP CONCAT('(^|[^0-9])', cd.mileage DIV 1000, '\\s*Mije([^a-zA-Z]|$)')
-            AND p.cleanedCaption NOT REGEXP CONCAT('(^|[^0-9])', cd.mileage DIV 1000, '\\s* mij([^a-zA-Z]|$)')
-            AND p.cleanedCaption NOT REGEXP CONCAT('(^|[^0-9])', cd.mileage DIV 1000, '\\s* mi([^a-zA-Z]|$)')
-            AND p.cleanedCaption NOT REGEXP CONCAT('(^|[^0-9])', cd.mileage DIV 1000, '\\s* Mij([^a-zA-Z]|$)')
-            AND p.cleanedCaption NOT REGEXP CONCAT('(^|[^0-9])', cd.mileage DIV 1000, '\\s* mije([^a-zA-Z]|$)')
-            AND p.cleanedCaption NOT REGEXP CONCAT('(^|[^0-9])', cd.mileage DIV 1000, '\\s* Mije([^a-zA-Z]|$)')
-            AND p.cleanedCaption NOT REGEXP CONCAT('(^|[^0-9])', cd.mileage DIV 1000, '\\s*k([^a-zA-Z]|$)')
-            AND p.cleanedCaption NOT REGEXP CONCAT('(^|[^0-9])', cd.mileage DIV 1000, '\\s*K([^a-zA-Z]|$)')
-          )
-        )
-      ORDER BY cd.mileage
-      `,
-    );
+    const rows = await this.promptRepository.findMileagePromptRows();
     const captions = rows.map(
       (row) => `{
                             id: ${String(row.id)}
@@ -759,66 +623,7 @@ export class ApPromptService {
             price: int,
             emissionGroup: one of Euro 1, Euro 2, Euro 3, Euro 4, Euro 5, Euro 6,
         }. `;
-    const rows = await this.prisma.$queryRawUnsafe<
-      Array<{
-        id: bigint;
-        cleanedCaption: string | null;
-        make: string | null;
-        model: string | null;
-        registration: string | number | null;
-        fuelType: string | null;
-      }>
-    >(
-      `
-      SELECT
-        cd.id,
-        p.cleanedCaption,
-        cd.mileage,
-        cd.price,
-        cd.sold,
-        cd.make,
-        cd.model,
-        cd.registration,
-        cd.fuelType,
-        cd.emissionGroup
-      FROM car_detail cd
-      LEFT JOIN post p ON cd.post_id = p.id
-      LEFT JOIN vendor v ON v.id = p.vendor_id
-      WHERE
-        FROM_UNIXTIME(p.createdTime) > DATE_SUB(NOW(), INTERVAL 3 MONTH)
-        AND cd.deleted = 0
-        AND cd.published = 1
-        AND p.deleted = 0
-        AND p.live = 1
-        AND cd.price > 0
-        AND cd.sold = 0
-        AND p.origin != 'manual'
-        AND p.vendor_id != 1
-        AND (cd.priceVerified = 0 OR cd.priceVerified IS NULL)
-        AND (
-          cd.price = cd.mileage
-          OR (
-            p.cleanedCaption NOT LIKE CONCAT('%', FORMAT(cd.price, 0, 'de_DE'), '%')
-            AND p.cleanedCaption NOT LIKE CONCAT('%', FORMAT(cd.price, 0, 'en_US'), '%')
-            AND p.cleanedCaption NOT LIKE CONCAT('%', cd.price, '%')
-            AND REPLACE(p.cleanedCaption, ' ', '') NOT LIKE CONCAT('%', cd.price, '%')
-            AND p.cleanedCaption NOT REGEXP CONCAT('(^|[^0-9])', cd.price DIV 1000, '\\s*mij([^a-zA-Z]|$)')
-            AND p.cleanedCaption NOT REGEXP CONCAT('(^|[^0-9])', cd.price DIV 1000, '\\s*mi([^a-zA-Z]|$)')
-            AND p.cleanedCaption NOT REGEXP CONCAT('(^|[^0-9])', cd.price DIV 1000, '\\s*Mij([^a-zA-Z]|$)')
-            AND p.cleanedCaption NOT REGEXP CONCAT('(^|[^0-9])', cd.price DIV 1000, '\\s*mije([^a-zA-Z]|$)')
-            AND p.cleanedCaption NOT REGEXP CONCAT('(^|[^0-9])', cd.price DIV 1000, '\\s*Mije([^a-zA-Z]|$)')
-            AND p.cleanedCaption NOT REGEXP CONCAT('(^|[^0-9])', cd.price DIV 1000, '\\s* mij([^a-zA-Z]|$)')
-            AND p.cleanedCaption NOT REGEXP CONCAT('(^|[^0-9])', cd.price DIV 1000, '\\s* mi([^a-zA-Z]|$)')
-            AND p.cleanedCaption NOT REGEXP CONCAT('(^|[^0-9])', cd.price DIV 1000, '\\s* Mij([^a-zA-Z]|$)')
-            AND p.cleanedCaption NOT REGEXP CONCAT('(^|[^0-9])', cd.price DIV 1000, '\\s* mije([^a-zA-Z]|$)')
-            AND p.cleanedCaption NOT REGEXP CONCAT('(^|[^0-9])', cd.price DIV 1000, '\\s* Mije([^a-zA-Z]|$)')
-            AND p.cleanedCaption NOT REGEXP CONCAT('(^|[^0-9])', cd.price DIV 1000, '\\s*k([^a-zA-Z]|$)')
-            AND p.cleanedCaption NOT REGEXP CONCAT('(^|[^0-9])', cd.price DIV 1000, '\\s*K([^a-zA-Z]|$)')
-          )
-        )
-      ORDER BY cd.price
-      `,
-    );
+    const rows = await this.promptRepository.findPricePromptRows();
     const captions = rows.map(
       (row) => `{
                             id: ${String(row.id)}
@@ -859,34 +664,7 @@ export class ApPromptService {
             engineSize: float,
             bodyType: one of [Supersport, Sport touring, Chopper/Cruiser, Touring Enduro, Streetfighter, Enduro Bike, Motocrosser, Sidecar, Classic, Three Wheeler, Scooter, Moped, Super Moto, Minibike, Naked Bike, Quad, Rally, Trials Bike, Racing, Tourer, Others] 
         }. `;
-    const rows = await this.prisma.$queryRawUnsafe<
-      Array<{
-        id: bigint;
-        make: string | null;
-        model: string | null;
-        cleanedCaption: string | null;
-        contact: string | null;
-      }>
-    >(
-      `
-      SELECT cd.id, cd.make, cd.model, p.cleanedCaption, cd.contact, cd.bodyType, cd.drivetrain, cd.numberOfDoors, cd.seats
-      FROM post p
-      LEFT JOIN car_detail cd ON p.id = cd.post_id
-      WHERE cd.deleted = 0
-        AND cd.published = 1
-        AND p.deleted = 0
-        AND p.live = 1
-        AND cd.type = "motorcycle"
-        AND p.origin != "manual"
-        AND FROM_UNIXTIME(p.createdTime) > DATE_SUB(NOW(), INTERVAL 3 MONTH)
-        AND (
-          (cd.contact NOT LIKE "%{%" OR cd.contact IS NULL)
-          OR (cd.drivetrain IS NULL OR cd.drivetrain = "" OR drivetrain NOT IN ("2WD", "4WD", "AWD", "FWD", "RWD", "4x4"))
-          OR ((cd.numberOfDoors IS NULL OR cd.numberOfDoors = "" OR cd.numberOfDoors > 2) AND cd.numberOfDoors != 0)
-          OR (cd.seats IS NULL OR cd.seats = "" OR cd.seats > 2)
-        )
-      `,
-    );
+    const rows = await this.promptRepository.findMotorcyclePromptRows();
     const captions = rows.map(
       (row) => `{
                             id: ${String(row.id)}

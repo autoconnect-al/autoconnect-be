@@ -71,6 +71,21 @@ model import_status {
   vendorAccountName String?   @db.VarChar(100)
 }
 
+model prompt_import_job {
+  id              BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  runId           String    @unique(map: "prompt_import_job_run_id_uq") @db.VarChar(80)
+  status          String    @default("RUNNING") @db.VarChar(20)
+  totalItems      Int       @default(0) @db.UnsignedInt
+  checkpointIndex Int       @default(0) @db.UnsignedInt
+  processedItems  Int       @default(0) @db.UnsignedInt
+  lastError       String?   @db.LongText
+  dateCreated     DateTime  @default(now()) @db.DateTime(0)
+  dateUpdated     DateTime  @updatedAt @db.DateTime(0)
+  dateFinished    DateTime? @db.DateTime(0)
+
+  @@index([status, dateUpdated], map: "prompt_import_job_status_updated_idx")
+}
+
 model logs {
   id        Int       @id @default(autoincrement())
   timestamp DateTime? @db.DateTime(0)

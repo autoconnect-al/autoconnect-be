@@ -1,263 +1,59 @@
 import { LegacyApService } from './legacy-ap.service';
 
-describe('LegacyApService createdTime conversion', () => {
-  const createService = () =>
-    new LegacyApService({} as any, {} as any, {} as any, {} as any, {} as any);
+describe('LegacyApService vendor-management surface', () => {
+  const createService = (prisma: any = {}) =>
+    new LegacyApService(prisma, {} as any, {} as any);
 
-  it('accepts unix seconds as string', () => {
-    const service = createService();
-    const value = (service as any).toNullableBigInt('1770995188');
-    expect(value).toBe(1770995188n);
-  });
-
-  it('accepts unix milliseconds and normalizes to seconds', () => {
-    const service = createService();
-    const value = (service as any).toNullableBigInt('1770995188000');
-    expect(value).toBe(1770995188n);
-  });
-
-  it('accepts ISO date string and converts to seconds', () => {
-    const service = createService();
-    const value = (service as any).toNullableBigInt('2026-02-15T13:31:54.903Z');
-    expect(value).toBe(1771162314n);
-  });
-
-  it('returns null for invalid date/text', () => {
-    const service = createService();
-    expect((service as any).toNullableBigInt('not-a-date')).toBeNull();
-  });
-
-  it('getPostsByIds should return php-like flattened shape', async () => {
+  it('toggles vendor + related posts/details to deleted', async () => {
     const prisma = {
+      vendor: {
+        findUnique: jest.fn().mockResolvedValue({ id: 1n, deleted: false }),
+        update: jest.fn().mockResolvedValue({}),
+      },
       post: {
-        findMany: jest.fn().mockResolvedValue([
-          {
-            id: 1n,
-            caption: Buffer.from('Hello').toString('base64'),
-            cleanedCaption: 'Hello',
-            sidecarMedias: '[]',
-            createdTime: '1770995188',
-            likesCount: 10,
-            viewsCount: 20,
-            status: 'TO_BE_PUBLISHED',
-            origin: 'INSTAGRAM',
-            revalidate: false,
-            vendor_id: 2n,
-            vendor: {
-              id: 2n,
-              accountName: 'vendor.a',
-              profilePicture: 'pic',
-              biography: 'bio',
-              contact: '{"phone_number":"1"}',
-            },
-            car_detail_car_detail_post_idTopost: [
-              {
-                make: 'BMW',
-                model: 'X5',
-                variant: 'xDrive',
-                registration: '2017',
-                price: 10000,
-                mileage: 120000,
-                fuelType: 'diesel',
-                engineSize: '2.0',
-                sold: false,
-                contact: '{"phone_number":"1"}',
-                transmission: 'automatic',
-                drivetrain: 'AWD',
-                seats: 5,
-                numberOfDoors: 5,
-                bodyType: 'SUV',
-                customsPaid: true,
-                type: 'car',
-                priceVerified: false,
-                mileageVerified: false,
-                fuelVerified: false,
-              },
-            ],
-          },
-        ]),
+        findMany: jest.fn().mockResolvedValue([{ id: 11n }, { id: 12n }]),
+        updateMany: jest.fn().mockResolvedValue({ count: 2 }),
+      },
+      car_detail: {
+        updateMany: jest.fn().mockResolvedValue({ count: 2 }),
       },
     } as any;
 
-    const service = new LegacyApService(
-      prisma,
-      {} as any,
-      {} as any,
-      {} as any,
-      {} as any,
-    );
-
-    const response = await service.getPostsByIds('1');
-    const row = (response.result as Array<Record<string, unknown>>)[0];
-    expect(row).toMatchObject({
-      id: '1',
-      caption: 'Hello',
-      make: 'BMW',
-      model: 'X5',
-      registration: '2017',
-      engineSize: '2.0',
-      vendorId: '2',
-      accountName: 'vendor.a',
-      revalidate: false,
-    });
-    expect(row.details).toBeUndefined();
-    expect(row.car_detail_car_detail_post_idTopost).toBeUndefined();
-  });
-});
-
-describe('LegacyApService price range enrichment', () => {
-  it('calculates minPrice/maxPrice from similar posts', async () => {
-    const prisma = {
-      $queryRawUnsafe: jest.fn().mockResolvedValue([
-        { price: 8000 },
-        { price: 10000 },
-        { price: 12000 },
-      ]),
-    } as any;
-
-    const service = new LegacyApService(
-      prisma,
-      {} as any,
-      {} as any,
-      {} as any,
-      {} as any,
-    );
-
-    const result = await (service as any).calculateSearchPriceRange({
-      make: 'Audi',
-      model: 'A4',
-      variant: null,
-      registration: '2018',
-      fuelType: 'diesel',
-      bodyType: 'Sedan',
-      price: 9000,
-    });
-
-    expect(result).toEqual({ minPrice: 8000, maxPrice: 12000 });
-    expect(prisma.$queryRawUnsafe).toHaveBeenCalledTimes(1);
-  });
-
-  it('keeps unknown maxPrice when all similar prices are equal and current price is lower', async () => {
-    const prisma = {
-      $queryRawUnsafe: jest.fn().mockResolvedValue([
-        { price: 10000 },
-        { price: 10000 },
-        { price: 10000 },
-      ]),
-    } as any;
-
-    const service = new LegacyApService(
-      prisma,
-      {} as any,
-      {} as any,
-      {} as any,
-      {} as any,
-    );
-
-    const result = await (service as any).calculateSearchPriceRange({
-      make: 'Audi',
-      model: 'A4',
-      variant: null,
-      registration: '2018',
-      fuelType: 'diesel',
-      bodyType: 'Sedan',
-      price: 9000,
-    });
-
-    expect(result).toEqual({ minPrice: 9000, maxPrice: null });
-  });
-});
-
-describe('LegacyApService.autoRenewPosts allowed promotion writes', () => {
-  it('updates renewTo and renewedTime', async () => {
-    const prisma = {
-      post: {
-        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
-      },
-    } as any;
-
-    const service = new LegacyApService(
-      prisma,
-      {} as any,
-      {} as any,
-      {} as any,
-      {} as any,
-    );
-    jest
-      .spyOn(service as any, 'rebuildSearchFromPosts')
-      .mockResolvedValue(undefined);
-
-    const response = await service.autoRenewPosts();
+    const service = createService(prisma);
+    const response = await service.toggleVendorDeleted('1');
 
     expect(response.success).toBe(true);
+    expect(prisma.vendor.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 1n },
+        data: expect.objectContaining({ deleted: true }),
+      }),
+    );
     expect(prisma.post.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({
-          renewTo: expect.any(Number),
-          renewedTime: expect.any(Number),
-        }),
+        where: { vendor_id: 1n },
+        data: expect.objectContaining({ deleted: true }),
+      }),
+    );
+    expect(prisma.car_detail.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { post_id: { in: [11n, 12n] } },
+        data: expect.objectContaining({ deleted: true }),
       }),
     );
   });
-});
 
-describe('LegacyApService admin role management', () => {
-  it('grants ADMIN role to existing user', async () => {
+  it('returns error when vendor does not exist', async () => {
     const prisma = {
       vendor: {
-        findUnique: jest.fn().mockResolvedValue({ id: 7n, deleted: false }),
+        findUnique: jest.fn().mockResolvedValue(null),
       },
-      role: {
-        findFirst: jest.fn().mockResolvedValue({ id: 9 }),
-      },
-      $executeRawUnsafe: jest.fn().mockResolvedValue(1),
     } as any;
 
-    const service = new LegacyApService(
-      prisma,
-      {} as any,
-      {} as any,
-      {} as any,
-      {} as any,
-    );
-
-    const response = await service.grantAdminRole('7');
-
-    expect(response.success).toBe(true);
-    expect(prisma.$executeRawUnsafe).toHaveBeenCalledWith(
-      'INSERT IGNORE INTO vendor_role (vendor_id, role_id) VALUES (?, ?)',
-      7n,
-      9,
-    );
-  });
-
-  it('prevents revoking the last ADMIN role', async () => {
-    const prisma = {
-      vendor: {
-        findUnique: jest.fn().mockResolvedValue({ id: 7n, deleted: false }),
-      },
-      role: {
-        findFirst: jest.fn().mockResolvedValue({ id: 9 }),
-      },
-      $queryRawUnsafe: jest
-        .fn()
-        .mockResolvedValueOnce([{ total: 1n }])
-        .mockResolvedValueOnce([{ total: 1n }]),
-      $executeRawUnsafe: jest.fn().mockResolvedValue(1),
-    } as any;
-
-    const service = new LegacyApService(
-      prisma,
-      {} as any,
-      {} as any,
-      {} as any,
-      {} as any,
-    );
-
-    const response = await service.revokeAdminRole('7');
+    const service = createService(prisma);
+    const response = await service.toggleVendorDeleted('999');
 
     expect(response.success).toBe(false);
-    expect(response.statusCode).toBe('409');
-    expect(prisma.$executeRawUnsafe).not.toHaveBeenCalled();
+    expect(response.message).toContain('Could not mark vendor for crawl next');
   });
 });

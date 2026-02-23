@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { legacyError, legacySuccess } from '../../common/legacy-response';
 import { LocalPostOrderService } from '../legacy-group-b/local-post-order.service';
@@ -205,9 +206,11 @@ export class ApPostToolingService {
   }
 
   async runCommonDetailsFix() {
-    await this.prisma.$executeRawUnsafe(
-      "UPDATE car_detail SET type = 'car' WHERE (type IS NULL OR type = '') AND deleted = 0",
-    );
+    await this.prisma.$executeRaw`
+      UPDATE car_detail
+      SET type = 'car'
+      WHERE (type IS NULL OR type = '') AND deleted = 0
+    `;
     return legacySuccess(null, 'Common details fixed successfully');
   }
 
@@ -384,52 +387,45 @@ export class ApPostToolingService {
     }
 
     const oneYearAgo = Math.floor(Date.now() / 1000) - 365 * 24 * 60 * 60;
-    const whereClauses = [
-      'CAST(p.createdTime AS UNSIGNED) > ?',
-      'cd.price > 0',
-      'cd.make = ?',
-      'cd.model = ?',
-      '(cd.customsPaid = 1 OR cd.customsPaid IS NULL)',
+    const conditions: Prisma.Sql[] = [
+      Prisma.sql`CAST(p.createdTime AS UNSIGNED) > ${oneYearAgo}`,
+      Prisma.sql`cd.price > 0`,
+      Prisma.sql`cd.make = ${make}`,
+      Prisma.sql`cd.model = ${model}`,
+      Prisma.sql`(cd.customsPaid = 1 OR cd.customsPaid IS NULL)`,
     ];
-    const params: unknown[] = [oneYearAgo, make, model];
 
     const variantCondition = await this.buildVariantPriceRangeCondition(
       make,
       this.toSafeNullableString(details.variant),
     );
     if (variantCondition) {
-      whereClauses.push(variantCondition.clause);
-      params.push(...variantCondition.params);
+      conditions.push(variantCondition);
     }
 
-    whereClauses.push('cd.registration >= ?');
-    whereClauses.push('cd.registration <= ?');
-    params.push(String(registration - 1), String(registration + 1));
+    conditions.push(Prisma.sql`cd.registration >= ${String(registration - 1)}`);
+    conditions.push(Prisma.sql`cd.registration <= ${String(registration + 1)}`);
 
     const fuelType = this.toSafeNullableString(details.fuelType);
     if (fuelType) {
-      whereClauses.push('cd.fuelType = ?');
-      params.push(fuelType);
+      conditions.push(Prisma.sql`cd.fuelType = ${fuelType}`);
     }
 
     const bodyType = this.toSafeNullableString(details.bodyType);
     if (bodyType) {
-      whereClauses.push('cd.bodyType = ?');
-      params.push(bodyType);
+      conditions.push(Prisma.sql`cd.bodyType = ${bodyType}`);
     }
 
-    const similarRows = await this.prisma.$queryRawUnsafe<
+    const whereSql = Prisma.join(conditions, ' AND ');
+    const similarRows = await this.prisma.$queryRaw<
       Array<{ price: number | null }>
-    >(
-      `
+    >(Prisma.sql`
       SELECT cd.price
       FROM post p
       LEFT JOIN car_detail cd ON cd.post_id = p.id
       LEFT JOIN vendor v ON v.id = p.vendor_id
-      WHERE ${whereClauses.join(' AND ')}
-    `,
-      ...params,
-    );
+      WHERE ${whereSql}
+    `);
 
     const prices = similarRows
       .map((row) => this.toNullableInt(row.price))
@@ -461,18 +457,18 @@ export class ApPostToolingService {
   private async buildVariantPriceRangeCondition(
     make: string,
     variant: string | null,
-  ): Promise<{ clause: string; params: string[] } | null> {
+  ): Promise<Prisma.Sql | null> {
     if (!variant) return null;
     if (!['mercedes-benz', 'bmw', 'volkswagen'].includes(make.toLowerCase())) {
       return null;
     }
 
-    const modelRows = await this.prisma.$queryRawUnsafe<
+    const modelRows = await this.prisma.$queryRaw<
       Array<{
         Model: string | null;
         isVariant: number | boolean | string | null;
       }>
-    >('SELECT Model, isVariant FROM car_make_model WHERE Make = ?', make);
+    >(Prisma.sql`SELECT Model, isVariant FROM car_make_model WHERE Make = ${make}`);
 
     const normalizedVariant = variant.replace(/\s+/g, '-').toLowerCase();
     for (const row of modelRows) {
@@ -484,10 +480,7 @@ export class ApPostToolingService {
         row.isVariant === 1 ||
         row.isVariant === '1';
       if (isVariant && normalizedVariant.includes(normalizedModel)) {
-        return {
-          clause: '(cd.variant LIKE ? OR cd.variant LIKE ?)',
-          params: [`% ${model} %`, `${model} %`],
-        };
+        return Prisma.sql`(cd.variant LIKE ${`% ${model} %`} OR cd.variant LIKE ${`${model} %`})`;
       }
     }
 
