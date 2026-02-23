@@ -19,11 +19,14 @@ import { LegacyJwtAdminGuard } from '../../common/guards/legacy-jwt-admin.guard'
 import { LegacyJwtGuard } from '../../common/guards/legacy-jwt.guard';
 import { ApCodeGuard } from '../../common/guards/ap-code.guard';
 import { ApArticleService } from './ap-article.service';
+import { ApMakeModelService } from './ap-make-model.service';
+import { ApPaymentReminderService } from './ap-payment-reminder.service';
 import { ApPostToolingService } from './ap-post-tooling.service';
 import { ApPromptService } from './ap-prompt.service';
 import { ApRoleService } from './ap-role.service';
+import { ApSitemapAdminService } from './ap-sitemap-admin.service';
 import { ApUserVendorService } from './ap-user-vendor.service';
-import { LegacyApService } from './legacy-ap.service';
+import { ApVendorManagementService } from './ap-vendor-management.service';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -261,7 +264,7 @@ export class PostToolingController {
 @Controller('vendor-management')
 @UseGuards(LegacyJwtAdminGuard)
 export class VendorManagementController {
-  constructor(private readonly service: LegacyApService) {}
+  constructor(private readonly service: ApVendorManagementService) {}
 
   @Get('all')
   getAll() {
@@ -410,7 +413,7 @@ export class CarDetailsAdminController {
 @Controller('make-model-data')
 @UseGuards(LegacyJwtAdminGuard)
 export class MakeModelDataController {
-  constructor(private readonly service: LegacyApService) {}
+  constructor(private readonly service: ApMakeModelService) {}
 
   @Get('makes')
   makes() {
@@ -464,7 +467,7 @@ export class ArticleAdminController {
 @Controller('sitemap')
 @UseGuards(LegacyJwtAdminGuard)
 export class SitemapAdminController {
-  constructor(private readonly service: LegacyApService) {}
+  constructor(private readonly service: ApSitemapAdminService) {}
 
   @Get('generate')
   generate() {
@@ -475,7 +478,7 @@ export class SitemapAdminController {
 @Controller('api/v1/orders')
 @UseGuards(LegacyJwtAdminGuard)
 export class LegacyApPaymentsAdminController {
-  constructor(private readonly service: LegacyApService) {}
+  constructor(private readonly service: ApPaymentReminderService) {}
 
   @Get('send-remind-emails')
   sendRemindEmails() {

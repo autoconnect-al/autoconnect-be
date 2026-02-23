@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { mkdir, readFile } from 'fs/promises';
+import { mkdir } from 'fs/promises';
 import { join, resolve } from 'path';
 import { randomBytes } from 'crypto';
 import sharp from 'sharp';
 import {
+  legacyError,
   legacySuccess,
   type LegacyResponse,
 } from '../../common/legacy-response';
@@ -18,6 +19,8 @@ type UploadImageInput = {
   filename: string;
 };
 
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
 @Injectable()
 export class LocalMediaService {
   private readonly logger = createLogger('local-media-service');
@@ -26,6 +29,7 @@ export class LocalMediaService {
 
   async uploadImage(
     raw: unknown,
+    uploadedFiles: Express.Multer.File[] = [],
   ): Promise<LegacyResponse | Record<string, unknown>> {
     const rawType = typeof raw;
     const rawKeys =
@@ -50,16 +54,19 @@ export class LocalMediaService {
     await mkdir(this.mediaRoot, { recursive: true });
     await mkdir(this.mediaTmpRoot, { recursive: true });
 
-    const sourceBuffer = await this.readSourceBuffer(image.file);
+    const sourceBuffer = await this.readSourceBuffer(image.file, uploadedFiles);
     if (!sourceBuffer) {
-      return legacySuccess('');
+      return legacyError('Unsupported image source. Use multipart file or data URI.', 400);
+    }
+    if (sourceBuffer.length > MAX_UPLOAD_BYTES) {
+      return legacyError('Image exceeds max size limit.', 400);
     }
 
     try {
       await sharp(sourceBuffer).webp({ quality: 100 }).toFile(outputPath);
       return legacySuccess(outputUrl);
     } catch {
-      return legacySuccess('');
+      return legacyError('Invalid image payload.', 400);
     }
   }
 
@@ -83,43 +90,51 @@ export class LocalMediaService {
     return safe || this.generateId(12);
   }
 
-  private async readSourceBuffer(source: string): Promise<Buffer | null> {
-    if (!source) {
-      return null;
+  private async readSourceBuffer(
+    source: string,
+    uploadedFiles: Express.Multer.File[],
+  ): Promise<Buffer | null> {
+    const firstFile = uploadedFiles[0];
+    if (firstFile?.buffer?.length) {
+      return firstFile.buffer;
     }
+
+    if (!source) return null;
 
     if (source.startsWith('data:')) {
       const commaIndex = source.indexOf(',');
       if (commaIndex === -1) {
         return null;
       }
+      const header = source.slice(0, commaIndex).toLowerCase();
+      if (!header.startsWith('data:image/') || !header.includes(';base64')) {
+        return null;
+      }
       const payload = source.slice(commaIndex + 1);
-      const isBase64 = source.slice(0, commaIndex).includes(';base64');
       try {
-        return Buffer.from(payload, isBase64 ? 'base64' : 'utf8');
+        return Buffer.from(payload, 'base64');
       } catch {
         return null;
       }
     }
 
     if (/^https?:\/\//i.test(source)) {
+      return null;
+    }
+
+    if (this.looksLikeLocalPath(source)) {
+      return null;
+    }
+
+    if (this.looksLikeBase64(source)) {
       try {
-        const response = await fetch(source);
-        if (!response.ok) {
-          return null;
-        }
-        const arr = await response.arrayBuffer();
-        return Buffer.from(arr);
+        return Buffer.from(source, 'base64');
       } catch {
         return null;
       }
     }
 
-    try {
-      return await readFile(source);
-    } catch {
-      return null;
-    }
+    return null;
   }
 
   private asRecord(value: unknown): AnyRecord {
@@ -230,5 +245,21 @@ export class LocalMediaService {
       out += alphabet[bytes[i] % alphabet.length];
     }
     return out;
+  }
+
+  private looksLikeLocalPath(source: string): boolean {
+    return (
+      source.startsWith('/') ||
+      source.startsWith('./') ||
+      source.startsWith('../') ||
+      /^[a-z]:\\/i.test(source) ||
+      source.startsWith('file://')
+    );
+  }
+
+  private looksLikeBase64(source: string): boolean {
+    const text = source.replace(/\s+/g, '');
+    if (text.length < 16 || text.length % 4 !== 0) return false;
+    return /^[A-Za-z0-9+/=]+$/.test(text);
   }
 }

@@ -48,38 +48,7 @@ export class LegacyAuthController {
     @Body() body: unknown,
     @Headers('content-type') contentType?: string,
   ) {
-    const payload = (body ?? {}) as Record<string, unknown>;
-    const hasUsername = typeof payload.username === 'string';
-    const hasEmail = typeof payload.email === 'string';
-    const hasPassword = typeof payload.password === 'string';
-    this.log('login.request', {
-      endpoint: 'authentication/login',
-      contentType: contentType ?? '',
-      hasUsername,
-      hasEmail,
-      hasPassword,
-    });
-    if ((!hasUsername && !hasEmail) || !hasPassword) {
-      this.log('login.invalid_payload', {
-        endpoint: 'authentication/login',
-      });
-      const response = legacyError(
-        'Could not login user. Please check your credentials.',
-        400,
-      );
-      this.throwLegacy(response, 400);
-    }
-    const response = await this.service.loginLocal(body);
-    this.log('login.response', {
-      endpoint: 'authentication/login',
-      success: response.success,
-      statusCode: response.statusCode,
-      message: response.message,
-    });
-    if (!response.success) {
-      this.throwLegacy(response, Number(response.statusCode) || 500);
-    }
-    return response;
+    return this.handleLoginEndpoint('authentication/login', body, contentType);
   }
 
   @Post('user/login')
@@ -91,12 +60,20 @@ export class LegacyAuthController {
     @Body() body: unknown,
     @Headers('content-type') contentType?: string,
   ) {
+    return this.handleLoginEndpoint('user/login', body, contentType);
+  }
+
+  private async handleLoginEndpoint(
+    endpoint: 'authentication/login' | 'user/login',
+    body: unknown,
+    contentType?: string,
+  ) {
     const payload = (body ?? {}) as Record<string, unknown>;
     const hasUsername = typeof payload.username === 'string';
     const hasEmail = typeof payload.email === 'string';
     const hasPassword = typeof payload.password === 'string';
     this.log('login.request', {
-      endpoint: 'user/login',
+      endpoint,
       contentType: contentType ?? '',
       hasUsername,
       hasEmail,
@@ -104,7 +81,7 @@ export class LegacyAuthController {
     });
     if ((!hasUsername && !hasEmail) || !hasPassword) {
       this.log('login.invalid_payload', {
-        endpoint: 'user/login',
+        endpoint,
       });
       const response = legacyError(
         'Could not login user. Please check your credentials.',
@@ -114,7 +91,7 @@ export class LegacyAuthController {
     }
     const response = await this.service.loginLocal(body);
     this.log('login.response', {
-      endpoint: 'user/login',
+      endpoint,
       success: response.success,
       statusCode: response.statusCode,
       message: response.message,

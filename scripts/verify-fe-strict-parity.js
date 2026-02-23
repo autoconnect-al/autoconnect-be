@@ -748,14 +748,14 @@ async function main() {
     assertPass(String(vendorPicRow[0]?.profilePicture || '').length > 0, 'vendor profile picture not updated in DB');
 
     const postIdForSold = await createUserOwnedPost(nestToken);
-    const soldNest = await callApi(nestBaseUrl, { method: 'GET', path: `/admin/posts/sold/${postIdForSold}`, headers: headersNest });
+    const soldNest = await callApi(nestBaseUrl, { method: 'PATCH', path: `/admin/posts/${postIdForSold}/sold`, headers: headersNest });
     if (soldNest.body?.success !== true) failures.push('admin/posts/sold: nest failed');
 
     const soldRow = await conn.query('SELECT sold FROM search WHERE id = ? LIMIT 1', [postIdForSold]);
     assertPass(Boolean(soldRow[0]?.sold) === true, 'admin sold did not update search.sold');
 
     const postIdForDelete = await createUserOwnedPost(nestToken);
-    const deleteNest = await callApi(nestBaseUrl, { method: 'GET', path: `/admin/posts/delete/${postIdForDelete}`, headers: headersNest });
+    const deleteNest = await callApi(nestBaseUrl, { method: 'DELETE', path: `/admin/posts/${postIdForDelete}`, headers: headersNest });
     if (deleteNest.body?.success !== true) failures.push('admin/posts/delete: nest failed');
 
     const deletedRow = await conn.query('SELECT deleted FROM post WHERE id = ? LIMIT 1', [postIdForDelete]);

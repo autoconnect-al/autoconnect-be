@@ -176,16 +176,16 @@ const strictCases = [
   {
     file: 'strict-018-admin-delete-unauthorized.json',
     data: {
-      name: 'Strict admin/posts/delete unauthorized parity',
-      request: { method: 'GET', path: '/admin/posts/delete/1', headers: invalidAuthHeader },
+      name: 'Strict admin/posts/{id} DELETE unauthorized parity',
+      request: { method: 'DELETE', path: '/admin/posts/1', headers: invalidAuthHeader },
       compare: commonCompare(false),
     },
   },
   {
     file: 'strict-019-admin-sold-unauthorized.json',
     data: {
-      name: 'Strict admin/posts/sold unauthorized parity',
-      request: { method: 'GET', path: '/admin/posts/sold/1', headers: invalidAuthHeader },
+      name: 'Strict admin/posts/{id}/sold PATCH unauthorized parity',
+      request: { method: 'PATCH', path: '/admin/posts/1/sold', headers: invalidAuthHeader },
       compare: commonCompare(false),
     },
   },

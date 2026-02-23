@@ -307,7 +307,9 @@ model customer_orders {
   id          BigInt    @id
   dateCreated DateTime  @db.DateTime(0)
   dateUpdated DateTime? @db.DateTime(0)
+  capturedAt  DateTime? @db.DateTime(0)
   deleted     Boolean   @default(false)
+  captureKey  String?   @unique(map: "customer_orders_capture_key_uq") @db.VarChar(255)
   paypalId    String?   @db.VarChar(255)
   postId      String?   @db.VarChar(255)
   packages    String?   @db.VarChar(255)

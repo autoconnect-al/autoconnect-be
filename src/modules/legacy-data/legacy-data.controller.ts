@@ -7,17 +7,14 @@ import {
   Body,
   HttpCode,
   HttpException,
-  Headers,
   UseInterceptors,
+  UploadedFiles,
 } from '@nestjs/common';
 import { AnyFilesInterceptor } from '@nestjs/platform-express';
 import { LegacyDataService } from './legacy-data.service';
 import { LocalPostOrderService } from '../legacy-group-b/local-post-order.service';
 import { LocalMediaService } from './local-media.service';
-import {
-  extractLegacyBearerToken,
-  verifyAndDecodeLegacyJwtPayload,
-} from '../../common/legacy-auth.util';
+import { LegacyJwtEmail } from '../../common/decorators/legacy-auth.decorators';
 
 @Controller('data')
 export class LegacyDataController {
@@ -137,9 +134,8 @@ export class LegacyDataController {
   @HttpCode(200)
   async createPost(
     @Body() body: unknown,
-    @Headers() headers: Record<string, unknown>,
+    @LegacyJwtEmail() jwtEmail?: string,
   ) {
-    const jwtEmail = this.extractJwtEmail(headers);
     const response = await this.localPostOrderService.createPost(
       body,
       jwtEmail,
@@ -153,9 +149,8 @@ export class LegacyDataController {
   @HttpCode(200)
   async updatePost(
     @Body() body: unknown,
-    @Headers() headers: Record<string, unknown>,
+    @LegacyJwtEmail() jwtEmail?: string,
   ) {
-    const jwtEmail = this.extractJwtEmail(headers);
     const response = await this.localPostOrderService.updatePost(
       body,
       jwtEmail,
@@ -169,10 +164,8 @@ export class LegacyDataController {
   @HttpCode(200)
   async createUserPost(
     @Body() body: unknown,
-    @Headers() headers: Record<string, unknown>,
+    @LegacyJwtEmail() jwtEmail?: string,
   ) {
-    const jwtEmail = this.extractJwtEmail(headers);
-
     const response = await this.localPostOrderService.createUserAndPost(
       body,
       jwtEmail,
@@ -185,27 +178,7 @@ export class LegacyDataController {
   @Post('upload-image')
   @HttpCode(200)
   @UseInterceptors(AnyFilesInterceptor())
-  uploadImage(@Body() body: unknown) {
-    return this.localMediaService.uploadImage(body);
-  }
-
-  private extractJwtEmail(
-    headers: Record<string, unknown>,
-  ): string | undefined {
-    try {
-      const token = extractLegacyBearerToken(headers);
-      if (!token) return undefined;
-
-      const payload = verifyAndDecodeLegacyJwtPayload(token);
-      if (!payload) {
-        this.throwLegacy('JWT token is not valid.', '401', 401);
-      }
-
-      const emailFromToken =
-        typeof payload?.email === 'string' ? payload.email.trim() : '';
-      return emailFromToken || undefined;
-    } catch {
-      this.throwLegacy('JWT token is not valid.', '401', 401);
-    }
+  uploadImage(@Body() body: unknown, @UploadedFiles() files: Express.Multer.File[]) {
+    return this.localMediaService.uploadImage(body, files);
   }
 }

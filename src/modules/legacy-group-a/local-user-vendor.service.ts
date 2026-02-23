@@ -235,7 +235,7 @@ export class LocalUserVendorService {
       this.logger.error('login.exception', { message, stack });
       return legacyError(
         'Could not login user. Please check your credentials.',
-        500,
+        401,
       );
     }
   }

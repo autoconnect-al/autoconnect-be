@@ -77,7 +77,9 @@ export class LegacyDataService {
   }
 
   async article(lang: string, id: string, app = 'autoconnect') {
-    const rows = await this.prisma.$queryRawUnsafe<unknown[]>(
+    const rows = await this.prisma.$queryRawUnsafe<
+      Array<Record<string, unknown>>
+    >(
       'SELECT * FROM article WHERE id = ? AND appName = ? AND deleted = 0 LIMIT 1',
       id,
       app,
@@ -89,7 +91,7 @@ export class LegacyDataService {
         statusCode: '200',
       };
     }
-    return legacySuccess(rows[0]);
+    return legacySuccess(this.applyLanguageToArticle(rows[0], lang));
   }
 
   async articles(
@@ -99,13 +101,15 @@ export class LegacyDataService {
     app = 'autoconnect',
   ) {
     const offset = Math.max(page, 0) * 9;
-    const rows = await this.prisma.$queryRawUnsafe<unknown[]>(
+    const rows = await this.prisma.$queryRawUnsafe<
+      Array<Record<string, unknown>>
+    >(
       'SELECT * FROM article WHERE category = ? AND appName = ? AND deleted = 0 ORDER BY dateCreated DESC LIMIT 9 OFFSET ?',
       category,
       app,
       offset,
     );
-    return legacySuccess(rows);
+    return legacySuccess(rows.map((row) => this.applyLanguageToArticle(row, lang)));
   }
 
   async articlesTotal(lang: string, category: string, app = 'autoconnect') {
@@ -129,7 +133,21 @@ export class LegacyDataService {
         dateCreated: Date | string;
       }>
     >(
-      'SELECT id, category, data, image, dateCreated FROM article WHERE deleted = 0 AND appName = ? GROUP BY category ORDER BY dateCreated DESC LIMIT 5',
+      `SELECT a.id, a.category, a.data, a.image, a.dateCreated
+       FROM article a
+       WHERE a.deleted = 0
+         AND a.appName = ?
+         AND a.id = (
+           SELECT a2.id
+           FROM article a2
+           WHERE a2.deleted = 0
+             AND a2.appName = a.appName
+             AND a2.category = a.category
+           ORDER BY a2.dateCreated DESC, a2.id DESC
+           LIMIT 1
+         )
+       ORDER BY a.dateCreated DESC, a.id DESC
+       LIMIT 5`,
       app,
     );
     const mapped = rows.map((row) => ({
@@ -148,14 +166,18 @@ export class LegacyDataService {
     const excludeClause = excludeId ? 'AND id <> ?' : '';
     const query = `SELECT * FROM article WHERE category = ? AND appName = ? AND deleted = 0 ${excludeClause} ORDER BY dateCreated DESC LIMIT 3`;
     const rows = excludeId
-      ? await this.prisma.$queryRawUnsafe<unknown[]>(
+      ? await this.prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
           query,
           category,
           app,
           excludeId,
         )
-      : await this.prisma.$queryRawUnsafe<unknown[]>(query, category, app);
-    return legacySuccess(rows);
+      : await this.prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+          query,
+          category,
+          app,
+        );
+    return legacySuccess(rows.map((row) => this.applyLanguageToArticle(row, lang)));
   }
 
   async metadata(lang: string, id: string, app = 'autoconnect') {
@@ -216,5 +238,17 @@ export class LegacyDataService {
       .replace(/ :/g, ':')
       .replace(/\s+/g, ' ')
       .trim();
+  }
+
+  private applyLanguageToArticle(
+    row: Record<string, unknown>,
+    lang: string,
+  ): Record<string, unknown> {
+    if (!row || typeof row !== 'object') return row;
+    const data = typeof row.data === 'string' ? row.data : null;
+    return {
+      ...row,
+      data: this.filterArticleDataByLanguage(data, lang),
+    };
   }
 }

@@ -1,8 +1,8 @@
-import { LegacyApService } from './legacy-ap.service';
+import { ApVendorManagementService } from './ap-vendor-management.service';
 
-describe('LegacyApService vendor-management surface', () => {
+describe('ApVendorManagementService', () => {
   const createService = (prisma: any = {}) =>
-    new LegacyApService(prisma, {} as any, {} as any);
+    new ApVendorManagementService(prisma);
 
   it('toggles vendor + related posts/details to deleted', async () => {
     const prisma = {

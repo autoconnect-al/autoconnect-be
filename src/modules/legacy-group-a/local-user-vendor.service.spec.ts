@@ -82,4 +82,18 @@ describe('LocalUserVendorService password migration', () => {
       1n,
     );
   });
+
+  it('login should return 401 when an unexpected auth exception occurs', async () => {
+    (service as any).findVendorAuthByUsernameOrEmail = jest
+      .fn()
+      .mockRejectedValue(new Error('db fail'));
+
+    const response = await service.login({
+      username: 'admin',
+      password: 'secret123',
+    });
+
+    expect(response.success).toBe(false);
+    expect(response.statusCode).toBe('401');
+  });
 });

@@ -27,6 +27,7 @@ function validateEnvironment(config: Record<string, unknown>) {
     'ADMIN_CODE',
     'INSTAGRAM_CLIENT_ID',
     'INSTAGRAM_CLIENT_SECRET',
+    'INSTAGRAM_REDIRECT_URI',
   ];
 
   const missing = required.filter((key) => {

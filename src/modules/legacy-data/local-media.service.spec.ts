@@ -37,4 +37,28 @@ describe('LocalMediaService.uploadImage', () => {
     });
     await expect(access(outputPath)).resolves.toBeUndefined();
   });
+
+  it('blocks remote URL image sources', async () => {
+    const response = await service.uploadImage({
+      id: 'blocked-url',
+      file: 'https://example.com/image.png',
+    });
+
+    expect(response).toMatchObject({
+      success: false,
+      statusCode: '400',
+    });
+  });
+
+  it('blocks local filesystem path image sources', async () => {
+    const response = await service.uploadImage({
+      id: 'blocked-path',
+      file: '/etc/passwd',
+    });
+
+    expect(response).toMatchObject({
+      success: false,
+      statusCode: '400',
+    });
+  });
 });

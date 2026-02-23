@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import {
   legacyError,
@@ -15,6 +15,12 @@ import { requireEnv } from '../../common/require-env.util';
 import { getUserRoleNames } from '../../common/user-roles.util';
 import { lookup } from 'dns/promises';
 import { isIP } from 'net';
+import { Prisma } from '@prisma/client';
+import { createLogger } from '../../common/logger.util';
+import {
+  PAYMENT_PROVIDER,
+  type PaymentProvider,
+} from '../legacy-payments/payment-provider';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -54,10 +60,30 @@ const ALLOWED_PROMOTION_FIELDS = new Set([
   'promotionTo',
   'mostWantedTo',
 ]);
+const ORDER_STATUS_CREATED = 'CREATED';
+const ORDER_STATUS_COMPLETED = 'COMPLETED';
+type PaymentFailureCode =
+  | 'PAYMENT_CREATE_INVALID_PAYLOAD'
+  | 'PAYMENT_CREATE_INVALID_PACKAGE_IDS'
+  | 'PAYMENT_CREATE_PACKAGES_NOT_FOUND'
+  | 'PAYMENT_CREATE_POST_NOT_FOUND'
+  | 'PAYMENT_CREATE_OWNER_MISMATCH'
+  | 'PAYMENT_CREATE_PROVIDER_EXCEPTION'
+  | 'PAYMENT_CREATE_EXCEPTION'
+  | 'PAYMENT_CAPTURE_ORDER_NOT_FOUND'
+  | 'PAYMENT_CAPTURE_ORDER_MISSING_POST_ID'
+  | 'PAYMENT_CAPTURE_POST_NOT_FOUND'
+  | 'PAYMENT_CAPTURE_INVALID_STATE'
+  | 'PAYMENT_CAPTURE_OWNER_MISMATCH'
+  | 'PAYMENT_CAPTURE_PROVIDER_EXCEPTION'
+  | 'PAYMENT_CAPTURE_TRANSITION_FAILED'
+  | 'PAYMENT_CAPTURE_DUPLICATE_KEY'
+  | 'PAYMENT_CAPTURE_EXCEPTION';
 
 @Injectable()
 export class LocalPostOrderService {
   private readonly jwtService: JwtService;
+  private readonly logger = createLogger('local-post-order-service');
   private readonly mediaRoot = getMediaRootPath();
   private readonly mediaTmpRoot = resolve(this.mediaRoot, 'tmp');
   private readonly allowedMediaHosts = this.parseAllowedHosts(
@@ -70,6 +96,8 @@ export class LocalPostOrderService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly localUserVendorService: LocalUserVendorService,
+    @Inject(PAYMENT_PROVIDER)
+    private readonly paymentProvider: PaymentProvider,
   ) {
     this.jwtService = new JwtService({
       secret: jwtSecret,
@@ -240,7 +268,7 @@ export class LocalPostOrderService {
       const phoneNumber = this.toSafeString(payload.phoneNumber);
       const fullName = this.toSafeString(payload.fullName);
       if (!postId || cart.length === 0) {
-        return legacyError('ERROR: Something went wrong', 500);
+        return this.paymentFailure('PAYMENT_CREATE_INVALID_PAYLOAD', 400);
       }
 
       const packageIds = cart
@@ -250,14 +278,14 @@ export class LocalPostOrderService {
         .filter((id) => !Number.isNaN(id));
 
       if (packageIds.length === 0) {
-        return legacyError('ERROR: Something went wrong', 500);
+        return this.paymentFailure('PAYMENT_CREATE_INVALID_PACKAGE_IDS', 400);
       }
 
       const packages = await this.prisma.promotion_packages.findMany({
         where: { id: { in: packageIds }, deleted: false },
       });
       if (packages.length === 0) {
-        return legacyError('ERROR: Something went wrong', 500);
+        return this.paymentFailure('PAYMENT_CREATE_PACKAGES_NOT_FOUND', 404);
       }
 
       const post = await this.prisma.post.findUnique({
@@ -265,18 +293,24 @@ export class LocalPostOrderService {
         select: { id: true, vendor_id: true, deleted: true },
       });
       if (!post || post.deleted) {
-        return legacyError('ERROR: Something went wrong', 500);
+        return this.paymentFailure('PAYMENT_CREATE_POST_NOT_FOUND', 404);
       }
 
       if (ownerEmail) {
         const owner = await this.findVendorAuthByEmail(ownerEmail);
         if (!owner || owner.id !== post.vendor_id) {
-          return legacyError('ERROR: Something went wrong', 500);
+          return this.paymentFailure('PAYMENT_CREATE_OWNER_MISMATCH', 403);
         }
       }
 
       const orderId = BigInt(this.generateRandomCode(8, true));
-      const paypalId = `LOCAL-${orderId.toString()}`;
+      const providerOrder = await this.paymentProvider.createOrder({
+        orderReference: orderId.toString(),
+      });
+      const paypalId = this.toSafeString(providerOrder.id);
+      if (!paypalId) {
+        return this.paymentFailure('PAYMENT_CREATE_PROVIDER_EXCEPTION', 502);
+      }
       await this.prisma.customer_orders.create({
         data: {
           id: orderId,
@@ -288,63 +322,74 @@ export class LocalPostOrderService {
           email: ownerEmail || null,
           phoneNumber: phoneNumber || null,
           fullName: fullName || null,
-          status: 'CREATED',
+          status: ORDER_STATUS_CREATED,
         },
       });
 
-      return {
-        id: paypalId,
-        status: 'CREATED',
-        links: [
-          {
-            rel: 'approve',
-            href: `https://autoconnect.al/payments/mock/${paypalId}`,
-            method: 'GET',
-          },
-        ],
-      };
-    } catch {
-      return legacyError('ERROR: Something went wrong', 500);
+      return providerOrder;
+    } catch (error) {
+      return this.paymentFailure(
+        'PAYMENT_CREATE_EXCEPTION',
+        500,
+        undefined,
+        error,
+      );
     }
   }
 
-  async captureOrder(orderID: string): Promise<unknown> {
+  async captureOrder(
+    orderID: string,
+    idempotencyKeyInput?: string,
+  ): Promise<unknown> {
     try {
       const order = await this.prisma.customer_orders.findFirst({
         where: { paypalId: orderID },
       });
       if (!order) {
-        return legacyError('ERROR: Something went wrong', 500);
+        return this.paymentFailure('PAYMENT_CAPTURE_ORDER_NOT_FOUND', 404);
       }
 
       const postId = this.toSafeString(order.postId);
       if (!postId) {
-        return legacyError('ERROR: Something went wrong', 500);
+        return this.paymentFailure('PAYMENT_CAPTURE_ORDER_MISSING_POST_ID', 409);
       }
 
       const post = await this.prisma.post.findUnique({
         where: { id: BigInt(postId) },
       });
       if (!post) {
-        return legacyError('ERROR: Something went wrong', 500);
+        return this.paymentFailure('PAYMENT_CAPTURE_POST_NOT_FOUND', 404);
       }
 
+      const captureKey = this.toCaptureKey(orderID, idempotencyKeyInput);
       const normalizedStatus = this.toSafeString(order.status).toUpperCase();
-      if (normalizedStatus === 'COMPLETED') {
+      if (normalizedStatus === ORDER_STATUS_COMPLETED) {
         return {
           id: orderID,
-          status: 'COMPLETED',
+          status: ORDER_STATUS_COMPLETED,
+          captureKey: this.toSafeString((order as AnyRecord).captureKey) || captureKey,
         };
       }
-      if (normalizedStatus && normalizedStatus !== 'CREATED') {
-        return legacyError('ERROR: Something went wrong', 409);
+      if (normalizedStatus && normalizedStatus !== ORDER_STATUS_CREATED) {
+        return this.paymentFailure('PAYMENT_CAPTURE_INVALID_STATE', 409);
+      }
+
+      try {
+        await this.paymentProvider.captureOrder(orderID);
+      } catch (providerError) {
+        return this.paymentFailure(
+          'PAYMENT_CAPTURE_PROVIDER_EXCEPTION',
+          502,
+          undefined,
+          providerError,
+        );
       }
 
       const ownerEmail = this.toSafeString(order.email);
       if (ownerEmail) {
         const owner = await this.findVendorAuthByEmail(ownerEmail);
         if (!owner || owner.id !== post.vendor_id) {
-          return legacyError('ERROR: Something went wrong', 403);
+          return this.paymentFailure('PAYMENT_CAPTURE_OWNER_MISMATCH', 403);
         }
       }
 
@@ -358,21 +403,31 @@ export class LocalPostOrderService {
 
       const captureState = await this.prisma.$transaction(async (tx) => {
         const transition = await tx.customer_orders.updateMany({
-          where: { id: order.id, status: 'CREATED' },
+          where: { id: order.id, status: ORDER_STATUS_CREATED },
           data: {
-            status: 'COMPLETED',
+            status: ORDER_STATUS_COMPLETED,
+            captureKey,
+            capturedAt: new Date(),
             dateUpdated: new Date(),
-          },
-        });
+          } as any,
+        } as any);
 
         if (transition.count === 0) {
-          const latest = await tx.customer_orders.findUnique({
+          const latest = (await tx.customer_orders.findUnique({
             where: { id: order.id },
-            select: { status: true },
-          });
-          if (this.toSafeString(latest?.status).toUpperCase() === 'COMPLETED') {
+          })) as AnyRecord | null;
+          if (
+            this.toSafeString(latest?.status).toUpperCase() ===
+            ORDER_STATUS_COMPLETED
+          ) {
             return 'already-completed' as const;
           }
+          this.logger.warn('payment.capture.transition_failed', {
+            code: 'PAYMENT_CAPTURE_TRANSITION_FAILED',
+            orderID,
+            orderId: String(order.id),
+            latestStatus: this.toSafeString(latest?.status),
+          });
           throw new Error('Order transition failed');
         }
 
@@ -405,16 +460,29 @@ export class LocalPostOrderService {
       if (captureState === 'already-completed') {
         return {
           id: orderID,
-          status: 'COMPLETED',
+          status: ORDER_STATUS_COMPLETED,
+          captureKey,
         };
       }
 
       return {
         id: orderID,
-        status: 'COMPLETED',
+        status: ORDER_STATUS_COMPLETED,
+        captureKey,
       };
-    } catch {
-      return legacyError('ERROR: Something went wrong', 500);
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        return this.paymentFailure('PAYMENT_CAPTURE_DUPLICATE_KEY', 409, undefined, error);
+      }
+      return this.paymentFailure(
+        'PAYMENT_CAPTURE_EXCEPTION',
+        500,
+        undefined,
+        error,
+      );
     }
   }
 
@@ -720,6 +788,31 @@ export class LocalPostOrderService {
 
   private toSafeString(value: unknown): string {
     return typeof value === 'string' ? value.trim() : '';
+  }
+
+  private toCaptureKey(orderId: string, input?: string): string {
+    const raw = this.toSafeString(input);
+    const normalized = raw.replace(/[^a-zA-Z0-9:_-]/g, '').slice(0, 120);
+    if (normalized) return normalized;
+    return `capture:${orderId}`;
+  }
+
+  private paymentFailure(
+    code: PaymentFailureCode,
+    statusCode: number,
+    message = 'ERROR: Something went wrong',
+    error?: unknown,
+  ) {
+    const err =
+      error instanceof Error
+        ? { message: error.message, stack: error.stack }
+        : undefined;
+    this.logger.warn('payment.failure', {
+      code,
+      statusCode,
+      ...(err ? { error: err } : {}),
+    });
+    return legacyError(message, statusCode);
   }
 
   private toNullableString(value: unknown): string | null {

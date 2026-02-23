@@ -3,16 +3,31 @@ import { legacyRoutes } from './openapi-routes';
 
 @Injectable()
 export class LegacyDocsService {
+  private openApiDocument: Record<string, unknown> | null = null;
+
+  setOpenApiDocument(document: Record<string, unknown>): void {
+    this.openApiDocument = document;
+  }
+
   private expectedCode(): string {
     return process.env.DOCS_ACCESS_CODE ?? '';
   }
 
-  hasAccess(code?: string): boolean {
+  hasAccess(token?: string): boolean {
     const expected = this.expectedCode();
-    return Boolean(expected && code && expected === code);
+    return Boolean(expected && token && expected === token);
   }
 
   getOpenApiDocument() {
+    if (this.openApiDocument) {
+      return this.openApiDocument;
+    }
+
+    // Fallback for non-bootstrapped contexts (e.g. isolated unit tests).
+    return this.getLegacyFallbackOpenApiDocument();
+  }
+
+  private getLegacyFallbackOpenApiDocument() {
     const paths: Record<string, Record<string, unknown>> = {};
 
     for (const route of legacyRoutes) {
@@ -57,8 +72,8 @@ export class LegacyDocsService {
     };
   }
 
-  getDocsHtml(code: string) {
-    const specUrl = `/openapi.json?code=${encodeURIComponent(code)}`;
+  getDocsHtml(token: string) {
+    const specUrl = '/openapi.json';
     return `<!doctype html>
 <html lang="en">
 <head>
@@ -78,6 +93,10 @@ export class LegacyDocsService {
   <script>
     window.ui = SwaggerUIBundle({
       url: ${JSON.stringify(specUrl)},
+      requestInterceptor: (request) => {
+        request.headers['X-Docs-Token'] = ${JSON.stringify(token)};
+        return request;
+      },
       dom_id: '#swagger-ui',
       presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
       layout: 'StandaloneLayout'

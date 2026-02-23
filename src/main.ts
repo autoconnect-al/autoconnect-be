@@ -1,9 +1,11 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import express from 'express';
 import { getMediaRootPath } from './common/media-path.util';
 import { createLogger } from './common/logger.util';
+import { LegacyDocsService } from './modules/legacy-docs/legacy-docs.service';
 
 const defaultAllowedOrigins = [
   'https://ap.autoconnect.al',
@@ -89,6 +91,24 @@ async function bootstrap() {
       forbidNonWhitelisted: false,
       transform: true,
     }),
+  );
+
+  const openApiConfig = new DocumentBuilder()
+    .setTitle('Vehicle API Legacy Compatibility')
+    .setVersion('0.1.0')
+    .addApiKey(
+      {
+        type: 'apiKey',
+        in: 'header',
+        name: 'X-Http-Authorization',
+        description: 'Use value: Bearer <jwt_token>',
+      },
+      'XHttpAuthorization',
+    )
+    .build();
+  const openApiDocument = SwaggerModule.createDocument(app, openApiConfig);
+  app.get(LegacyDocsService).setOpenApiDocument(
+    openApiDocument as unknown as Record<string, unknown>,
   );
 
   const port = Number(process.env.PORT ?? 3000);

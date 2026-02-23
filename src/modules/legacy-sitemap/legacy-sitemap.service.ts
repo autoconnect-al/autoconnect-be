@@ -231,7 +231,7 @@ export class LegacySitemapService {
           const model = this.encodePathComponent(row.model);
           const params = `${make}/${model}`;
           const alPath = path.replace('[[...params]]', params);
-          const enPath = path.replace('[[...params]]', params);
+          const enPath = pathLocales.en.replace('[[...params]]', params);
           acc.push(this.makeItem(baseUrl, alPath, enPath, 'daily', '0.4'));
         }
         continue;
@@ -252,7 +252,7 @@ export class LegacySitemapService {
           const model = this.encodePathComponent(row.model);
           const params = `${make}/${model}`;
           const alPath = path.replace('[[...params]]', params);
-          const enPath = path.replace('[[...params]]', params);
+          const enPath = pathLocales.en.replace('[[...params]]', params);
           acc.push(this.makeItem(baseUrl, alPath, enPath, 'daily', '0.4'));
         }
         continue;

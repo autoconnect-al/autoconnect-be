@@ -14,6 +14,7 @@ import { createLogger } from '../../common/logger.util';
 const jwtSecret = requireEnv('JWT_SECRET');
 const instagramClientId = requireEnv('INSTAGRAM_CLIENT_ID');
 const instagramClientSecret = requireEnv('INSTAGRAM_CLIENT_SECRET');
+const instagramRedirectUri = requireEnv('INSTAGRAM_REDIRECT_URI');
 
 @Injectable()
 export class LegacyAuthService {
@@ -44,7 +45,7 @@ export class LegacyAuthService {
       this.logger.error('login.exception', { message, stack });
       return legacyError(
         'Could not login user. Please check your credentials.',
-        500,
+        401,
       );
     }
   }
@@ -137,9 +138,7 @@ export class LegacyAuthService {
 
     const clientId = instagramClientId;
     const clientSecret = instagramClientSecret;
-    const redirectUri =
-      process.env.INSTAGRAM_REDIRECT_URI ??
-      'https://www.autoconnect.al/sq-al/paneli-administrimit';
+    const redirectUri = instagramRedirectUri;
 
     try {
       const body = new URLSearchParams({

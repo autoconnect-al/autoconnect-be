@@ -1,19 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { legacyError, legacySuccess } from '../../common/legacy-response';
-import { LegacyDataService } from '../legacy-data/legacy-data.service';
-import { LegacySitemapService } from '../legacy-sitemap/legacy-sitemap.service';
-import { Resend } from 'resend';
 
 type AnyRecord = Record<string, unknown>;
 
 @Injectable()
-export class LegacyApService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly legacyDataService: LegacyDataService,
-    private readonly legacySitemapService: LegacySitemapService,
-  ) {}
+export class ApVendorManagementService {
+  constructor(private readonly prisma: PrismaService) {}
 
   async getVendors() {
     const rows = await this.prisma.vendor.findMany({
@@ -123,129 +116,24 @@ export class LegacyApService {
       },
     });
 
-    if (deleted) {
-      const vendorPosts = await this.prisma.post.findMany({
-        where: { vendor_id: vendorId },
-        select: { id: true },
-      });
-      const postIds = vendorPosts.map((item) => item.id);
+    const vendorPosts = await this.prisma.post.findMany({
+      where: { vendor_id: vendorId },
+      select: { id: true },
+    });
+    const postIds = vendorPosts.map((item) => item.id);
 
-      await this.prisma.post.updateMany({
-        where: { vendor_id: vendorId },
-        data: { deleted: true, dateUpdated: new Date() },
+    await this.prisma.post.updateMany({
+      where: { vendor_id: vendorId },
+      data: { deleted, dateUpdated: new Date() },
+    });
+    if (postIds.length > 0) {
+      await this.prisma.car_detail.updateMany({
+        where: { post_id: { in: postIds } },
+        data: { deleted, dateUpdated: new Date() },
       });
-      if (postIds.length > 0) {
-        await this.prisma.car_detail.updateMany({
-          where: { post_id: { in: postIds } },
-          data: { deleted: true, dateUpdated: new Date() },
-        });
-      }
-    } else {
-      const vendorPosts = await this.prisma.post.findMany({
-        where: { vendor_id: vendorId },
-        select: { id: true },
-      });
-      const postIds = vendorPosts.map((item) => item.id);
-
-      await this.prisma.post.updateMany({
-        where: { vendor_id: vendorId },
-        data: { deleted: false, dateUpdated: new Date() },
-      });
-      if (postIds.length > 0) {
-        await this.prisma.car_detail.updateMany({
-          where: { post_id: { in: postIds } },
-          data: { deleted: false, dateUpdated: new Date() },
-        });
-      }
     }
 
     return legacySuccess(null, 'Vendor marked for crawl next');
-  }
-
-  async makeModelMakes(type: 'car' | 'motorcycle') {
-    return this.legacyDataService.makes(type);
-  }
-
-  async makeModelModels(make: string, type: 'car' | 'motorcycle') {
-    return this.legacyDataService.models(make, type, true);
-  }
-
-  async sitemapGenerate() {
-    await this.legacySitemapService.getDefaultSitemap();
-    return legacySuccess(true, 'Sitemap generated successfully');
-  }
-
-  async sendRemindEmails() {
-    const now = Date.now();
-    const threeDayUpper = new Date(now - 11 * 24 * 3600 * 1000);
-    const threeDayLower = new Date(now - 12 * 24 * 3600 * 1000);
-    const oneDayUpper = new Date(now - 14 * 24 * 3600 * 1000);
-    const oneDayLower = new Date(now - 15 * 24 * 3600 * 1000);
-
-    const [threeDayOrders, oneDayOrders] = await Promise.all([
-      this.prisma.customer_orders.findMany({
-        where: {
-          dateUpdated: {
-            lte: threeDayUpper,
-            gt: threeDayLower,
-          },
-          email: { not: null },
-        },
-      }),
-      this.prisma.customer_orders.findMany({
-        where: {
-          dateUpdated: {
-            lte: oneDayUpper,
-            gt: oneDayLower,
-          },
-          email: { not: null },
-        },
-      }),
-    ]);
-
-    const apiKey = this.toSafeString(process.env.RESEND_API_KEY);
-    const resend = apiKey ? new Resend(apiKey) : null;
-    const sent = { oneDay: 0, threeDay: 0 };
-
-    const sendBatch = async (
-      rows: Array<{ email: string | null; postId: string | null }>,
-      daysLeft: '1' | '3',
-    ) => {
-      for (const row of rows) {
-        const email = this.toSafeString(row.email);
-        const postId = this.toSafeString(row.postId);
-        if (!email || !postId || !resend) continue;
-
-        const link = `https://autoconnect.al/sq-al/automjete/makine-ne-shitje/${postId}`;
-        try {
-          await resend.emails.send({
-            from: 'info@autoconnect.al',
-            to: [email],
-            subject: 'Promovimi i postimit tuaj skadon se shpejti',
-            html: `
-              <strong>Promovimi i postimit tuaj skadon se shpejti</strong>
-              <p>Postimit tuaj i kane mbetur vetem ${daysLeft} dite nga promovimi aktiv.</p>
-              <p><a href="${link}">Shiko postin</a></p>
-              <p>Faleminderit,<br/>Ekipi i Autoconnect</p>
-            `,
-          });
-          if (daysLeft === '1') sent.oneDay += 1;
-          if (daysLeft === '3') sent.threeDay += 1;
-        } catch {
-          // Keep endpoint resilient; continue with next recipient.
-        }
-      }
-    };
-
-    await sendBatch(threeDayOrders, '3');
-    await sendBatch(oneDayOrders, '1');
-
-    return legacySuccess({
-      oneDayCandidates: oneDayOrders.length,
-      threeDayCandidates: threeDayOrders.length,
-      sent,
-      emailDeliveryEnabled: Boolean(resend),
-    });
   }
 
   private extractVendor(rawVendor: unknown): {
@@ -301,7 +189,7 @@ export class LegacyApService {
 
   private normalizeBigInts<T>(input: T): T {
     return JSON.parse(
-      JSON.stringify(input, (key, value) =>
+      JSON.stringify(input, (_, value) =>
         typeof value === 'bigint' ? value.toString() : value,
       ),
     ) as T;

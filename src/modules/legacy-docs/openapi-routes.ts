@@ -150,14 +150,14 @@ export const legacyRoutes: LegacyRoute[] = [
     security: true,
   },
   {
-    method: 'get',
-    path: '/admin/posts/delete/{id}',
+    method: 'delete',
+    path: '/admin/posts/{id}',
     summary: 'Delete post',
     security: true,
   },
   {
-    method: 'get',
-    path: '/admin/posts/sold/{id}',
+    method: 'patch',
+    path: '/admin/posts/{id}/sold',
     summary: 'Mark post sold',
     security: true,
   },

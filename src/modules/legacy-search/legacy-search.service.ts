@@ -123,29 +123,22 @@ export class LegacySearchService {
   }
 
   async mostWanted(excludeIds?: string, excludedAccounts?: string) {
-    const excludeIdList = (excludeIds ?? '')
-      .split(',')
-      .map((v) => v.trim())
-      .filter(Boolean)
-      .map((id) => `'${id.replace(/'/g, "''")}'`)
-      .join(',');
-
-    const excludeAccountList = (excludedAccounts ?? '')
-      .split(',')
-      .map((v) => v.trim())
-      .filter(Boolean)
-      .map((name) => `'${name.replace(/'/g, "''")}'`)
-      .join(',');
+    const excludeIdValues = this.parseCsvValues(excludeIds);
+    const excludeAccountValues = this.parseCsvValues(excludedAccounts);
 
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const clauses: string[] = ['sold = 0', "(deleted = '0' OR deleted = 0)"];
     const params: unknown[] = [sevenDaysAgo];
     clauses.push('dateCreated > ?');
-    if (excludeIdList) {
-      clauses.push(`id NOT IN (${excludeIdList})`);
+    if (excludeIdValues.length > 0) {
+      clauses.push(`id NOT IN (${excludeIdValues.map(() => '?').join(',')})`);
+      params.push(...excludeIdValues);
     }
-    if (excludeAccountList) {
-      clauses.push(`accountName NOT IN (${excludeAccountList})`);
+    if (excludeAccountValues.length > 0) {
+      clauses.push(
+        `accountName NOT IN (${excludeAccountValues.map(() => '?').join(',')})`,
+      );
+      params.push(...excludeAccountValues);
     }
 
     const query = `SELECT id, make, model, variant, registration, mileage, price, transmission, fuelType, engineSize, drivetrain, seats, numberOfDoors, bodyType, customsPaid, canExchange, options, emissionGroup, type, accountName, sidecarMedias, contact, vendorContact, profilePicture, vendorId
@@ -194,15 +187,12 @@ export class LegacySearchService {
       return legacySuccess([]);
     }
 
-    const excluded = (excludedIds ?? '')
-      .split(',')
-      .map((v) => v.trim())
-      .filter(Boolean)
-      .map((value) => `'${value.replace(/'/g, "''")}'`)
-      .join(',');
-
-    const excludedClause = excluded ? `AND id NOT IN (${excluded})` : '';
-    const params: unknown[] = [make, model, id, type];
+    const excludedValues = this.parseCsvValues(excludedIds);
+    const excludedClause =
+      excludedValues.length > 0
+        ? `AND id NOT IN (${excludedValues.map(() => '?').join(',')})`
+        : '';
+    const params: unknown[] = [make, model, id, type, ...excludedValues];
     const rows = await this.prisma.$queryRawUnsafe<unknown[]>(
       `SELECT id, make, model, variant, registration, mileage, price, transmission, fuelType, engineSize, drivetrain, seats, numberOfDoors, bodyType, customsPaid, canExchange, options, emissionGroup, type, sidecarMedias, accountName, profilePicture, vendorId, contact, vendorContact
        FROM search WHERE make = ? AND model = ? AND id <> ? AND sold = 0 AND deleted = '0' AND type = ? ${excludedClause} ORDER BY dateUpdated DESC LIMIT 4`,
@@ -227,15 +217,13 @@ export class LegacySearchService {
     const terms = this.termMap(filter.searchTerms ?? []);
     const make = this.toStr(terms.get('make1') ?? '');
     const model = this.toStr(terms.get('model1') ?? '');
-    const excluded = (excludedIds ?? '')
-      .split(',')
-      .map((v) => v.trim())
-      .filter(Boolean)
-      .map((value) => `'${value.replace(/'/g, "''")}'`)
-      .join(',');
-    const excludedClause = excluded ? `AND id NOT IN (${excluded})` : '';
+    const excludedValues = this.parseCsvValues(excludedIds);
+    const excludedClause =
+      excludedValues.length > 0
+        ? `AND id NOT IN (${excludedValues.map(() => '?').join(',')})`
+        : '';
 
-    const params: unknown[] = [type];
+    const params: unknown[] = [type, ...excludedValues];
     let where = `sold = 0 AND deleted = '0' AND type = ? ${excludedClause}`;
     if (make) {
       where += ' AND make = ?';
@@ -701,6 +689,13 @@ export class LegacySearchService {
     if (typeof value === 'string') return value.trim();
     if (typeof value === 'number') return String(value);
     return '';
+  }
+
+  private parseCsvValues(raw: string | undefined): string[] {
+    return (raw ?? '')
+      .split(',')
+      .map((v) => v.trim())
+      .filter((v) => v.length > 0);
   }
 
   private normalizeBigInts<T>(input: T): T {

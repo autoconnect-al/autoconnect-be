@@ -198,4 +198,61 @@ describe('LegacySearchService', () => {
       }),
     );
   });
+
+  it('mostWanted should bind excluded ids/accounts as params, not SQL string concat', async () => {
+    const prisma = {
+      $queryRawUnsafe: jest.fn().mockResolvedValue([]),
+    } as any;
+    const service = new LegacySearchService(prisma);
+
+    await service.mostWanted("1,2,'3", "foo,bar' OR 1=1 --");
+
+    const call = prisma.$queryRawUnsafe.mock.calls[0];
+    const query = call[0] as string;
+    expect(query).toContain('id NOT IN (?,?,?)');
+    expect(query).toContain('accountName NOT IN (?,?)');
+    expect(query).not.toContain("bar' OR 1=1 --");
+    expect(call.slice(2)).toEqual(
+      expect.arrayContaining(['1', '2', "'3", 'foo', "bar' OR 1=1 --"]),
+    );
+  });
+
+  it('relatedById should use parameterized excluded ids list', async () => {
+    const prisma = {
+      $queryRawUnsafe: jest
+        .fn()
+        .mockResolvedValueOnce([{ make: 'BMW', model: 'X5' }])
+        .mockResolvedValueOnce([]),
+    } as any;
+    const service = new LegacySearchService(prisma);
+
+    await service.relatedById('1', 'car', "2,3,'4");
+
+    const call = prisma.$queryRawUnsafe.mock.calls[1];
+    const query = call[0] as string;
+    expect(query).toContain('id NOT IN (?,?,?)');
+    expect(call.slice(1)).toEqual(
+      expect.arrayContaining(['BMW', 'X5', '1', 'car', '2', '3', "'4"]),
+    );
+  });
+
+  it('relatedByFilter should use parameterized excluded ids list', async () => {
+    const prisma = {
+      $queryRawUnsafe: jest.fn().mockResolvedValue([]),
+    } as any;
+    const service = new LegacySearchService(prisma);
+
+    await service.relatedByFilter(
+      JSON.stringify({ searchTerms: [{ key: 'make1', value: 'BMW' }] }),
+      'car',
+      "10,11,'12",
+    );
+
+    const call = prisma.$queryRawUnsafe.mock.calls[0];
+    const query = call[0] as string;
+    expect(query).toContain('id NOT IN (?,?,?)');
+    expect(call.slice(1)).toEqual(
+      expect.arrayContaining(['car', '10', '11', "'12", 'BMW']),
+    );
+  });
 });

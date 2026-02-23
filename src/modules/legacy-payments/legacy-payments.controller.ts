@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Headers,
   HttpCode,
   HttpException,
   Param,
@@ -41,8 +42,14 @@ export class LegacyPaymentsController {
 
   @Post(':orderID/capture')
   @HttpCode(200)
-  async captureOrder(@Param('orderID') orderID: string) {
-    const response = await this.localPostOrderService.captureOrder(orderID);
+  async captureOrder(
+    @Param('orderID') orderID: string,
+    @Headers('x-idempotency-key') idempotencyKey?: string,
+  ) {
+    const response = await this.localPostOrderService.captureOrder(
+      orderID,
+      idempotencyKey,
+    );
     if (
       response &&
       typeof response === 'object' &&
