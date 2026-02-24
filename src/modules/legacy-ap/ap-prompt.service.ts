@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { legacyError, legacySuccess } from '../../common/legacy-response';
 import { decodeCaption, isCustomsPaid } from '../imports/utils/caption-processor';
-import { sanitizePostUpdateDataForSource } from '../../common/promotion-field-guard.util';
 import { ApPromptRepository } from './ap-prompt.repository';
 
 interface PromptImportOptions {
@@ -394,24 +393,66 @@ export class ApPromptService {
       },
     });
 
-    const postUpdateData = sanitizePostUpdateDataForSource(
-      {
-        live: true,
-        revalidate: false,
-        origin: this.toSafeString(result.origin) || undefined,
-        status: this.toSafeString(result.status) || undefined,
-        renewTo: this.toNullableInt(result.renewTo) ?? undefined,
-        highlightedTo: this.toNullableInt(result.highlightedTo) ?? undefined,
-        promotionTo: this.toNullableInt(result.promotionTo) ?? undefined,
-        mostWantedTo: this.toNullableInt(result.mostWantedTo) ?? undefined,
-        dateUpdated: new Date(),
-      },
-      'untrusted',
-    );
+    const postUpdateData: Record<string, unknown> = {
+      live: true,
+      revalidate: false,
+      origin: this.toSafeString(result.origin) || undefined,
+      status: this.toSafeString(result.status) || undefined,
+      dateUpdated: new Date(),
+    };
+
+    this.assignNullableIntIfProvided(postUpdateData, result, 'renewTo');
+    this.assignNullableIntIfProvided(postUpdateData, result, 'highlightedTo');
+    this.assignNullableIntIfProvided(postUpdateData, result, 'promotionTo');
+    this.assignNullableIntIfProvided(postUpdateData, result, 'mostWantedTo');
+    this.assignNullableIntIfProvided(postUpdateData, result, 'renewedTime');
+    this.assignNullableStringIfProvided(postUpdateData, result, 'renewInterval');
+
     await this.prisma.post.update({
       where: { id: BigInt(id) },
       data: postUpdateData,
     });
+  }
+
+  private assignNullableIntIfProvided(
+    target: Record<string, unknown>,
+    source: Record<string, unknown>,
+    key:
+      | 'renewTo'
+      | 'highlightedTo'
+      | 'promotionTo'
+      | 'mostWantedTo'
+      | 'renewedTime',
+  ): void {
+    if (!Object.prototype.hasOwnProperty.call(source, key)) return;
+    const value = source[key];
+    if (value === null) {
+      target[key] = null;
+      return;
+    }
+
+    const parsed = this.toNullableInt(value);
+    if (parsed !== null) {
+      target[key] = parsed;
+    }
+  }
+
+  private assignNullableStringIfProvided(
+    target: Record<string, unknown>,
+    source: Record<string, unknown>,
+    key: 'renewInterval',
+  ): void {
+    if (!Object.prototype.hasOwnProperty.call(source, key)) return;
+    const value = source[key];
+    if (value === null) {
+      target[key] = null;
+      return;
+    }
+
+    const parsed = this.toSafeString(value);
+    if (parsed) {
+      target[key] = parsed;
+    }
   }
 
   private async generateVariantPrompt(length: number): Promise<{

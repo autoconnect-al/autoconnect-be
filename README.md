@@ -21,6 +21,56 @@ npm run prisma:generate
 npm run start:dev
 ```
 
+## Integration Tests (Ephemeral MySQL)
+
+Node 20 is required for integration tests.
+
+### Local run
+
+1. Use Node 20
+```bash
+nvm use 20
+```
+
+2. Start disposable MySQL
+```bash
+npm run test:int:db:up
+```
+
+3. Run integration tests (migrations + tests)
+```bash
+npm run test:int
+```
+
+4. Tear down disposable MySQL
+```bash
+npm run test:int:db:down
+```
+
+### Environment contract
+
+Defaults are provided by `test/integration/setup.ts`, including:
+- `DATABASE_URL` (default: `mysql://root:rootroot@127.0.0.1:3307/vehicle_api_int`)
+- `JWT_SECRET`
+- `INSTAGRAM_CLIENT_ID`
+- `INSTAGRAM_CLIENT_SECRET`
+- `INSTAGRAM_REDIRECT_URI`
+- `AP_ADMIN_CODE`
+- `ADMIN_CODE`
+- `IMPORT_QUEUE_ENABLED=false`
+
+Outbound network is blocked during integration tests by default.
+To allow it temporarily:
+```bash
+ALLOW_OUTBOUND_NETWORK=true npm run test:int
+```
+
+### Troubleshooting
+
+- If migration/test startup fails right after DB up, rerun `npm run test:int`.
+- If port `3307` is occupied, stop the conflicting process or override `DATABASE_URL`.
+- If Docker resources are stale, run `npm run test:int:db:down` and then `npm run test:int:db:up`.
+
 ## Legacy Docs Gate
 
 Set:

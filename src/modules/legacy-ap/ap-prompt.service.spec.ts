@@ -35,7 +35,7 @@ function createPromptImportJobMock() {
 }
 
 describe('ApPromptService.importPromptResults promotion guards', () => {
-  it('does not update promotion fields from car-details import payload', async () => {
+  it('updates promotion fields from car-details import payload only when provided (including null clear)', async () => {
     const prisma = {
       post: {
         update: jest.fn().mockResolvedValue({}),
@@ -90,19 +90,23 @@ describe('ApPromptService.importPromptResults promotion guards', () => {
           highlightedTo: 2,
           promotionTo: 3,
           mostWantedTo: 4,
+          renewInterval: null,
+          renewedTime: 5,
         },
       ]),
     );
 
     expect(prisma.post.update).toHaveBeenCalledTimes(1);
     const updateArg = prisma.post.update.mock.calls[0][0];
-    expect(updateArg.data).not.toHaveProperty('renewTo');
-    expect(updateArg.data).not.toHaveProperty('highlightedTo');
-    expect(updateArg.data).not.toHaveProperty('promotionTo');
-    expect(updateArg.data).not.toHaveProperty('mostWantedTo');
     expect(updateArg.data).toMatchObject({
       live: true,
       revalidate: false,
+      renewTo: 1,
+      highlightedTo: 2,
+      promotionTo: 3,
+      mostWantedTo: 4,
+      renewInterval: null,
+      renewedTime: 5,
     });
 
     expect(prisma.car_detail.update).toHaveBeenCalledTimes(1);
@@ -183,6 +187,13 @@ describe('ApPromptService.importPromptResults promotion guards', () => {
         }),
       }),
     );
+    const postUpdateArg = prisma.post.update.mock.calls[0][0];
+    expect(postUpdateArg.data).not.toHaveProperty('renewTo');
+    expect(postUpdateArg.data).not.toHaveProperty('highlightedTo');
+    expect(postUpdateArg.data).not.toHaveProperty('promotionTo');
+    expect(postUpdateArg.data).not.toHaveProperty('mostWantedTo');
+    expect(postUpdateArg.data).not.toHaveProperty('renewInterval');
+    expect(postUpdateArg.data).not.toHaveProperty('renewedTime');
   });
 
   it('falls back to id lookup when no post_id-linked row exists', async () => {

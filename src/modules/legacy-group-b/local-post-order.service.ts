@@ -596,6 +596,18 @@ export class LocalPostOrderService {
       const normalizedCustomsPaid = this.nullableBooleanFrom(
         detailsSource.customsPaid,
       );
+      const existingPromotionTo =
+        this.toNullableInt(existing?.promotionTo) ?? undefined;
+      const existingHighlightedTo =
+        this.toNullableInt(existing?.highlightedTo) ?? undefined;
+      const existingRenewTo =
+        this.toNullableInt(existing?.renewTo) ?? undefined;
+      const existingRenewInterval =
+        this.toNullableString(existing?.renewInterval) ?? undefined;
+      const existingRenewedTime =
+        this.toNullableInt(existing?.renewedTime) ?? undefined;
+      const existingMostWantedTo =
+        this.toNullableInt(existing?.mostWantedTo) ?? undefined;
 
       await this.prisma.$transaction(async (tx) => {
         if (existing) {
@@ -716,6 +728,12 @@ export class LocalPostOrderService {
             customsPaid: normalizedCustomsPaid,
             sold,
             type: normalizedType,
+            promotionTo: existingPromotionTo,
+            highlightedTo: existingHighlightedTo,
+            renewTo: existingRenewTo,
+            renewInterval: existingRenewInterval,
+            renewedTime: existingRenewedTime,
+            mostWantedTo: existingMostWantedTo,
           },
           create: {
             id: postIdBigInt,
@@ -748,6 +766,12 @@ export class LocalPostOrderService {
             customsPaid: normalizedCustomsPaid,
             sold,
             type: normalizedType,
+            promotionTo: existingPromotionTo,
+            highlightedTo: existingHighlightedTo,
+            renewTo: existingRenewTo,
+            renewInterval: existingRenewInterval,
+            renewedTime: existingRenewedTime,
+            mostWantedTo: existingMostWantedTo,
           },
         });
       });
