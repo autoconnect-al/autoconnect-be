@@ -1,0 +1,15 @@
+{
+  "name": "Smoke GET /admin/posts",
+  "request": {
+    "method": "GET",
+    "path": "/admin/posts",
+    "headers": {
+      "X-Http-Authorization": "Bearer invalid-token"
+    }
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "values": false
+  }
+}

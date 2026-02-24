@@ -1,0 +1,687 @@
+{
+  "generatedAt": "2026-02-14T08:22:43.804Z",
+  "sourceAudit": "/Users/reipano/Personal/tregu-makinave/admin-endpoints-audit.json",
+  "total": 68,
+  "matrix": [
+    {
+      "method": "GET",
+      "path": "/",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "POST",
+      "path": "/create-role",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "POST",
+      "path": "/update-role/{id}",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "DELETE",
+      "path": "/delete-role/{id}",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "GET",
+      "path": "/",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "POST",
+      "path": "/create-user",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "POST",
+      "path": "/update-user/{id}",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "DELETE",
+      "path": "/delete-user/{id}",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "POST",
+      "path": "/update",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "DELETE",
+      "path": "/delete/{id}",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "POST",
+      "path": "/save-post",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "GET",
+      "path": "/scrape-posts",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "GET",
+      "path": "/scrape-posts/create",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "GET",
+      "path": "/scrape-posts/details",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "POST",
+      "path": "/scrape-posts/update",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "GET",
+      "path": "/scrape-posts/cleanPosts",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "GET",
+      "path": "/scrape-posts/update-search",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "GET",
+      "path": "/scrape-posts/fix-details",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "GET",
+      "path": "/get-most-liked",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "GET",
+      "path": "/auto-renew",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "GET",
+      "path": "/posts",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "POST",
+      "path": "/update/{id}",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "GET",
+      "path": "/all",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "POST",
+      "path": "/add/{id}",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "POST",
+      "path": "/add/details/{id}",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "POST",
+      "path": "/edit/{id}",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "GET",
+      "path": "/next-to-crawl",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "GET",
+      "path": "/mark-vendor-for-crawl-next/{id}",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "GET",
+      "path": "/toggle-deleted/{id}",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "GET",
+      "path": "/generate-prompt",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "GET",
+      "path": "/generate-prompt-fix-variant",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "GET",
+      "path": "/generate-prompt-fix-registration",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "GET",
+      "path": "/generate-prompt-fix-mileage",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "GET",
+      "path": "/generate-prompt-fix-price",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "GET",
+      "path": "/generate-prompt-fix-motorcycle-details",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "GET",
+      "path": "/get-manual-draft-posts",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "POST",
+      "path": "/import",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "GET",
+      "path": "/clean-cache",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "GET",
+      "path": "/makes",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "GET",
+      "path": "/models/{make}",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "GET",
+      "path": "/makes/motorcycle",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "GET",
+      "path": "/models/motorcycle/{make}",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "GET",
+      "path": "/all",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "POST",
+      "path": "/create",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "POST",
+      "path": "/update/{id}",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "GET",
+      "path": "/{id}",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "GET",
+      "path": "/generate",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/orders/send-remind-emails",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "ap-frontend,scraper",
+      "exposure": "public",
+      "auth": "code",
+      "target": "legacy-ap-admin"
+    },
+    {
+      "method": "GET",
+      "path": "/user-management/user/{id}",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "ap-backoffice",
+      "exposure": "public",
+      "auth": "jwt-admin",
+      "target": "legacy-ap-admin"
+    },
+    {
+      "method": "GET",
+      "path": "/user-management/user/username/{username}",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "ap-backoffice",
+      "exposure": "public",
+      "auth": "jwt-admin",
+      "target": "legacy-ap-admin"
+    },
+    {
+      "method": "GET",
+      "path": "/role-management/role/{id}",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "ap-backoffice",
+      "exposure": "public",
+      "auth": "jwt-admin",
+      "target": "legacy-ap-admin"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/save-post",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "internal-only",
+      "exposure": "internal-only",
+      "auth": "internal",
+      "target": "legacy-group-b"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/create-user-and-post",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "internal-only",
+      "exposure": "internal-only",
+      "auth": "internal",
+      "target": "legacy-group-b+legacy-group-a"
+    },
+    {
+      "method": "GET",
+      "path": "/delete/{id}",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "GET",
+      "path": "/sold/{id}",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "GET",
+      "path": "/unsold/{id}",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "POST",
+      "path": "/edit/{id}",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "POST",
+      "path": "/change-password/{id}",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "POST",
+      "path": "/contact/{id}",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "POST",
+      "path": "/biography/{id}",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "POST",
+      "path": "/profile-picture/{id}",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "unknown",
+      "exposure": "review",
+      "auth": "review",
+      "target": "review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/user/reset-password",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "internal-only",
+      "exposure": "internal-only",
+      "auth": "public",
+      "target": "legacy-group-a"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/user/update-password",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "internal-only",
+      "exposure": "internal-only",
+      "auth": "public",
+      "target": "legacy-group-a"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/orders",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": true,
+      "caller": "fe",
+      "exposure": "public",
+      "auth": "public",
+      "target": "legacy-payments/legacy-auth"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/orders/{orderID}/capture",
+      "sourceFile": "admin-routes.php",
+      "migratedToVehicleApi": true,
+      "caller": "fe",
+      "exposure": "public",
+      "auth": "public",
+      "target": "legacy-payments/legacy-auth"
+    },
+    {
+      "method": "POST",
+      "path": "/authentication/login",
+      "sourceFile": "auth-routes.php",
+      "migratedToVehicleApi": true,
+      "caller": "fe",
+      "exposure": "public",
+      "auth": "public",
+      "target": "legacy-payments/legacy-auth"
+    },
+    {
+      "method": "GET",
+      "path": "/authentication/login-with-code",
+      "sourceFile": "auth-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "ap-frontend,scraper",
+      "exposure": "public",
+      "auth": "code",
+      "target": "legacy-ap-auth"
+    },
+    {
+      "method": "POST",
+      "path": "/user/signup",
+      "sourceFile": "auth-routes.php",
+      "migratedToVehicleApi": false,
+      "caller": "internal-only",
+      "exposure": "internal-only",
+      "auth": "public",
+      "target": "legacy-group-a"
+    }
+  ]
+}

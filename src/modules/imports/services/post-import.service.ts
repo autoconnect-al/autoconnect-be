@@ -12,6 +12,9 @@ import { ImageDownloadService } from './image-download.service';
 import { isWithinThreeMonths, isWithinDays } from '../utils/date-filter';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { createHash } from 'crypto';
+import { sanitizePostUpdateDataForSource } from '../../../common/promotion-field-guard.util';
+import { createLogger } from '../../../common/logger.util';
 
 export interface ImportPostData {
   id: number | string;
@@ -81,13 +84,41 @@ export interface ParsedResult {
   mostWantedTo?: number | null;
 }
 
+type IncrementMetric =
+  | 'postOpen'
+  | 'impressions'
+  | 'reach'
+  | 'clicks'
+  | 'contact';
+type ContactMethod = 'call' | 'whatsapp' | 'email' | 'instagram';
+
+interface IncrementMetricOptions {
+  visitorId?: string;
+  contactMethod?: ContactMethod;
+}
+
 @Injectable()
 export class PostImportService {
+  private readonly logger = createLogger('post-import-service');
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly openaiService: OpenAIService,
     private readonly imageDownloadService: ImageDownloadService,
   ) {}
+
+  async getPostState(postId: bigint): Promise<{ exists: boolean; deleted: boolean }> {
+    const post = await this.prisma.post.findUnique({
+      where: { id: postId },
+      select: { id: true, deleted: true },
+    });
+
+    if (!post) {
+      return { exists: false, deleted: false };
+    }
+
+    return { exists: true, deleted: Boolean(post.deleted) };
+  }
 
   /**
    * Import a post with optional car details and image downloads
@@ -107,14 +138,47 @@ export class PostImportService {
     forceDownloadImages = false,
     forceDownloadImagesDays?: number,
   ): Promise<bigint | null> {
+    let idempotencyKey = '';
+    let payloadHash = '';
+    let idempotencyClaimed = false;
+
     try {
       const now = new Date();
       const postId = BigInt(postData.id);
+      const source =
+        typeof postData.origin === 'string' && postData.origin.trim().length > 0
+          ? postData.origin.trim()
+          : 'UNKNOWN';
+      idempotencyKey = `${source}:${postId.toString()}`;
+      payloadHash = this.buildImportPayloadHash({
+        postData,
+        vendorId,
+        useOpenAI,
+        downloadImages,
+        forceDownloadImages,
+        forceDownloadImagesDays,
+      });
+
+      idempotencyClaimed = await this.claimImportIdempotency(
+        idempotencyKey,
+        payloadHash,
+      );
+      if (!idempotencyClaimed) {
+        if (process.env.SHOW_LOGS) {
+          this.logger.info('skipping replayed import payload', {
+            postId: postId.toString(),
+            source,
+          });
+        }
+        return postId;
+      }
 
       if (process.env.SHOW_LOGS) {
-        console.log(
-          `📥 Processing post ${postId} | vendor: ${vendorId} | origin: ${postData.origin || 'N/A'}`,
-        );
+        this.logger.info('processing post', {
+          postId: postId.toString(),
+          vendorId,
+          origin: postData.origin || 'N/A',
+        });
       }
 
       // Check if post exists and if it's older than 3 months
@@ -135,21 +199,25 @@ export class PostImportService {
         // Check if existing post is older than 3 months
         if (!isWithinThreeMonths(existingPost.createdTime)) {
           if (process.env.SHOW_LOGS) {
-            console.log(
-              `⚠️  Post ${postId} exists but is older than 3 months - marking as deleted`,
-            );
+            this.logger.info('post exists and is older than 3 months; deleting', {
+              postId: postId.toString(),
+            });
           }
           // Mark post as deleted
           await this.markPostAsDeleted(postId, existingPost.vendor_id);
           if (process.env.SHOW_LOGS) {
-            console.log(`🗑️  Post ${postId} marked as deleted`);
+            this.logger.info('post marked as deleted', {
+              postId: postId.toString(),
+            });
           }
+          await this.markImportCompleted(idempotencyKey, payloadHash);
           return null;
         }
       } else if (existingPost && existingPost.deleted) {
         if (process.env.SHOW_LOGS) {
-          console.log(`⏭️  Skipping post ${postId} - already deleted`);
+          this.logger.info('skipping deleted post', { postId: postId.toString() });
         }
+        await this.markImportCompleted(idempotencyKey, payloadHash);
         return postId;
       }
 
@@ -165,56 +233,53 @@ export class PostImportService {
       // If post is sold, mark it as sold and delete images immediately without any other updates
       if (sold) {
         if (process.env.SHOW_LOGS) {
-          console.log(
-            `🔴 Post ${postId} is marked as SOLD - marking and cleaning up images`,
-          );
+          this.logger.info('post is sold; cleaning and deleting', {
+            postId: postId.toString(),
+          });
         }
 
-        // Update post status to sold
-        await this.prisma.post.upsert({
-          where: { id: postId },
-          create: {
-            id: postId,
-            dateCreated: now,
-            dateUpdated: now,
-            caption: encodedCaption,
-            cleanedCaption,
-            createdTime: postData.createdTime || now.toISOString(),
-            sidecarMedias: '[]',
-            vendor_id: BigInt(vendorId),
-            live: false,
-            likesCount: 0,
-            viewsCount: 0,
-            car_detail_id: null,
-            origin: postData.origin || null,
-            status: 'ARCHIVED',
-            revalidate: false,
-          },
-          update: {
-            status: 'ARCHIVED',
-            dateUpdated: now,
-          },
-        });
+        if (existingPost) {
+          await this.markPostAsDeleted(postId, existingPost.vendor_id);
+        }
 
         // Update car_detail if it exists to mark as sold
         const existingCarDetail = await this.prisma.car_detail.findFirst({
           where: { post_id: postId },
         });
-        if (existingCarDetail) {
+        if (existingCarDetail && !existingCarDetail.sold) {
           await this.prisma.car_detail.update({
             where: { id: existingCarDetail.id },
-            data: { sold: true, dateUpdated: now },
+            data: { sold: true, deleted: true, dateUpdated: now },
           });
         }
 
-        // Delete post images
-        await this.deletePostImages(postId, BigInt(vendorId));
-
         if (process.env.SHOW_LOGS) {
-          console.log(`✅ Post ${postId} marked as SOLD and images cleaned up`);
+          this.logger.info('sold post cleaned', { postId: postId.toString() });
         }
 
+        await this.markImportCompleted(idempotencyKey, payloadHash);
         return postId;
+      }
+
+      const existingCarDetail = await this.prisma.car_detail.findFirst({
+        where: { post_id: postId },
+      });
+
+      if (existingCarDetail && existingCarDetail.sold) {
+        if (process.env.SHOW_LOGS) {
+          this.logger.info('car detail already sold; deleting post', {
+            postId: postId.toString(),
+            carDetailId: existingCarDetail.id.toString(),
+          });
+        }
+        await this.prisma.post.update({
+          where: { id: postId },
+          data: { deleted: true, dateUpdated: now },
+        });
+        await this.prisma.car_detail.update({
+          where: { id: existingCarDetail.id },
+          data: { deleted: true, dateUpdated: now },
+        });
       }
 
       // Check if vendor exists, if not create it
@@ -263,14 +328,19 @@ export class PostImportService {
               );
               if (shouldForceDownload) {
                 if (process.env.SHOW_LOGS) {
-                  console.log(
-                    `Post ${postData.id} is within last ${forceDownloadImagesDays} days - forcing image download`,
-                  );
+                  this.logger.info('forcing image download for fresh post', {
+                    postId: String(postData.id),
+                    days: forceDownloadImagesDays,
+                  });
                 }
               } else {
                 if (process.env.SHOW_LOGS) {
-                  console.log(
-                    `Post ${postData.id} is older than ${forceDownloadImagesDays} days - skipping forced download`,
+                  this.logger.info(
+                    'skip forced image download for older post',
+                    {
+                      postId: String(postData.id),
+                      days: forceDownloadImagesDays,
+                    },
                   );
                 }
               }
@@ -286,16 +356,18 @@ export class PostImportService {
             // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
             postData.sidecarMedias = result as any;
             if (process.env.SHOW_LOGS) {
-              console.log(
-                `   📸 Downloaded ${imageUrls.length} images for post ${postData.id}${shouldForceDownload ? ' (forced)' : ''}`,
-              );
+              this.logger.info('images downloaded', {
+                postId: String(postData.id),
+                imageCount: imageUrls.length,
+                forced: shouldForceDownload,
+              });
             }
           }
         } catch (error) {
-          console.error(
-            `   ❌ Failed to download images for post ${postData.id}:`,
-            error,
-          );
+          this.logger.error('failed to download images', {
+            postId: String(postData.id),
+            error: error instanceof Error ? error.message : String(error),
+          });
           // Continue with post creation even if image download fails
         }
       }
@@ -313,7 +385,9 @@ export class PostImportService {
           caption: encodedCaption,
           cleanedCaption,
           createdTime: postData.createdTime || now.toISOString(),
-          sidecarMedias: postData.sidecarMedias ? postData.sidecarMedias : '[]',
+          sidecarMedias: postData.sidecarMedias
+            ? JSON.stringify(postData.sidecarMedias)
+            : '[]',
           vendor_id: BigInt(vendorId),
           live: false,
           likesCount: postData.likesCount || 0,
@@ -328,7 +402,9 @@ export class PostImportService {
           caption: encodedCaption,
           cleanedCaption,
           createdTime: postData.createdTime || now.toISOString(),
-          sidecarMedias: postData.sidecarMedias ? postData.sidecarMedias : '',
+          sidecarMedias: postData.sidecarMedias
+            ? JSON.stringify(postData.sidecarMedias)
+            : '',
           likesCount: postData.likesCount || 0,
           viewsCount: postData.viewsCount || 0,
           origin: postData.origin || null,
@@ -338,24 +414,33 @@ export class PostImportService {
       });
 
       if (process.env.SHOW_LOGS) {
-        console.log(
-          `======================================================================================`,
-        );
-        console.log(
-          `   📝 Post should be revalidated: ${post.revalidate}. New cleaned caption differs from existing.`,
-        );
-        console.log(`New caption: ${cleanedCaption}`);
-        console.log(
-          `Existing caption: ${existingPost?.cleanedCaption || 'N/A'}`,
-        );
-        console.log(
-          `======================================================================================`,
-        );
+        this.logger.info('post revalidation status', {
+          postId: postId.toString(),
+          revalidate: post.revalidate,
+          newCaption: cleanedCaption,
+          existingCaption: existingPost?.cleanedCaption || 'N/A',
+        });
       }
       if (process.env.SHOW_LOGS) {
-        console.log(
-          `✅ ${isNewPost ? 'Created new' : 'Updated'} post ${postId} | vendor: ${vendorId} | origin: ${postData.origin || 'N/A'} | sold: ${sold} | customsPaid: ${customsPaid}`,
-        );
+        this.logger.info('post persisted', {
+          postId: postId.toString(),
+          vendorId,
+          origin: postData.origin || 'N/A',
+          isNewPost,
+          sold,
+          customsPaid,
+        });
+      }
+
+      // Keep customsPaid in sync for existing posts.
+      // This allows re-imports to overwrite previous values, including setting null.
+      if (existingPost) {
+        if (existingPost.car_detail_id) {
+          await this.prisma.car_detail.updateMany({
+            where: { id: existingPost.car_detail_id },
+            data: { customsPaid, dateUpdated: now },
+          });
+        }
       }
 
       // Now create/link car_detail AFTER post exists
@@ -378,9 +463,9 @@ export class PostImportService {
 
         if (useOpenAI && cleanedCaption) {
           if (process.env.SHOW_LOGS) {
-            console.log(
-              `   🤖 Generating car details with OpenAI for post ${postId}`,
-            );
+            this.logger.info('generating details with openai', {
+              postId: postId.toString(),
+            });
           }
           carDetailsFromAI =
             await this.openaiService.generateCarDetails(cleanedCaption);
@@ -388,9 +473,9 @@ export class PostImportService {
 
         if (carDetailsFromAI && Object.keys(carDetailsFromAI).length > 0) {
           if (process.env.SHOW_LOGS) {
-            console.log(
-              `   ✨ OpenAI generated car details for post ${postId}`,
-            );
+            this.logger.info('openai generated details', {
+              postId: postId.toString(),
+            });
           }
           // Create car_detail from AI-generated data
           // Convert AI format to cardDetails format
@@ -417,9 +502,9 @@ export class PostImportService {
         } else {
           if (useOpenAI) {
             if (process.env.SHOW_LOGS) {
-              console.log(
-                `   ⚠️  OpenAI did not generate car details for post ${postId} - creating empty`,
-              );
+              this.logger.warn('openai returned empty details; creating empty', {
+                postId: postId.toString(),
+              });
             }
           }
           // Create empty car_detail
@@ -441,6 +526,16 @@ export class PostImportService {
         );
       }
 
+      if (carDetailId) {
+        await this.prisma.car_detail.updateMany({
+          where: {
+            id: carDetailId,
+            OR: [{ post_id: null }, { post_id: { not: postId } }],
+          },
+          data: { post_id: postId },
+        });
+      }
+
       // Update post with car_detail_id if a car_detail was created
       if (carDetailId && isNewPost) {
         await this.prisma.post.update({
@@ -448,20 +543,142 @@ export class PostImportService {
           data: { car_detail_id: carDetailId },
         });
         if (process.env.SHOW_LOGS) {
-          console.log(
-            `   ↳ Linked car_detail ${carDetailId} to post ${postId}`,
-          );
+          this.logger.info('linked car detail', {
+            postId: postId.toString(),
+            carDetailId: carDetailId.toString(),
+          });
         }
       }
 
+      await this.markImportCompleted(idempotencyKey, payloadHash);
       return post.id;
     } catch (e) {
+      if (idempotencyClaimed && idempotencyKey && payloadHash) {
+        await this.markImportFailed(idempotencyKey, payloadHash, e);
+      }
       if (process.env.SHOW_LOGS) {
-        console.error('❌ Failed to import post:', JSON.stringify(e));
+        this.logger.error('failed to import post', {
+          error: e instanceof Error ? e.message : String(e),
+        });
       }
       // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
       return Promise.reject(e);
     }
+  }
+
+  private buildImportPayloadHash(payload: unknown): string {
+    const canonical = JSON.stringify(this.toCanonicalValue(payload));
+    return createHash('sha256').update(canonical).digest('hex');
+  }
+
+  private toCanonicalValue(value: unknown): unknown {
+    if (Array.isArray(value)) {
+      return value.map((item) => this.toCanonicalValue(item));
+    }
+    if (value && typeof value === 'object') {
+      const entries = Object.entries(value as Record<string, unknown>).sort(
+        ([a], [b]) => a.localeCompare(b),
+      );
+      const output: Record<string, unknown> = {};
+      for (const [key, entryValue] of entries) {
+        output[key] = this.toCanonicalValue(entryValue);
+      }
+      return output;
+    }
+    return value;
+  }
+
+  private async claimImportIdempotency(
+    idempotencyKey: string,
+    payloadHash: string,
+  ): Promise<boolean> {
+    const now = new Date();
+    const inserted = await this.prisma.$executeRawUnsafe(
+      `
+        INSERT IGNORE INTO import_idempotency (
+          idempotency_key,
+          payload_hash,
+          status,
+          last_error,
+          attempts,
+          created_at,
+          updated_at
+        ) VALUES (?, ?, 'processing', NULL, 1, ?, ?)
+      `,
+      idempotencyKey,
+      payloadHash,
+      now,
+      now,
+    );
+
+    if (Number(inserted) > 0) {
+      return true;
+    }
+
+    const rows = await this.prisma.$queryRawUnsafe<Array<{ status: string }>>(
+      `
+        SELECT status
+        FROM import_idempotency
+        WHERE idempotency_key = ? AND payload_hash = ?
+        ORDER BY id DESC
+        LIMIT 1
+      `,
+      idempotencyKey,
+      payloadHash,
+    );
+    const status = String(rows[0]?.status ?? '');
+    if (status !== 'failed') {
+      return false;
+    }
+
+    const reclaimed = await this.prisma.$executeRawUnsafe(
+      `
+        UPDATE import_idempotency
+        SET status = 'processing', last_error = NULL, attempts = attempts + 1, updated_at = ?
+        WHERE idempotency_key = ? AND payload_hash = ? AND status = 'failed'
+      `,
+      now,
+      idempotencyKey,
+      payloadHash,
+    );
+
+    return Number(reclaimed) > 0;
+  }
+
+  private async markImportCompleted(
+    idempotencyKey: string,
+    payloadHash: string,
+  ): Promise<void> {
+    await this.prisma.$executeRawUnsafe(
+      `
+        UPDATE import_idempotency
+        SET status = 'completed', updated_at = ?
+        WHERE idempotency_key = ? AND payload_hash = ?
+      `,
+      new Date(),
+      idempotencyKey,
+      payloadHash,
+    );
+  }
+
+  private async markImportFailed(
+    idempotencyKey: string,
+    payloadHash: string,
+    error: unknown,
+  ): Promise<void> {
+    const message =
+      error instanceof Error ? error.message : String(error ?? 'unknown');
+    await this.prisma.$executeRawUnsafe(
+      `
+        UPDATE import_idempotency
+        SET status = 'failed', last_error = ?, updated_at = ?
+        WHERE idempotency_key = ? AND payload_hash = ?
+      `,
+      message,
+      new Date(),
+      idempotencyKey,
+      payloadHash,
+    );
   }
 
   private async createEmptyCarDetail(
@@ -482,9 +699,11 @@ export class PostImportService {
       },
     });
     if (process.env.SHOW_LOGS) {
-      console.log(
-        `   ↳ Created empty car_detail ${carDetail.id} | sold: ${sold} | customsPaid: ${customsPaid}`,
-      );
+      this.logger.info('created empty car detail', {
+        carDetailId: carDetail.id.toString(),
+        sold,
+        customsPaid,
+      });
     }
 
     return carDetail.id;
@@ -522,7 +741,7 @@ export class PostImportService {
         numberOfDoors: carDetails.numberOfDoors || null,
         bodyType: carDetails.bodyType || null,
         price: carDetails.price || null,
-        customsPaid: customsPaid || false,
+        customsPaid: customsPaid ?? null,
         sold,
         published: !!carDetails.make && !!carDetails.model,
         contact: carDetails.contact ? JSON.stringify(carDetails.contact) : '',
@@ -531,9 +750,14 @@ export class PostImportService {
       },
     });
     if (process.env.SHOW_LOGS) {
-      console.log(
-        `   ↳ Created car_detail ${carDetail.id} | make: ${carDetails.make || 'N/A'} | model: ${carDetails.model || 'N/A'} | published: ${carDetail.published} | sold: ${sold} | customsPaid: ${customsPaid}`,
-      );
+      this.logger.info('created car detail', {
+        carDetailId: carDetail.id.toString(),
+        make: carDetails.make || 'N/A',
+        model: carDetails.model || 'N/A',
+        published: carDetail.published,
+        sold,
+        customsPaid,
+      });
     }
 
     return carDetail.id;
@@ -597,15 +821,18 @@ export class PostImportService {
       // Delete the entire post directory
       await fs.rm(postDir, { recursive: true, force: true });
       if (process.env.SHOW_LOGS) {
-        console.log(`Deleted images directory for post ${postId}: ${postDir}`);
+        this.logger.info('deleted post image directory', {
+          postId: postId.toString(),
+          path: postDir,
+        });
       }
     } catch (error) {
       // Directory doesn't exist or error deleting - log and continue
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        console.error(
-          `Error deleting images for post ${postId}:`,
-          (error as Error).message,
-        );
+        this.logger.error('error deleting post images', {
+          postId: postId.toString(),
+          error: (error as Error).message,
+        });
       }
     }
   }
@@ -754,10 +981,8 @@ export class PostImportService {
               customsPaid: parsedResult.customsPaid ?? cd.customsPaid,
               options: null,
               contact: parsedResult.contact
-                ? (JSON.stringify(
-                    parsedResult.contact,
-                  ) as unknown as Prisma.InputJsonValue)
-                : (cd.contact as unknown as Prisma.NullableJsonNullValueInput),
+                ? JSON.stringify(parsedResult.contact)
+                : cd.contact,
               published: true,
               type: parsedResult.type ?? cd.type,
               priceVerified:
@@ -772,37 +997,23 @@ export class PostImportService {
             where: { id: postId },
           });
           if (post) {
-            await this.prisma.post.update({
-              where: { id: postId },
-              data: {
-                status: this.getPromotionFieldValueOrDefault(
-                  parsedResult.status,
-                  post.status,
-                ),
-                origin: this.getPromotionFieldValueOrDefault(
-                  parsedResult.origin,
-                  post.origin,
-                ),
-                renewTo: this.getPromotionFieldValueOrDefault(
-                  parsedResult.renewTo,
-                  post.renewTo,
-                ),
-                highlightedTo: this.getPromotionFieldValueOrDefault(
-                  parsedResult.highlightedTo,
-                  post.highlightedTo,
-                ),
-                promotionTo: this.getPromotionFieldValueOrDefault(
-                  parsedResult.promotionTo,
-                  post.promotionTo,
-                ),
-                mostWantedTo: this.getPromotionFieldValueOrDefault(
-                  parsedResult.mostWantedTo,
-                  post.mostWantedTo,
-                ),
+            const postUpdateData = sanitizePostUpdateDataForSource(
+              {
+                status: parsedResult.status ?? post.status,
+                origin: parsedResult.origin ?? post.origin,
+                renewTo: parsedResult.renewTo ?? post.renewTo,
+                highlightedTo: parsedResult.highlightedTo ?? post.highlightedTo,
+                promotionTo: parsedResult.promotionTo ?? post.promotionTo,
+                mostWantedTo: parsedResult.mostWantedTo ?? post.mostWantedTo,
                 live: true,
                 revalidate: false,
                 dateUpdated: new Date(),
               },
+              'untrusted',
+            );
+            await this.prisma.post.update({
+              where: { id: postId },
+              data: postUpdateData,
             });
           }
         }
@@ -826,33 +1037,100 @@ export class PostImportService {
     };
   }
 
-  private getPromotionFieldValueOrDefault<T>(
-    value: T | null | undefined,
-    defaultValue: T,
-  ): T {
-    return value ?? defaultValue;
-  }
-
   private resultIsEmpty(result: ParsedResult): boolean {
     return (result.model ?? null) === null && (result.make ?? null) === null;
   }
 
   /**
-   * Increment a post metric (postOpen, impressions, reach, clicks, or contact) asynchronously
-   * @param postId - The ID of the post to increment
-   * @param metric - The metric to increment ('postOpen', 'impressions', 'reach', 'clicks', or 'contact')
-   * @throws Error if metric is invalid
+   * Increment post metrics.
+   *
+   * - `impressions`: always increments, optional `visitorId` increments `reach` once per post.
+   * - `clicks`: increments `clicks`.
+   * - `contact`: increments total `contact` and optional method-specific counter.
+   * - `postOpen`: legacy metric, increments both `postOpen` and `clicks`.
+   * - `reach`: kept for backward compatibility, increments directly.
    */
   async incrementPostMetric(
     postId: bigint,
-    metric: 'postOpen' | 'impressions' | 'reach' | 'clicks' | 'contact',
+    metric: IncrementMetric,
+    options: IncrementMetricOptions = {},
   ): Promise<void> {
-    if (!['postOpen', 'impressions', 'reach', 'clicks', 'contact'].includes(metric)) {
+    const allowedMetrics: IncrementMetric[] = [
+      'postOpen',
+      'impressions',
+      'reach',
+      'clicks',
+      'contact',
+    ];
+    if (!allowedMetrics.includes(metric)) {
       throw new Error(
         `Invalid metric: ${metric}. Must be 'postOpen', 'impressions', 'reach', 'clicks', or 'contact'.`,
       );
     }
 
+    if (metric === 'impressions') {
+      await this.incrementSimpleMetric(postId, 'impressions');
+
+      const sanitizedVisitorId = this.sanitizeVisitorId(options.visitorId);
+      if (sanitizedVisitorId) {
+        await this.incrementUniqueReach(postId, sanitizedVisitorId);
+      }
+      return;
+    }
+
+    if (metric === 'clicks') {
+      await this.incrementSimpleMetric(postId, 'clicks');
+      return;
+    }
+
+    if (metric === 'postOpen') {
+      await this.prisma.post.update({
+        where: { id: postId },
+        data: {
+          postOpen: { increment: 1 },
+          clicks: { increment: 1 },
+        } as Prisma.postUpdateInput,
+      });
+      return;
+    }
+
+    if (metric === 'contact') {
+      const updateData: Record<string, unknown> = {
+        contact: { increment: 1 },
+      };
+      const contactMethod = this.normalizeContactMethod(options.contactMethod);
+      if (options.contactMethod && !contactMethod) {
+        throw new Error(
+          `Invalid contact method: ${options.contactMethod}. Must be one of 'call', 'whatsapp', 'email', 'instagram'.`,
+        );
+      }
+      if (contactMethod) {
+        const contactMethodFieldMap: Record<ContactMethod, string> = {
+          call: 'contactCall',
+          whatsapp: 'contactWhatsapp',
+          email: 'contactEmail',
+          instagram: 'contactInstagram',
+        };
+        (updateData as Record<string, unknown>)[
+          contactMethodFieldMap[contactMethod]
+        ] = { increment: 1 };
+      }
+
+      await this.prisma.post.update({
+        where: { id: postId },
+        data: updateData as Prisma.postUpdateInput,
+      });
+      return;
+    }
+
+    // Legacy compatibility for direct reach increments.
+    await this.incrementSimpleMetric(postId, 'reach');
+  }
+
+  private async incrementSimpleMetric(
+    postId: bigint,
+    metric: 'impressions' | 'reach' | 'clicks',
+  ): Promise<void> {
     const updateData: Prisma.postUpdateInput = {
       [metric]: {
         increment: 1,
@@ -863,5 +1141,49 @@ export class PostImportService {
       where: { id: postId },
       data: updateData,
     });
+  }
+
+  private async incrementUniqueReach(
+    postId: bigint,
+    visitorId: string,
+  ): Promise<void> {
+    const visitorHash = createHash('sha256').update(visitorId).digest('hex');
+
+    const insertedRows = await this.prisma.$executeRawUnsafe(
+      'INSERT IGNORE INTO post_reach_unique (post_id, visitor_hash, dateCreated) VALUES (?, ?, NOW())',
+      postId.toString(),
+      visitorHash,
+    );
+
+    if (Number(insertedRows) > 0) {
+      await this.incrementSimpleMetric(postId, 'reach');
+    }
+  }
+
+  private sanitizeVisitorId(visitorId?: string): string | null {
+    if (typeof visitorId !== 'string') {
+      return null;
+    }
+    const trimmed = visitorId.trim();
+    if (!trimmed) {
+      return null;
+    }
+    return trimmed.slice(0, 255);
+  }
+
+  private normalizeContactMethod(contactMethod?: string): ContactMethod | null {
+    if (!contactMethod) {
+      return null;
+    }
+    const normalized = contactMethod.toLowerCase().trim();
+    if (
+      normalized === 'call' ||
+      normalized === 'whatsapp' ||
+      normalized === 'email' ||
+      normalized === 'instagram'
+    ) {
+      return normalized;
+    }
+    return null;
   }
 }

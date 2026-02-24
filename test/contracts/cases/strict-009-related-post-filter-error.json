@@ -1,0 +1,19 @@
+{
+  "name": "Strict related-post-filter error parity",
+  "request": {
+    "method": "POST",
+    "path": "/car-details/related-post-filter",
+    "body": {}
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "values": true,
+    "keys": [
+      "success",
+      "message",
+      "statusCode"
+    ],
+    "ignorePaths": []
+  }
+}

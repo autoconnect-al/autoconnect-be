@@ -1,0 +1,16 @@
+{
+  "name": "Smoke POST /api/v1/orders/{orderID}/capture",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/orders/LOCAL-1/capture",
+    "body": {},
+    "headers": {
+      "Content-Type": "application/json"
+    }
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "values": false
+  }
+}

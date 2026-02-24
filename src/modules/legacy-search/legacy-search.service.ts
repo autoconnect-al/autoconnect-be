@@ -1,0 +1,690 @@
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../../database/prisma.service';
+import { legacyError, legacySuccess } from '../../common/legacy-response';
+import { decodeCaption } from '../imports/utils/caption-processor';
+import { createLogger } from '../../common/logger.util';
+import {
+  LegacySearchQueryBuilder,
+  type FilterTerm,
+  type SearchFilter,
+} from './legacy-search-query-builder';
+
+@Injectable()
+export class LegacySearchService {
+  private readonly skipQuickSearchFix = new Set(['benz', 'mercedes']);
+  private readonly logger = createLogger('legacy-search-service');
+  private readonly queryBudgetsMs: Record<string, number> = {
+    search: 350,
+    result_count: 180,
+    price_calculate: 350,
+    most_wanted: 200,
+    post_detail: 120,
+    caption: 150,
+    related_by_id: 220,
+    related_by_filter: 220,
+    resolve_model: 120,
+  };
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly queryBuilder: LegacySearchQueryBuilder,
+  ) {}
+
+  async search(filterRaw: string | undefined) {
+    const filter = this.queryBuilder.parseFilter(filterRaw);
+    if (!filter) {
+      return legacyError('An error occurred while searching for cars', 500);
+    }
+    const { whereSql, params } = this.queryBuilder.buildWhere(filter);
+    const { orderSql, limit, offset } =
+      this.queryBuilder.buildSortAndPagination(filter);
+    const rows = await this.timeQuery('search', () =>
+      this.prisma.$queryRawUnsafe<unknown[]>(
+        `SELECT * FROM search ${whereSql} ${orderSql} LIMIT ? OFFSET ?`,
+        ...params,
+        limit,
+        offset,
+      ),
+    );
+    return legacySuccess(this.normalizeBigInts(rows));
+  }
+
+  async countResults(filterRaw: string | undefined) {
+    const filter = this.queryBuilder.parseFilter(filterRaw);
+    if (!filter) {
+      return legacyError('An error occurred while counting results', 500);
+    }
+    const { whereSql, params } = this.queryBuilder.buildWhere(filter);
+    const rows = await this.timeQuery('result_count', () =>
+      this.prisma.$queryRawUnsafe<Array<{ total: bigint | number }>>(
+        `SELECT COUNT(*) as total FROM search ${whereSql}`,
+        ...params,
+      ),
+    );
+    const count = Number(rows[0]?.total ?? 0);
+    return legacySuccess(count);
+  }
+
+  async priceCalculate(filterRaw: string | undefined) {
+    const filter = this.queryBuilder.parseFilter(filterRaw);
+    if (!filter) {
+      return legacyError('An error occurred while searching for cars', 500);
+    }
+
+    const terms = this.termMap(filter.searchTerms ?? []);
+    const make = this.toStr(terms.get('make1') ?? '');
+    const model = this.toStr(terms.get('model1') ?? '');
+    const registrationRaw = terms.get('registration');
+    const fuelType = this.toStr(terms.get('fuelType') ?? '');
+    const bodyType = this.toStr(terms.get('bodyType') ?? '');
+    const transmission = this.toStr(terms.get('transmission') ?? '');
+
+    const registrationFrom =
+      this.queryBuilder.extractRegistrationFrom(registrationRaw);
+    if (!make || !model || !registrationFrom || !fuelType) {
+      return legacySuccess([]);
+    }
+
+    const modelResolution = await this.resolveModel(make, model);
+
+    const where: string[] = [
+      'CAST(p.createdTime AS UNSIGNED) > ?',
+      'cd.price > 0',
+      'cd.make = ?',
+      '(cd.customsPaid = 1 OR cd.customsPaid IS NULL)',
+      'cd.registration >= ?',
+      'cd.registration <= ?',
+      'cd.fuelType = ?',
+    ];
+    const params: unknown[] = [
+      Math.floor(Date.now() / 1000) - 365 * 24 * 60 * 60,
+      make,
+      String(registrationFrom - 2),
+      String(registrationFrom + 2),
+      fuelType,
+    ];
+
+    if (modelResolution.isVariant) {
+      where.push('(cd.variant LIKE ? OR cd.variant LIKE ?)');
+      params.push(
+        `% ${modelResolution.variant} %`,
+        `${modelResolution.model}%`,
+      );
+    } else {
+      where.push('cd.model = ?');
+      params.push(modelResolution.model.replace(' (all)', ''));
+    }
+
+    if (transmission) {
+      where.push('cd.transmission = ?');
+      params.push(transmission);
+    }
+    if (bodyType) {
+      where.push('cd.bodyType = ?');
+      params.push(bodyType);
+    }
+
+    const rows = await this.timeQuery('price_calculate', () =>
+      this.prisma.$queryRawUnsafe<unknown[]>(
+        `SELECT cd.price, cd.make, cd.model, cd.variant, cd.registration, p.id
+       FROM post p
+       LEFT JOIN car_detail cd ON cd.post_id = p.id
+       WHERE ${where.join(' AND ')}`,
+        ...params,
+      ),
+    );
+
+    return legacySuccess(this.normalizeBigInts(rows));
+  }
+
+  async mostWanted(excludeIds?: string, excludedAccounts?: string) {
+    const excludeIdValues = this.queryBuilder.parseCsvValues(excludeIds);
+    const excludeAccountValues = this.queryBuilder.parseCsvValues(excludedAccounts);
+
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const clauses: string[] = ['sold = 0', "(deleted = '0' OR deleted = 0)"];
+    const params: unknown[] = [sevenDaysAgo];
+    clauses.push('dateCreated > ?');
+    if (excludeIdValues.length > 0) {
+      clauses.push(`id NOT IN (${excludeIdValues.map(() => '?').join(',')})`);
+      params.push(...excludeIdValues);
+    }
+    if (excludeAccountValues.length > 0) {
+      clauses.push(
+        `accountName NOT IN (${excludeAccountValues.map(() => '?').join(',')})`,
+      );
+      params.push(...excludeAccountValues);
+    }
+
+    const query = `SELECT id, make, model, variant, registration, mileage, price, transmission, fuelType, engineSize, drivetrain, seats, numberOfDoors, bodyType, customsPaid, canExchange, options, emissionGroup, type, accountName, sidecarMedias, contact, vendorContact, profilePicture, vendorId, promotionTo, highlightedTo, renewTo, renewInterval, renewedTime, mostWantedTo
+      FROM search
+      WHERE ${clauses.join(' AND ')}
+      ORDER BY mostWantedTo DESC
+      LIMIT 4`;
+    const rows = await this.timeQuery('most_wanted', () =>
+      this.prisma.$queryRawUnsafe<unknown[]>(query, ...params),
+    );
+    return legacySuccess(this.normalizeBigInts(this.withCarDetail(rows)));
+  }
+
+  async getCarDetails(id: string) {
+    const rows = await this.timeQuery('post_detail', () =>
+      this.prisma.$queryRawUnsafe<unknown[]>(
+        'SELECT * FROM search WHERE id = ? LIMIT 1',
+        id,
+      ),
+    );
+    if (rows.length === 0) {
+      return legacyError('Car details not found', 404);
+    }
+    return legacySuccess(this.normalizeBigInts(rows));
+  }
+
+  async getCaption(id: string) {
+    const rows = await this.timeQuery('caption', () =>
+      this.prisma.$queryRawUnsafe<
+        Array<{ cleanedCaption: string | null; sidecarMedias: unknown }>
+      >(
+        'SELECT cleanedCaption, sidecarMedias FROM search WHERE id = ? LIMIT 1',
+        id,
+      ),
+    );
+    if (rows.length === 0) {
+      return legacyError('Car details not found', 404);
+    }
+    const first = rows[0] ?? { cleanedCaption: null, sidecarMedias: null };
+    const cleanedCaption = this.normalizeCaption(first.cleanedCaption ?? '');
+    const mediaUrl = await this.resolveCaptionMedia(first.sidecarMedias);
+    return legacySuccess({ cleanedCaption, mediaUrl });
+  }
+
+  async relatedById(id: string, type = 'car', excludedIds?: string) {
+    const row = await this.timeQuery('related_by_id', () =>
+      this.prisma.$queryRawUnsafe<Array<{ make: string | null; model: string | null }>>(
+        'SELECT make, model FROM search WHERE id = ? LIMIT 1',
+        id,
+      ),
+    );
+    const make = row[0]?.make;
+    const model = row[0]?.model;
+    if (!make || !model) {
+      return legacySuccess([]);
+    }
+
+    const excludedValues = this.queryBuilder.parseCsvValues(excludedIds);
+    const excludedClause =
+      excludedValues.length > 0
+        ? `AND id NOT IN (${excludedValues.map(() => '?').join(',')})`
+        : '';
+    const params: unknown[] = [make, model, id, type, ...excludedValues];
+    const rows = await this.timeQuery('related_by_id', () =>
+      this.prisma.$queryRawUnsafe<unknown[]>(
+        `SELECT id, make, model, variant, registration, mileage, price, transmission, fuelType, engineSize, drivetrain, seats, numberOfDoors, bodyType, customsPaid, canExchange, options, emissionGroup, type, sidecarMedias, accountName, profilePicture, vendorId, contact, vendorContact, promotionTo, highlightedTo, renewTo, renewInterval, renewedTime, mostWantedTo
+       FROM search WHERE make = ? AND model = ? AND id <> ? AND sold = 0 AND deleted = '0' AND type = ? ${excludedClause} ORDER BY dateUpdated DESC LIMIT 4`,
+        ...params,
+      ),
+    );
+    return legacySuccess(this.normalizeBigInts(this.withCarDetail(rows)));
+  }
+
+  async relatedByFilter(
+    filterRaw: string | undefined,
+    type = 'car',
+    excludedIds?: string,
+  ) {
+    const filter = this.queryBuilder.parseFilter(filterRaw);
+    if (!filter) {
+      return legacyError(
+        'An error occurred while getting related searches',
+        500,
+      );
+    }
+
+    const terms = this.termMap(filter.searchTerms ?? []);
+    const make = this.toStr(terms.get('make1') ?? '');
+    const model = this.toStr(terms.get('model1') ?? '');
+    const excludedValues = this.queryBuilder.parseCsvValues(excludedIds);
+    const excludedClause =
+      excludedValues.length > 0
+        ? `AND id NOT IN (${excludedValues.map(() => '?').join(',')})`
+        : '';
+
+    const params: unknown[] = [type, ...excludedValues];
+    let where = `sold = 0 AND deleted = '0' AND type = ? ${excludedClause}`;
+    if (make) {
+      where += ' AND make = ?';
+      params.push(make);
+    }
+    if (model) {
+      where += ' AND model = ?';
+      params.push(model.replace(' (all)', ''));
+    }
+
+    const rows = await this.timeQuery('related_by_filter', () =>
+      this.prisma.$queryRawUnsafe<unknown[]>(
+        `SELECT id, make, model, variant, registration, mileage, price, transmission, fuelType, engineSize, drivetrain, seats, numberOfDoors, bodyType, customsPaid, canExchange, options, emissionGroup, type, sidecarMedias, accountName, profilePicture, vendorId, contact, vendorContact, promotionTo, highlightedTo, renewTo, renewInterval, renewedTime, mostWantedTo
+       FROM search WHERE ${where} ORDER BY dateUpdated DESC LIMIT 4`,
+        ...params,
+      ),
+    );
+    return legacySuccess(this.normalizeBigInts(this.withCarDetail(rows)));
+  }
+
+  private parseFilter(filterRaw: string | undefined): SearchFilter | null {
+    return this.queryBuilder.parseFilter(filterRaw);
+  }
+
+  private extractRegistrationFrom(registrationRaw: unknown): number | null {
+    return this.queryBuilder.extractRegistrationFrom(registrationRaw);
+  }
+
+  private async resolveModel(
+    make: string,
+    model: string,
+  ): Promise<{ model: string; variant: string; isVariant: boolean }> {
+    const rows = await this.timeQuery('resolve_model', () =>
+      this.prisma.$queryRawUnsafe<
+        Array<{ Model: string | null; isVariant: boolean | number | null }>
+      >('SELECT Model, isVariant FROM car_make_model WHERE Make = ?', make),
+    );
+
+    const normalizedInput = this.normalizeModelToken(model);
+    for (const row of rows) {
+      const dbModel = this.toStr(row.Model ?? '');
+      if (!dbModel) continue;
+      const normalizedDb = this.normalizeModelToken(dbModel);
+      if (
+        normalizedDb.includes(normalizedInput) &&
+        normalizedInput.includes(normalizedDb)
+      ) {
+        return {
+          model: dbModel,
+          variant: dbModel,
+          isVariant: Boolean(row.isVariant),
+        };
+      }
+    }
+
+    const fallback = model.replace(/-/g, ' ');
+    return { model: fallback, variant: fallback, isVariant: false };
+  }
+
+  private normalizeModelToken(value: string): string {
+    return value.replace(/\s+/g, '-').toLowerCase();
+  }
+
+  private normalizeCaption(caption: string): string {
+    if (!caption) return '';
+    return caption
+      .replace(/ ,/g, ',')
+      .replace(/ !/g, '!')
+      .replace(/ - /g, '-')
+      .replace(/ : /g, ':')
+      .replace(/: /g, ':')
+      .replace(/ :/g, ':')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private async resolveCaptionMedia(
+    sidecarMedias: unknown,
+  ): Promise<string | null> {
+    const source = this.firstSidecarThumbnail(sidecarMedias);
+    if (!source) return null;
+
+    const jpg = this.toJpgUrlIfWebp(source);
+    if (jpg !== source) {
+      const exists = await this.urlExists(jpg);
+      if (exists) return jpg;
+    }
+    return source;
+  }
+
+  private firstSidecarThumbnail(sidecarMedias: unknown): string | null {
+    let parsed: unknown = sidecarMedias;
+    if (typeof parsed === 'string') {
+      try {
+        parsed = JSON.parse(parsed);
+      } catch {
+        return null;
+      }
+    }
+    if (!Array.isArray(parsed) || parsed.length === 0) return null;
+    const first = (parsed as unknown[])[0];
+    if (!first || typeof first !== 'object') return null;
+    const candidate = (first as Record<string, unknown>).imageThumbnailUrl;
+    return typeof candidate === 'string' && candidate.trim().length > 0
+      ? candidate
+      : null;
+  }
+
+  private toJpgUrlIfWebp(url: string): string {
+    return url.replace(/\.webp(\?.*)?$/i, '.jpg$1');
+  }
+
+  private async urlExists(url: string): Promise<boolean> {
+    try {
+      const response = await fetch(url, { method: 'HEAD' });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  private buildSortAndPagination(filter: SearchFilter) {
+    return this.queryBuilder.buildSortAndPagination(filter);
+  }
+
+  private buildWhere(filter: SearchFilter) {
+    return this.queryBuilder.buildWhere(filter);
+  }
+
+  private applyKeywordClauses(
+    clauses: string[],
+    params: unknown[],
+    keyword: string,
+    isVendorSearch: boolean,
+  ) {
+    const options = keyword
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    if (!keyword) {
+      if (!isVendorSearch) {
+        clauses.push('(vendorId != 1 OR vendorId IS NULL)');
+      }
+      return;
+    }
+
+    if (keyword === 'encar') {
+      clauses.push('vendorId = 1');
+    } else {
+      clauses.push('(vendorId != 1 OR vendorId IS NULL)');
+    }
+
+    const hasOfferKeyword = options.some(
+      (option) => option === 'okazion' || option === 'oferte',
+    );
+    if (hasOfferKeyword) {
+      clauses.push('price > 1');
+      clauses.push('minPrice > 1');
+      clauses.push('maxPrice > 1');
+      clauses.push('((price - minPrice) / (maxPrice - price) < 0.25)');
+      const remainingOptions = options.filter(
+        (option) => option !== 'okazion' && option !== 'oferte',
+      );
+      if (remainingOptions.length > 0) {
+        clauses.push(
+          `(${remainingOptions.map(() => 'cleanedCaption LIKE ?').join(' OR ')})`,
+        );
+        for (const option of remainingOptions) {
+          params.push(`%${option}%`);
+        }
+      }
+      return;
+    }
+
+    if (keyword === 'retro') {
+      clauses.push('(cleanedCaption LIKE ? OR registration < ?)');
+      params.push('%retro%', String(new Date().getFullYear() - 30));
+      return;
+    }
+
+    if (keyword === 'korea') {
+      clauses.push('(cleanedCaption LIKE ? OR accountName LIKE ?)');
+      params.push('%korea%', '%korea%');
+      return;
+    }
+
+    if (keyword !== 'elektrike') {
+      if (options.length > 0) {
+        clauses.push(
+          `(${options.map(() => 'cleanedCaption LIKE ?').join(' OR ')})`,
+        );
+        for (const option of options) {
+          params.push(`%${option}%`);
+        }
+      }
+    }
+  }
+
+  private applyGeneralSearchClauses(
+    clauses: string[],
+    params: unknown[],
+    generalSearch: string,
+  ) {
+    const normalizedInput = generalSearch.replace(/,/g, ' ').trim();
+    if (!normalizedInput) return;
+    if (normalizedInput.length > 75) return;
+
+    const tokens = this.normalizeGeneralSearchTokens(normalizedInput).slice(
+      0,
+      10,
+    );
+    if (tokens.length === 0) return;
+
+    for (const token of tokens) {
+      clauses.push(
+        '(cleanedCaption LIKE ? OR make LIKE ? OR model LIKE ? OR variant LIKE ? OR registration LIKE ? OR fuelType LIKE ?)',
+      );
+      const value = `%${token}%`;
+      params.push(value, value, value, value, value, value);
+    }
+  }
+
+  private normalizeGeneralSearchTokens(input: string): string[] {
+    let tokens = input
+      .split(' ')
+      .map((token) => token.trim().toLowerCase())
+      .filter(Boolean);
+
+    tokens = tokens.map((token) => {
+      if (token === 'benc') return 'benz';
+      if (token === 'mercedez') return 'mercedes';
+      if (token === 'seri' || token === 'seria' || token === 'serija') {
+        return 'series';
+      }
+      if (token === 'klas' || token === 'klasa' || token === 'clas') {
+        return 'class';
+      }
+      return token;
+    });
+
+    for (let i = 0; i < tokens.length - 1; i++) {
+      if (tokens[i] === 't' && tokens[i + 1] === 'max') {
+        tokens[i] = 'tmax';
+        tokens.splice(i + 1, 1);
+      }
+    }
+
+    for (let i = 0; i < tokens.length - 1; i++) {
+      if (tokens[i] === 'series') {
+        const tmp = tokens[i];
+        tokens[i] = tokens[i + 1];
+        tokens[i + 1] = tmp;
+      }
+    }
+
+    for (let i = 0; i < tokens.length - 1; i++) {
+      const current = tokens[i];
+      const next = tokens[i + 1];
+      if (
+        current.length === 1 &&
+        !this.isNumeric(current) &&
+        !this.skipQuickSearchFix.has(current)
+      ) {
+        tokens[i] = this.isNumeric(next)
+          ? `${current} ${next}`
+          : `${current}-${next}`;
+        tokens.splice(i + 1, 1);
+        i--;
+      }
+    }
+
+    for (let i = 1; i < tokens.length; i++) {
+      const current = tokens[i];
+      const prev = tokens[i - 1];
+      if (
+        this.isNumeric(current) &&
+        !this.isNumeric(prev) &&
+        !prev.includes('-') &&
+        !this.skipQuickSearchFix.has(prev) &&
+        !current.includes('.')
+      ) {
+        tokens[i - 1] =
+          prev === 'golf' ? `${prev} ${current}` : `${prev}-${current}`;
+        tokens.splice(i, 1);
+        i--;
+      }
+    }
+
+    return tokens;
+  }
+
+  private isNumeric(value: string): boolean {
+    if (!value) return false;
+    return !Number.isNaN(Number(value));
+  }
+
+  private addInClause(
+    clauses: string[],
+    params: unknown[],
+    key: string,
+    raw: unknown,
+  ) {
+    const value = this.toStr(raw ?? '');
+    if (!value) return;
+    const values = value
+      .split(',')
+      .map((v) => v.trim())
+      .filter(Boolean)
+      .map((v) => {
+        if (
+          !v.toLowerCase().includes('suv') &&
+          !v.toLowerCase().includes('gas')
+        ) {
+          return v.replace(/-/g, ' ');
+        }
+        return v;
+      });
+    if (values.length === 0) return;
+    clauses.push(`${key} IN (${values.map(() => '?').join(',')})`);
+    params.push(...values);
+  }
+
+  private addRangeClause(
+    clauses: string[],
+    params: unknown[],
+    key: string,
+    raw: unknown,
+  ) {
+    if (!raw || typeof raw !== 'object') return;
+    const value = raw as Record<string, unknown>;
+    const from = this.toStr(value.from ?? '');
+    const to = this.toStr(value.to ?? '');
+    if (from) {
+      clauses.push(`${key} > ?`);
+      params.push(from);
+    }
+    if (to) {
+      clauses.push(`${key} < ?`);
+      params.push(to);
+    }
+  }
+
+  private addCustomsPaidClause(
+    clauses: string[],
+    params: unknown[],
+    raw: unknown,
+  ) {
+    const value = this.toStr(raw ?? '');
+    if (!value) return;
+    if (value === '1' || value.toLowerCase() === 'true') {
+      clauses.push('(customsPaid = 1 OR customsPaid IS NULL)');
+      return;
+    }
+    if (value === '0' || value.toLowerCase() === 'false') {
+      clauses.push('customsPaid = 0');
+      return;
+    }
+    clauses.push('customsPaid = ?');
+    params.push(value);
+  }
+
+  private termMap(searchTerms: FilterTerm[]) {
+    const map = new Map<string, unknown>();
+    for (const term of searchTerms) {
+      if (!term || typeof term.key !== 'string') continue;
+      map.set(term.key, term.value);
+    }
+    return map;
+  }
+
+  private toStr(value: unknown): string {
+    if (typeof value === 'string') return value.trim();
+    if (typeof value === 'number') return String(value);
+    return '';
+  }
+
+  private parseCsvValues(raw: string | undefined): string[] {
+    return this.queryBuilder.parseCsvValues(raw);
+  }
+
+  private async timeQuery<T>(name: string, task: () => Promise<T>): Promise<T> {
+    const startedAt = Date.now();
+    try {
+      return await task();
+    } finally {
+      const durationMs = Date.now() - startedAt;
+      const budgetMs = this.queryBudgetsMs[name] ?? 250;
+      this.logger.info('query.timing', { name, durationMs, budgetMs });
+      if (durationMs > budgetMs) {
+        this.logger.warn('query.slow', { name, durationMs, budgetMs });
+      }
+    }
+  }
+
+  private normalizeBigInts<T>(input: T): T {
+    return JSON.parse(
+      JSON.stringify(input, (key, value) => {
+        if (typeof value === 'bigint') return value.toString();
+        if (key === 'caption' && typeof value === 'string') {
+          return decodeCaption(value);
+        }
+        return value;
+      }),
+    ) as T;
+  }
+
+  private withCarDetail(rows: unknown[]): unknown[] {
+    return rows.map((row) => {
+      if (!row || typeof row !== 'object') return row;
+      const item = row as Record<string, unknown>;
+      return {
+        ...item,
+        car_detail: {
+          make: item.make,
+          model: item.model,
+          variant: item.variant,
+          registration: item.registration,
+          mileage: item.mileage,
+          transmission: item.transmission,
+          fuelType: item.fuelType,
+          engineSize: item.engineSize,
+          drivetrain: item.drivetrain,
+          seats: item.seats,
+          numberOfDoors: item.numberOfDoors,
+          bodyType: item.bodyType,
+          customsPaid: item.customsPaid,
+          canExchange: item.canExchange,
+          options: item.options,
+          emissionGroup: item.emissionGroup,
+          type: item.type,
+          contact: item.contact,
+          price: item.price,
+        },
+      };
+    });
+  }
+}

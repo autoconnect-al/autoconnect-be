@@ -1,0 +1,12 @@
+{
+  "name": "Smoke GET /sitemap/get-sitemap/{appName}",
+  "request": {
+    "method": "GET",
+    "path": "/sitemap/get-sitemap/autoconnect"
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "values": false
+  }
+}

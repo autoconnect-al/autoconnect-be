@@ -1,0 +1,19 @@
+{
+  "name": "Strict search error parity",
+  "request": {
+    "method": "POST",
+    "path": "/car-details/search",
+    "body": {}
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "values": true,
+    "keys": [
+      "success",
+      "message",
+      "statusCode"
+    ],
+    "ignorePaths": []
+  }
+}

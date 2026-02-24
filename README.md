@@ -1,98 +1,146 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# vehicle-api (PHP parity rewrite)
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+This branch (`codex/php-parity-rewrite`) is a fresh NestJS rewrite focused on parity with:
+- `/Users/reipano/Personal/tregu-makinave`
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Setup
 
-## Description
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
-
+1. Install dependencies
 ```bash
-$ npm install
+npm install
 ```
 
-## Compile and run the project
-
+2. Pull Prisma schema from local MySQL snapshot
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+npm run prisma:pull
+npm run prisma:generate
 ```
 
-## Run tests
-
+3. Start API
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npm run start:dev
 ```
 
-## Deployment
+## Integration Tests (Ephemeral MySQL)
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+Node 20 is required for integration tests.
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+### Local run
 
+1. Use Node 20
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+nvm use 20
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+2. Start disposable MySQL
+```bash
+npm run test:int:db:up
+```
 
-## Resources
+3. Run integration tests (migrations + tests)
+```bash
+npm run test:int
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+4. Tear down disposable MySQL
+```bash
+npm run test:int:db:down
+```
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+### Environment contract
 
-## Support
+Defaults are provided by `test/integration/setup.ts`, including:
+- `DATABASE_URL` (default: `mysql://root:rootroot@127.0.0.1:3307/vehicle_api_int`)
+- `JWT_SECRET`
+- `INSTAGRAM_CLIENT_ID`
+- `INSTAGRAM_CLIENT_SECRET`
+- `INSTAGRAM_REDIRECT_URI`
+- `AP_ADMIN_CODE`
+- `CODE`
+- `ADMIN_CODE`
+- `DOCS_ACCESS_CODE`
+- `AUTOCONNECT_BASE_URL`
+- `AUTOCONNECT_CODE`
+- `IMPORT_QUEUE_ENABLED=false`
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+Outbound network is blocked during integration tests by default.
+To allow it temporarily:
+```bash
+ALLOW_OUTBOUND_NETWORK=true npm run test:int
+```
 
-## Stay in touch
+### Troubleshooting
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+- If migration/test startup fails right after DB up, rerun `npm run test:int`.
+- If port `3307` is occupied, stop the conflicting process or override `DATABASE_URL`.
+- If Docker resources are stale, run `npm run test:int:db:down` and then `npm run test:int:db:up`.
 
-## License
+## Legacy Docs Gate
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+Set:
+```bash
+export DOCS_ACCESS_CODE="your-secret-code"
+```
+
+Then access:
+- `/docs?code=your-secret-code`
+- `/openapi.json?code=your-secret-code`
+
+## AP Admin/Tooling Code Gate
+
+AP-backoffice and scraper compatibility routes require query `code` and use:
+```bash
+export CODE="your-secret-code"
+```
+
+Examples:
+- `/authentication/login-with-code?code=your-secret-code`
+- `/post/get-most-liked?code=your-secret-code`
+- `/vendor-management/all?code=your-secret-code`
+- `/car-details/generate-prompt?code=your-secret-code`
+
+## Contract Diff Runner
+
+Run both services locally:
+- PHP legacy backend (default expected at `http://localhost:8000`)
+- Nest rewrite (default expected at `http://localhost:3000`)
+
+Then execute:
+```bash
+npm run contract:diff
+```
+
+Override base URLs if needed:
+```bash
+PHP_BASE_URL=http://localhost:8080 NEST_BASE_URL=http://localhost:3001 npm run contract:diff
+```
+
+Report output:
+- `test/contracts/report.json`
+
+### AP Endpoint Contract Suites
+
+Generate AP case fixtures:
+```bash
+npm run contract:cases:ap
+```
+
+Run AP suites independently:
+```bash
+npm run contract:diff:ap:auth
+npm run contract:diff:ap:admin
+npm run contract:diff:ap:tooling
+```
+
+Generate AP endpoint ownership matrix:
+```bash
+npm run contract:matrix:ap
+```
+
+Output:
+- `docs/migration/ap-endpoint-matrix.json`
+
+## Deferred Proxy Groups
+
+See:
+- `docs/migration/DEFERRED_PROXY_GROUPS.md`

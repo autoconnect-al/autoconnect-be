@@ -65,11 +65,19 @@ describe('Date Filter', () => {
     });
 
     it('handles edge case at exactly 3 months boundary', () => {
-      const exactlyThreeMonths = new Date();
-      exactlyThreeMonths.setMonth(exactlyThreeMonths.getMonth() - 3);
-      const timestamp = exactlyThreeMonths.getTime() / 1000;
-      // Should return true (posts from exactly 3 months ago or newer are included)
-      expect(isWithinThreeMonths(timestamp)).toBe(true);
+      jest.useFakeTimers();
+      try {
+        const fixedNow = new Date('2026-02-23T12:00:00.000Z');
+        jest.setSystemTime(fixedNow);
+
+        const exactlyThreeMonths = new Date();
+        exactlyThreeMonths.setMonth(exactlyThreeMonths.getMonth() - 3);
+        const timestamp = exactlyThreeMonths.getTime() / 1000;
+        // Should return true (posts from exactly 3 months ago or newer are included)
+        expect(isWithinThreeMonths(timestamp)).toBe(true);
+      } finally {
+        jest.useRealTimers();
+      }
     });
   });
 });

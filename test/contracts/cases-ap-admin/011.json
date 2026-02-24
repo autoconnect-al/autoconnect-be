@@ -1,0 +1,21 @@
+{
+  "name": "AP admin guard parity GET /user-management/user/username/admin",
+  "request": {
+    "method": "GET",
+    "path": "/user-management/user/username/admin",
+    "headers": {
+      "X-Http-Authorization": "Bearer invalid-token"
+    }
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "values": true,
+    "keys": [
+      "success",
+      "message",
+      "statusCode"
+    ],
+    "ignorePaths": []
+  }
+}

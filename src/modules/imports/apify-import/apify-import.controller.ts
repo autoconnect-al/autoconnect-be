@@ -6,21 +6,31 @@ import {
   HttpStatus,
   Query,
   UseGuards,
+  Optional,
+  Inject,
 } from '@nestjs/common';
 import type { Response } from 'express';
-import { ApifyDatasetImportService } from './apify-dataset-import.service';
 import { AdminGuard } from '../../../common/guards/admin.guard';
+import { ImportJobsService } from '../queue/import-jobs.service';
+import { ApifyDatasetImportService } from './apify-dataset-import.service';
+import { createLogger } from '../../../common/logger.util';
 
 @Controller({
-  path: 'apify',
-  version: '1',
+  path: ['apify', 'api/v1/apify'],
 })
 @UseGuards(AdminGuard)
 export class ApifyController {
-  constructor(private readonly apifyImport: ApifyDatasetImportService) {}
+  private readonly logger = createLogger('apify-controller');
+
+  constructor(
+    @Optional()
+    @Inject(ImportJobsService)
+    private readonly importJobsService: ImportJobsService | null,
+    private readonly apifyImportService: ApifyDatasetImportService,
+  ) {}
 
   @Post('import')
-  importFromApifyNotification(
+  async importFromApifyNotification(
     @Query('useOpenAI') useOpenAI: string | undefined,
     @Query('downloadImages') downloadImages: string | undefined,
     @Query('forceDownloadImages') forceDownloadImages: string | undefined,
@@ -28,10 +38,6 @@ export class ApifyController {
     forceDownloadImagesDays: string | undefined,
     @Res() res: Response,
   ) {
-    // Return immediately
-    res.status(HttpStatus.ACCEPTED).json({ ok: true, status: 'queued' });
-
-    // Kick async job
     const shouldUseOpenAI = useOpenAI === 'true' || useOpenAI === '1';
     const shouldDownloadImages =
       downloadImages === 'true' || downloadImages === '1';
@@ -41,16 +47,39 @@ export class ApifyController {
       ? Number(forceDownloadImagesDays)
       : undefined;
 
+    if (this.importJobsService) {
+      const job = await this.importJobsService.enqueueApifyImport({
+        useOpenAI: shouldUseOpenAI,
+        downloadImages: shouldDownloadImages,
+        forceDownloadImages: shouldForceDownloadImages,
+        forceDownloadImagesDays: forceDownloadDays,
+      });
+
+      res.status(HttpStatus.ACCEPTED).json({
+        ok: true,
+        status: 'queued',
+        jobId: job.id ?? null,
+      });
+      return;
+    }
+
+    res.status(HttpStatus.ACCEPTED).json({
+      ok: true,
+      status: 'queued-inline',
+    });
+
     setImmediate(() => {
-      this.apifyImport
+      this.apifyImportService
         .importLatestDataset(
           shouldUseOpenAI,
           shouldDownloadImages,
           shouldForceDownloadImages,
           forceDownloadDays,
         )
-        .catch((err) => {
-          console.error('[ApifyImport] failed:', err);
+        .catch((error) => {
+          this.logger.error('inline apify import failed', {
+            error: error instanceof Error ? error.message : String(error),
+          });
         });
     });
   }

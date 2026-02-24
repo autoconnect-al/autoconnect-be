@@ -1,0 +1,103 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`LegacySitemapService matches article sitemap snapshot for autoconnect + rd-construction apps 1`] = `
+{
+  "autoconnect": [
+    {
+      "alternates": {
+        "languages": {
+          "en": "/en/article/English-Title-11",
+          "sq-al": "/sq-al/artikull/Titulli-Shqip-11",
+        },
+      },
+      "changeFrequency": "daily",
+      "lastModified": "2026-02-23T00:00:00.000Z",
+      "priority": "0.8",
+      "url": "/sq-al/artikull/Titulli-Shqip-11",
+    },
+  ],
+  "rdConstruction": [
+    {
+      "alternates": {
+        "languages": {
+          "en": "https://rdconstruction.us/blog/cat_3/article/Construction-Update-22",
+          "sq-al": "",
+        },
+      },
+      "changeFrequency": "daily",
+      "lastModified": "2026-02-23T00:00:00.000Z",
+      "priority": "0.8",
+      "url": "https://rdconstruction.us/blog/cat_3/article/Construction-Update-22",
+    },
+  ],
+}
+`;
+
+exports[`LegacySitemapService matches default sitemap snapshot for key dynamic route branches 1`] = `
+[
+  {
+    "alternates": {
+      "en": "http://localhost:3000/en/vehicles/car-for-sale/Mercedes%2BBenz-C%2BClass-123",
+      "sq-al": "http://localhost:3000/sq-al/automjete/makine-ne-shitje/Mercedes%2BBenz-C%2BClass-123",
+    },
+    "lastModified": "2026-02-23T00:00:00.000Z",
+    "url": "http://localhost:3000/sq-al/automjete/makine-ne-shitje/Mercedes%2BBenz-C%2BClass-123",
+  },
+  {
+    "alternates": {
+      "en": "http://localhost:3000/en/vehicles/motorbikes-for-sale/Yamaha-MT%2B07-456",
+      "sq-al": "http://localhost:3000/sq-al/automjete/motorr-ne-shitje/Yamaha-MT%2B07-456",
+    },
+    "lastModified": "2026-02-23T00:00:00.000Z",
+    "url": "http://localhost:3000/sq-al/automjete/motorr-ne-shitje/Yamaha-MT%2B07-456",
+  },
+  {
+    "alternates": {
+      "en": "http://localhost:3000/en/vehicles-for-sale/dealer1/",
+      "sq-al": "http://localhost:3000/sq-al/automjete-ne-shitje/dealer1/",
+    },
+    "lastModified": "2026-02-23T00:00:00.000Z",
+    "url": "http://localhost:3000/sq-al/automjete-ne-shitje/dealer1/",
+  },
+  {
+    "alternates": {
+      "en": "http://localhost:3000/en/vehicles-for-sale/dealer1/Mercedes+Benz",
+      "sq-al": "http://localhost:3000/sq-al/automjete-ne-shitje/dealer1/Mercedes+Benz",
+    },
+    "lastModified": "2026-02-23T00:00:00.000Z",
+    "url": "http://localhost:3000/sq-al/automjete-ne-shitje/dealer1/Mercedes+Benz",
+  },
+  {
+    "alternates": {
+      "en": "http://localhost:3000/en/vehicles-for-sale/dealer1/Mercedes%2BBenz/C%2BClass",
+      "sq-al": "http://localhost:3000/sq-al/automjete-ne-shitje/dealer1/Mercedes%2BBenz/C%2BClass",
+    },
+    "lastModified": "2026-02-23T00:00:00.000Z",
+    "url": "http://localhost:3000/sq-al/automjete-ne-shitje/dealer1/Mercedes%2BBenz/C%2BClass",
+  },
+  {
+    "alternates": {
+      "en": "http://localhost:3000/en/vehicles-for-sale/dealer2/",
+      "sq-al": "http://localhost:3000/sq-al/automjete-ne-shitje/dealer2/",
+    },
+    "lastModified": "2026-02-23T00:00:00.000Z",
+    "url": "http://localhost:3000/sq-al/automjete-ne-shitje/dealer2/",
+  },
+  {
+    "alternates": {
+      "en": "http://localhost:3000/en/vehicles-for-sale/dealer2/Yamaha",
+      "sq-al": "http://localhost:3000/sq-al/automjete-ne-shitje/dealer2/Yamaha",
+    },
+    "lastModified": "2026-02-23T00:00:00.000Z",
+    "url": "http://localhost:3000/sq-al/automjete-ne-shitje/dealer2/Yamaha",
+  },
+  {
+    "alternates": {
+      "en": "http://localhost:3000/en/vehicles-for-sale/dealer2/Yamaha/MT%2B07",
+      "sq-al": "http://localhost:3000/sq-al/automjete-ne-shitje/dealer2/Yamaha/MT%2B07",
+    },
+    "lastModified": "2026-02-23T00:00:00.000Z",
+    "url": "http://localhost:3000/sq-al/automjete-ne-shitje/dealer2/Yamaha/MT%2B07",
+  },
+]
+`;

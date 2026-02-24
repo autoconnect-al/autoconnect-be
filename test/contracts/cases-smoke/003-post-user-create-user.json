@@ -1,0 +1,27 @@
+{
+  "name": "Smoke POST /user/create-user",
+  "request": {
+    "method": "POST",
+    "path": "/user/create-user",
+    "body": {
+      "user": {
+        "name": "Parity User",
+        "username": "parity-user",
+        "email": "parity-user@example.com",
+        "password": "Password123",
+        "rewritePassword": "Password123",
+        "phone": "",
+        "whatsapp": "",
+        "location": ""
+      }
+    },
+    "headers": {
+      "Content-Type": "application/json"
+    }
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "values": false
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "AP code-gate parity GET /vendor-management/next-to-crawl",
+  "request": {
+    "method": "GET",
+    "path": "/vendor-management/next-to-crawl"
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "values": true,
+    "keys": [
+      "success",
+      "message",
+      "statusCode"
+    ],
+    "ignorePaths": []
+  }
+}

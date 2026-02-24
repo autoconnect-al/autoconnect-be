@@ -5,30 +5,52 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import type { Request } from 'express';
+import {
+  extractLegacyBearerToken,
+  verifyAndDecodeLegacyJwtPayload,
+} from '../legacy-auth.util';
 
-/**
- * Admin guard that ensures only admin users can access protected routes
- * For now, checks for a special admin code in query params or JWT authentication
- * TODO: Update to use proper role-based access when roles are added to JWT
- */
 @Injectable()
 export class AdminGuard implements CanActivate {
-  private readonly adminCode = process.env.ADMIN_CODE || '';
-
   canActivate(context: ExecutionContext): boolean {
-    if (!this.adminCode) {
+    const adminCode = process.env.ADMIN_CODE;
+    if (!adminCode || adminCode.trim().length === 0) {
       throw new UnauthorizedException('Admin code not configured');
     }
+
     const request = context.switchToHttp().getRequest<Request>();
 
-    // Check for admin code in query params (legacy compatibility)
-    const code = request.query.code as string | undefined;
-    if (code && code === this.adminCode) {
+    if (this.hasValidAdminJwt(request)) {
       return true;
     }
 
-    // Check for JWT authentication (future implementation)
-    // For now, if no code is provided, deny access
+    const code = this.getHeaderCode(request.headers['x-admin-code']);
+    if (code && code === adminCode) {
+      return true;
+    }
+
     throw new UnauthorizedException('Admin access required');
+  }
+
+  private hasValidAdminJwt(request: Request): boolean {
+    try {
+      const token = extractLegacyBearerToken(
+        request.headers as Record<string, unknown>,
+      );
+      if (!token) return false;
+      const payload = verifyAndDecodeLegacyJwtPayload(token);
+      const roles = Array.isArray(payload?.roles)
+        ? payload.roles.map((role) => String(role ?? '').toUpperCase())
+        : [];
+      return roles.includes('ADMIN');
+    } catch {
+      return false;
+    }
+  }
+
+  private getHeaderCode(value: unknown): string {
+    if (typeof value === 'string') return value;
+    if (Array.isArray(value) && typeof value[0] === 'string') return value[0];
+    return '';
   }
 }

@@ -97,7 +97,14 @@ export function isSold(cleanedCaption: string | null | undefined): boolean {
   }
 
   // Check for sold keywords
-  const soldKeywords = ['sold', 'shitur', 'u shit', 'porositur', 'rezervuar'];
+  const soldKeywords = [
+    'sold',
+    'shitur',
+    'u shit',
+    'porositur',
+    'rezervuar',
+    's h i t u r',
+  ];
   return soldKeywords.some((keyword) => lowerCaption.includes(keyword));
 }
 
@@ -107,14 +114,14 @@ export function isSold(cleanedCaption: string | null | undefined): boolean {
  * Then checks for terms indicating customs are NOT paid.
  * If customs paid terms are found, returns true.
  * If customs not paid terms are found, returns false.
- * If neither are found, returns false (unknown status).
+ * If neither are found, returns null (unknown status).
  * @param cleanedCaption - Cleaned caption text
- * @returns true if post indicates customs have been paid, false otherwise
+ * @returns true if paid, false if explicitly unpaid, null if unknown
  */
 export function isCustomsPaid(
   cleanedCaption: string | null | undefined,
 ): boolean | null {
-  if (!cleanedCaption) return false;
+  if (!cleanedCaption) return null;
 
   const lowerCaption = cleanedCaption.toLowerCase();
 
@@ -135,7 +142,17 @@ export function isCustomsPaid(
   ];
 
   // Terms indicating customs have NOT been paid
-  const termsForCustomsNotPaid = ['pa dogane', 'pa dogan', 'pa doganë'];
+  const termsForCustomsNotPaid = [
+    'pa dogane',
+    'pa dogan',
+    'pa doganë',
+    'deri ne durres',
+    'deri ne durrës',
+    'deri ne durrs',
+    'deri ne port',
+    'deri ne porte',
+    'deri ne portë',
+  ];
 
   // Check for customs paid terms first
   for (const term of termsForCustomsPaid) {
@@ -151,6 +168,6 @@ export function isCustomsPaid(
     }
   }
 
-  // If no terms found, return false (unknown status)
+  // If no terms found, status is unknown.
   return null;
 }

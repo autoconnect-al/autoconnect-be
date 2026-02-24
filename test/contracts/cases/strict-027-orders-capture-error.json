@@ -1,0 +1,18 @@
+{
+  "name": "Strict orders capture error parity",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/orders/LOCAL-1/capture"
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "values": true,
+    "keys": [
+      "success",
+      "message",
+      "statusCode"
+    ],
+    "ignorePaths": []
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "AP code-gate parity GET /api/v1/orders/send-remind-emails",
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/orders/send-remind-emails"
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "values": true,
+    "keys": [
+      "success",
+      "message",
+      "statusCode"
+    ],
+    "ignorePaths": []
+  }
+}

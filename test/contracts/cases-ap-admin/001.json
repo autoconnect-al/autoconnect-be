@@ -1,0 +1,21 @@
+{
+  "name": "AP admin guard parity GET /role-management",
+  "request": {
+    "method": "GET",
+    "path": "/role-management",
+    "headers": {
+      "X-Http-Authorization": "Bearer invalid-token"
+    }
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "values": true,
+    "keys": [
+      "success",
+      "message",
+      "statusCode"
+    ],
+    "ignorePaths": []
+  }
+}

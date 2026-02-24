@@ -1,0 +1,18 @@
+{
+  "name": "AP code-gate parity GET /car-details/get-manual-draft-posts",
+  "request": {
+    "method": "GET",
+    "path": "/car-details/get-manual-draft-posts"
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "values": true,
+    "keys": [
+      "success",
+      "message",
+      "statusCode"
+    ],
+    "ignorePaths": []
+  }
+}

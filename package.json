@@ -17,7 +17,27 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "test:int": "npm run test:int:db:prepare && jest --config ./test/jest-integration.json --runInBand",
+    "test:int:watch": "npm run test:int:db:prepare && jest --config ./test/jest-integration.json --watch",
+    "test:int:db:up": "docker compose -f test/integration/docker-compose.yml up -d mysql-int",
+    "test:int:db:down": "docker compose -f test/integration/docker-compose.yml down -v",
+    "test:int:db:prepare": "npm run prisma:generate && npm run test:int:db:migrate",
+    "test:int:db:migrate": "node scripts/prisma-migrate-with-retry.js",
+    "prisma:pull": "npx prisma db pull",
+    "prisma:generate": "npx prisma generate",
+    "contract:diff": "node scripts/contract-diff.js",
+    "contract:cases:smoke": "node scripts/generate-smoke-contract-cases.js",
+    "contract:diff:smoke": "node scripts/generate-smoke-contract-cases.js && CONTRACT_CASES_DIR=test/contracts/cases-smoke node scripts/contract-diff.js",
+    "contract:cases:strict": "node scripts/generate-strict-contract-cases.js",
+    "contract:cases:ap": "node scripts/generate-ap-contract-cases.js",
+    "contract:diff:ap:auth": "CONTRACT_CASES_DIR=test/contracts/cases-ap-auth node scripts/contract-diff.js",
+    "contract:diff:ap:admin": "CONTRACT_CASES_DIR=test/contracts/cases-ap-admin node scripts/contract-diff.js",
+    "contract:diff:ap:tooling": "CONTRACT_CASES_DIR=test/contracts/cases-ap-tooling node scripts/contract-diff.js",
+    "contract:matrix:ap": "node scripts/generate-ap-endpoint-matrix.js",
+    "verify:critical": "node scripts/verify-critical-endpoints.js",
+    "verify:fe:strict": "node scripts/verify-fe-strict-parity.js",
+    "admin:role": "node scripts/admin-role.js"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.4",
@@ -37,6 +57,7 @@
     "class-validator": "^0.14.3",
     "csv-parse": "^6.1.0",
     "csv-stringify": "^6.6.0",
+    "dotenv": "^17.2.3",
     "mariadb": "^3.4.5",
     "multer": "^2.0.2",
     "passport": "^0.7.0",
@@ -67,7 +88,6 @@
     "@types/passport-jwt": "^4.0.1",
     "@types/stream-json": "^1.7.8",
     "@types/supertest": "^6.0.2",
-    "dotenv": "^17.2.3",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.2",
@@ -94,6 +114,9 @@
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
+    "setupFiles": [
+      "<rootDir>/test-env.setup.ts"
+    ],
     "collectCoverageFrom": [
       "**/*.(t|j)s"
     ],

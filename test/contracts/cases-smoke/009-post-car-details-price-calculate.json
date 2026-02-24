@@ -1,0 +1,22 @@
+{
+  "name": "Smoke POST /car-details/price-calculate",
+  "request": {
+    "method": "POST",
+    "path": "/car-details/price-calculate",
+    "body": {
+      "make": "BMW",
+      "model": "X5",
+      "registration": "2020",
+      "mileage": "100000",
+      "fuelType": "Diesel"
+    },
+    "headers": {
+      "Content-Type": "application/json"
+    }
+  },
+  "compare": {
+    "status": true,
+    "envelope": true,
+    "values": false
+  }
+}
