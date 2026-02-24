@@ -62,6 +62,9 @@ const ALLOWED_PROMOTION_FIELDS = new Set([
 ]);
 const ORDER_STATUS_CREATED = 'CREATED';
 const ORDER_STATUS_COMPLETED = 'COMPLETED';
+const PAYPAL_CURRENCY_CODE = (
+  process.env.PAYPAL_CURRENCY_CODE ?? 'EUR'
+).trim().toUpperCase();
 type PaymentFailureCode =
   | 'PAYMENT_CREATE_INVALID_PAYLOAD'
   | 'PAYMENT_CREATE_INVALID_PACKAGE_IDS'
@@ -304,8 +307,14 @@ export class LocalPostOrderService {
       }
 
       const orderId = BigInt(this.generateRandomCode(8, true));
+      const totalAmount = packages.reduce((sum, pkg) => {
+        const price = Number(pkg.price ?? 0);
+        return Number.isFinite(price) ? sum + Math.max(0, price) : sum;
+      }, 0);
       const providerOrder = await this.paymentProvider.createOrder({
         orderReference: orderId.toString(),
+        totalAmount,
+        currencyCode: PAYPAL_CURRENCY_CODE,
       });
       const paypalId = this.toSafeString(providerOrder.id);
       if (!paypalId) {
@@ -375,7 +384,7 @@ export class LocalPostOrderService {
       }
 
       try {
-        await this.paymentProvider.captureOrder(orderID);
+        await this.paymentProvider.captureOrder(orderID, captureKey);
       } catch (providerError) {
         return this.paymentFailure(
           'PAYMENT_CAPTURE_PROVIDER_EXCEPTION',

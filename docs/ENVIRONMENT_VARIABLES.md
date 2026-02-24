@@ -14,6 +14,8 @@ Validated by `src/app.module.ts`:
 - `INSTAGRAM_CLIENT_ID`
 - `INSTAGRAM_CLIENT_SECRET`
 - `INSTAGRAM_REDIRECT_URI`
+- `PAYPAL_CLIENT_ID` (unless `PAYMENT_PROVIDER_MODE=local`)
+- `PAYPAL_CLIENT_SECRET` (unless `PAYMENT_PROVIDER_MODE=local`)
 
 ## Variable Catalog
 
@@ -26,6 +28,12 @@ Validated by `src/app.module.ts`:
 | `INSTAGRAM_CLIENT_ID` | Yes (non-test) | Required for IG OAuth token exchange. | `legacy-auth` | High | Instagram auth flow breaks |
 | `INSTAGRAM_CLIENT_SECRET` | Yes (non-test) | Required for IG OAuth token exchange. | `legacy-auth` | High | Instagram auth flow breaks |
 | `INSTAGRAM_REDIRECT_URI` | Yes (non-test) | Required for IG OAuth token exchange. | `legacy-auth` | Medium | OAuth redirect mismatch / auth failure |
+| `PAYPAL_CLIENT_ID` | Yes (non-test, unless local provider mode) | Used to mint OAuth token for PayPal Orders API. | `legacy-payments` | High | Order create/capture fails |
+| `PAYPAL_CLIENT_SECRET` | Yes (non-test, unless local provider mode) | Used to mint OAuth token for PayPal Orders API. | `legacy-payments` | High | Order create/capture fails |
+| `PAYPAL_ENV` | No | `sandbox` by default; use `live` for production PayPal endpoint. | `legacy-payments` | High | Orders sent to wrong PayPal environment |
+| `PAYPAL_BASE_URL` | No | Optional explicit PayPal API base URL override. | `legacy-payments` | Medium | Requests target wrong host if misconfigured |
+| `PAYPAL_CURRENCY_CODE` | No | Default `EUR` for PayPal purchase unit currency. | `legacy-group-b`, `legacy-payments` | Medium | Wrong currency in checkout/capture flow |
+| `PAYMENT_PROVIDER_MODE` | No | Auto-selects PayPal by default; set `local` to force mock provider. | `legacy-payments` | Medium | Unexpected gateway behavior |
 | `PORT` | No | Default `3000`. | app bootstrap | Low | Service binds wrong port |
 | `CORS_ORIGINS` | No | Comma list merged with defaults in `main.ts`. | app bootstrap / web clients | Medium | Browser calls blocked or over-opened CORS |
 | `CORS_STRICT` | No | `true` enables allowlist callback; else permissive `origin: true`. | app bootstrap | Medium | Cross-origin access too strict or too loose |
@@ -75,6 +83,10 @@ These may exist for local tooling or historical reasons:
 
 ### Queue bundle
 - `IMPORT_QUEUE_ENABLED`, `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DB`
+
+### Payments bundle
+- `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`
+- Optional: `PAYPAL_ENV` (`sandbox` or `live`), `PAYPAL_BASE_URL`, `PAYPAL_CURRENCY_CODE`, `PAYMENT_PROVIDER_MODE`
 
 ### Import external services bundle
 - `APIFY_DATASET_URL` or `APIFY_API_TOKEN`

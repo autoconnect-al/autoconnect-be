@@ -36,6 +36,8 @@ Key domains in one service:
 - `JWT_SECRET`
 - `MEDIA_FETCH_ALLOWED_HOSTS`
 - `PROMOTION_PACKAGE_MAPPING_JSON`
+- `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` (via payments provider when non-test)
+- `PAYPAL_CURRENCY_CODE` (default `EUR` for order create)
 
 ## Error and Edge-Case Behavior
 - Missing/invalid vendor context -> 4xx path

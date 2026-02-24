@@ -3,8 +3,8 @@ import { LegacyPaymentsController } from './legacy-payments.controller';
 import { LocalPostOrderService } from '../legacy-group-b/local-post-order.service';
 import { LocalUserVendorService } from '../legacy-group-a/local-user-vendor.service';
 import {
-  LocalPaymentProviderService,
   PAYMENT_PROVIDER,
+  selectPaymentProvider,
 } from './payment-provider';
 
 @Module({
@@ -12,7 +12,7 @@ import {
   providers: [
     LocalPostOrderService,
     LocalUserVendorService,
-    { provide: PAYMENT_PROVIDER, useClass: LocalPaymentProviderService },
+    { provide: PAYMENT_PROVIDER, useFactory: selectPaymentProvider },
   ],
 })
 export class LegacyPaymentsModule {}

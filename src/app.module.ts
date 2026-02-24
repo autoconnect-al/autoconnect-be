@@ -30,6 +30,14 @@ function validateEnvironment(config: Record<string, unknown>) {
     'INSTAGRAM_REDIRECT_URI',
   ];
 
+  const paymentProviderMode = String(env.PAYMENT_PROVIDER_MODE ?? '')
+    .trim()
+    .toLowerCase();
+  const usesLocalProvider = paymentProviderMode === 'local';
+  if (!usesLocalProvider) {
+    required.push('PAYPAL_CLIENT_ID', 'PAYPAL_CLIENT_SECRET');
+  }
+
   const missing = required.filter((key) => {
     const value = env[key];
     return !value || value.trim().length === 0;

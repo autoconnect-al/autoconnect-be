@@ -30,6 +30,9 @@ Base route: `/api/v1/orders`
 - `post` and `search` promotion fields on capture
 
 ## Env Vars Affecting Module
+- `PAYPAL_CLIENT_ID`
+- `PAYPAL_CLIENT_SECRET`
+- Optional: `PAYPAL_ENV`, `PAYPAL_BASE_URL`, `PAYPAL_CURRENCY_CODE`, `PAYMENT_PROVIDER_MODE`
 - Indirect via provider/service dependencies (`PROMOTION_PACKAGE_MAPPING_JSON`, `JWT_SECRET`)
 
 ## Error and Edge-Case Behavior
@@ -52,7 +55,7 @@ Base route: `/api/v1/orders`
 - Provider integration abstraction.
 
 ## Known Risks and Limits
-- Current default provider is local/mock behavior and must be swapped for real gateway integration where required.
+- Wrong PayPal environment selection (`PAYPAL_ENV` / `PAYPAL_BASE_URL`) can route payments to sandbox/live unintentionally.
 
 ## Ownership and Touchpoints
 - Coupled with `legacy-group-b` order and promotion logic.
