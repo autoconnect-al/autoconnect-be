@@ -156,7 +156,7 @@ export class LegacySearchService {
       params.push(...excludeAccountValues);
     }
 
-    const query = `SELECT id, make, model, variant, registration, mileage, price, transmission, fuelType, engineSize, drivetrain, seats, numberOfDoors, bodyType, customsPaid, canExchange, options, emissionGroup, type, accountName, sidecarMedias, contact, vendorContact, profilePicture, vendorId
+    const query = `SELECT id, make, model, variant, registration, mileage, price, transmission, fuelType, engineSize, drivetrain, seats, numberOfDoors, bodyType, customsPaid, canExchange, options, emissionGroup, type, accountName, sidecarMedias, contact, vendorContact, profilePicture, vendorId, promotionTo, highlightedTo, renewTo, renewInterval, renewedTime, mostWantedTo
       FROM search
       WHERE ${clauses.join(' AND ')}
       ORDER BY mostWantedTo DESC
@@ -219,7 +219,7 @@ export class LegacySearchService {
     const params: unknown[] = [make, model, id, type, ...excludedValues];
     const rows = await this.timeQuery('related_by_id', () =>
       this.prisma.$queryRawUnsafe<unknown[]>(
-        `SELECT id, make, model, variant, registration, mileage, price, transmission, fuelType, engineSize, drivetrain, seats, numberOfDoors, bodyType, customsPaid, canExchange, options, emissionGroup, type, sidecarMedias, accountName, profilePicture, vendorId, contact, vendorContact
+        `SELECT id, make, model, variant, registration, mileage, price, transmission, fuelType, engineSize, drivetrain, seats, numberOfDoors, bodyType, customsPaid, canExchange, options, emissionGroup, type, sidecarMedias, accountName, profilePicture, vendorId, contact, vendorContact, promotionTo, highlightedTo, renewTo, renewInterval, renewedTime, mostWantedTo
        FROM search WHERE make = ? AND model = ? AND id <> ? AND sold = 0 AND deleted = '0' AND type = ? ${excludedClause} ORDER BY dateUpdated DESC LIMIT 4`,
         ...params,
       ),
@@ -262,7 +262,7 @@ export class LegacySearchService {
 
     const rows = await this.timeQuery('related_by_filter', () =>
       this.prisma.$queryRawUnsafe<unknown[]>(
-        `SELECT id, make, model, variant, registration, mileage, price, transmission, fuelType, engineSize, drivetrain, seats, numberOfDoors, bodyType, customsPaid, canExchange, options, emissionGroup, type, sidecarMedias, accountName, profilePicture, vendorId, contact, vendorContact
+        `SELECT id, make, model, variant, registration, mileage, price, transmission, fuelType, engineSize, drivetrain, seats, numberOfDoors, bodyType, customsPaid, canExchange, options, emissionGroup, type, sidecarMedias, accountName, profilePicture, vendorId, contact, vendorContact, promotionTo, highlightedTo, renewTo, renewInterval, renewedTime, mostWantedTo
        FROM search WHERE ${where} ORDER BY dateUpdated DESC LIMIT 4`,
         ...params,
       ),

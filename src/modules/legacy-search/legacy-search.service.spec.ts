@@ -123,6 +123,8 @@ describe('LegacySearchService', () => {
     const secondQuery = prisma.$queryRawUnsafe.mock.calls[1][0] as string;
     expect(secondQuery).toContain('sidecarMedias');
     expect(secondQuery).toContain('profilePicture');
+    expect(secondQuery).toContain('promotionTo');
+    expect(secondQuery).toContain('renewInterval');
   });
 
   it('relatedById should include car_detail object in response rows', async () => {
@@ -174,6 +176,23 @@ describe('LegacySearchService', () => {
       price: 20000,
       customsPaid: 0,
     });
+  });
+
+  it('mostWanted should select promotion fields from search', async () => {
+    const prisma = {
+      $queryRawUnsafe: jest.fn().mockResolvedValue([]),
+    } as any;
+    const service = new LegacySearchService(prisma, new LegacySearchQueryBuilder());
+
+    await service.mostWanted();
+
+    const query = prisma.$queryRawUnsafe.mock.calls[0][0] as string;
+    expect(query).toContain('promotionTo');
+    expect(query).toContain('highlightedTo');
+    expect(query).toContain('renewTo');
+    expect(query).toContain('renewInterval');
+    expect(query).toContain('renewedTime');
+    expect(query).toContain('mostWantedTo');
   });
 
   it('getCarDetails should decode base64 caption to text', async () => {

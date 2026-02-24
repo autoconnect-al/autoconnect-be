@@ -16,6 +16,12 @@ describe('ApPostToolingService', () => {
             status: 'TO_BE_PUBLISHED',
             origin: 'INSTAGRAM',
             revalidate: false,
+            promotionTo: 1772000000,
+            highlightedTo: 1772000100,
+            renewTo: 1772000200,
+            renewInterval: 'weekly',
+            renewedTime: 1772000300,
+            mostWantedTo: 1772000400,
             vendor_id: 2n,
             vendor: {
               id: 2n,
@@ -68,6 +74,12 @@ describe('ApPostToolingService', () => {
       vendorId: '2',
       accountName: 'vendor.a',
       revalidate: false,
+      promotionTo: 1772000000,
+      highlightedTo: 1772000100,
+      renewTo: 1772000200,
+      renewInterval: 'weekly',
+      renewedTime: 1772000300,
+      mostWantedTo: 1772000400,
     });
     expect(row.details).toBeUndefined();
     expect(row.car_detail_car_detail_post_idTopost).toBeUndefined();
