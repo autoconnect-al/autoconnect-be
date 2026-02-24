@@ -22,9 +22,9 @@ jobs:
             BRANCH="${{ github.ref_name }}"
             echo "Deploying Nest PROD from branch: $BRANCH"
 
-            APP_NAME="autoconnect-be-prod" \
-            APP_DIR="/var/www/autoconnect-be-prod" \
+            APP_NAME="autoconnect-be" \
+            APP_DIR="/var/www/autoconnect-be" \
             MODE="prod" \
             DEFAULT_BRANCH="main" \
-            /var/www/autoconnect-be-prod/deploy.sh "$BRANCH"
+            /var/www/autoconnect-be/deploy.sh "$BRANCH"
             '
