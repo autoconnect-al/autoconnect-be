@@ -109,22 +109,124 @@ describe('LegacySearchService', () => {
     );
   });
 
+  it('search should prepend matched promoted row and annotate promoted/highlighted', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const prisma = {
+      $queryRawUnsafe: jest
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            id: 9,
+            make: 'BMW',
+            model: 'X5',
+            promotionTo: now + 5000,
+            highlightedTo: now + 100,
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            id: 9,
+            make: 'BMW',
+            model: 'X5',
+            highlightedTo: now + 100,
+          },
+          {
+            id: 10,
+            make: 'BMW',
+            model: 'X3',
+            highlightedTo: now - 100,
+          },
+        ]),
+    } as any;
+    const service = new LegacySearchService(prisma, new LegacySearchQueryBuilder());
+
+    const response = await service.search(
+      JSON.stringify({
+        type: 'car',
+        searchTerms: [{ key: 'make1', value: 'BMW' }],
+        sortTerms: [{ key: 'price', order: 'ASC' }],
+        page: 0,
+        maxResults: 10,
+      }),
+    );
+
+    expect(response.success).toBe(true);
+    expect(response.result).toHaveLength(2);
+    expect(response.result[0]).toEqual(
+      expect.objectContaining({
+        id: 9,
+        promoted: true,
+        highlighted: true,
+      }),
+    );
+    expect(response.result[1]).toEqual(
+      expect.objectContaining({
+        id: 10,
+        promoted: false,
+        highlighted: false,
+      }),
+    );
+  });
+
+  it('search should fallback to global promoted when filter-match is unavailable', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const prisma = {
+      $queryRawUnsafe: jest
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            id: 77,
+            make: 'Audi',
+            model: 'A6',
+            promotionTo: now + 5000,
+            highlightedTo: null,
+          },
+        ])
+        .mockResolvedValueOnce([{ id: 11, make: 'BMW', model: 'X5' }]),
+    } as any;
+    const service = new LegacySearchService(prisma, new LegacySearchQueryBuilder());
+
+    const response = await service.search(
+      JSON.stringify({
+        type: 'car',
+        searchTerms: [{ key: 'make1', value: 'BMW' }],
+        page: 0,
+        maxResults: 10,
+      }),
+    );
+
+    expect(response.success).toBe(true);
+    expect(response.result[0]).toEqual(
+      expect.objectContaining({
+        id: 77,
+        promoted: true,
+        highlighted: false,
+      }),
+    );
+  });
+
   it('relatedById should select sidecarMedias for related cards', async () => {
     const prisma = {
       $queryRawUnsafe: jest
         .fn()
         .mockResolvedValueOnce([{ make: 'BMW', model: 'X5' }])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]),
     } as any;
 
     const service = new LegacySearchService(prisma, new LegacySearchQueryBuilder());
     await service.relatedById('1', 'car');
 
-    const secondQuery = prisma.$queryRawUnsafe.mock.calls[1][0] as string;
-    expect(secondQuery).toContain('sidecarMedias');
-    expect(secondQuery).toContain('profilePicture');
-    expect(secondQuery).toContain('promotionTo');
-    expect(secondQuery).toContain('renewInterval');
+    const relatedQueryCall = prisma.$queryRawUnsafe.mock.calls.find((call: unknown[]) =>
+      String(call[0]).includes('ORDER BY dateUpdated DESC, id DESC LIMIT ?'),
+    );
+    expect(relatedQueryCall).toBeTruthy();
+    const query = relatedQueryCall?.[0] as string;
+    expect(query).toContain('sidecarMedias');
+    expect(query).toContain('profilePicture');
+    expect(query).toContain('promotionTo');
+    expect(query).toContain('renewInterval');
   });
 
   it('relatedById should include car_detail object in response rows', async () => {
@@ -132,6 +234,8 @@ describe('LegacySearchService', () => {
       $queryRawUnsafe: jest
         .fn()
         .mockResolvedValueOnce([{ make: 'BMW', model: 'X5' }])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([
           {
             id: 2,
@@ -152,6 +256,7 @@ describe('LegacySearchService', () => {
       price: 12000,
       customsPaid: 1,
     });
+    expect(first.promoted).toBe(false);
   });
 
   it('mostWanted should include car_detail object in response rows', async () => {
@@ -242,23 +347,31 @@ describe('LegacySearchService', () => {
       $queryRawUnsafe: jest
         .fn()
         .mockResolvedValueOnce([{ make: 'BMW', model: 'X5' }])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]),
     } as any;
     const service = new LegacySearchService(prisma, new LegacySearchQueryBuilder());
 
     await service.relatedById('1', 'car', "2,3,'4");
 
-    const call = prisma.$queryRawUnsafe.mock.calls[1];
+    const call = prisma.$queryRawUnsafe.mock.calls.find((args: unknown[]) =>
+      String(args[0]).includes('ORDER BY dateUpdated DESC, id DESC LIMIT ?'),
+    ) as unknown[];
     const query = call[0] as string;
-    expect(query).toContain('id NOT IN (?,?,?)');
+    expect(query).toContain('id NOT IN (?,?,?,?)');
     expect(call.slice(1)).toEqual(
-      expect.arrayContaining(['BMW', 'X5', '1', 'car', '2', '3', "'4"]),
+      expect.arrayContaining(['BMW', 'X5', 'car', '2', '3', "'4", '1']),
     );
   });
 
   it('relatedByFilter should use parameterized excluded ids list', async () => {
     const prisma = {
-      $queryRawUnsafe: jest.fn().mockResolvedValue([]),
+      $queryRawUnsafe: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]),
     } as any;
     const service = new LegacySearchService(prisma, new LegacySearchQueryBuilder());
 
@@ -268,7 +381,9 @@ describe('LegacySearchService', () => {
       "10,11,'12",
     );
 
-    const call = prisma.$queryRawUnsafe.mock.calls[0];
+    const call = prisma.$queryRawUnsafe.mock.calls.find((args: unknown[]) =>
+      String(args[0]).includes('ORDER BY dateUpdated DESC, id DESC LIMIT ?'),
+    ) as unknown[];
     const query = call[0] as string;
     expect(query).toContain('id NOT IN (?,?,?)');
     expect(call.slice(1)).toEqual(

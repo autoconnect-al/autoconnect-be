@@ -256,6 +256,55 @@ describe('Integration: write flows and payments', () => {
     expect(search?.promotionTo).toBe(post?.promotionTo ?? null);
   });
 
+  it('captured promotion is discoverable by related-post-filter as promoted result', async () => {
+    await seedVendor(prisma);
+    await seedPostGraph(prisma);
+    await seedVendor(prisma, 1002n);
+    await seedPostGraph(prisma, { postId: 2002n, vendorId: 1002n });
+    await seedPromotionPackage(prisma, FIXTURE_PROMOTION_PACKAGE_ID);
+
+    const createResponse = await request(app.getHttpServer())
+      .post('/api/v1/orders')
+      .send(buildCreateOrderPayload())
+      .expect(200);
+    const orderId = createResponse.body.id as string;
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/orders/${orderId}/capture`)
+      .expect(200);
+
+    const filter = JSON.stringify({
+      type: 'car',
+      keyword: '',
+      generalSearch: '',
+      searchTerms: [
+        { key: 'make1', value: 'BMW' },
+        { key: 'model1', value: 'X5' },
+      ],
+      sortTerms: [{ key: 'renewedTime', order: 'DESC' }],
+      page: 0,
+      maxResults: 24,
+    });
+
+    const response = await request(app.getHttpServer())
+      .post('/car-details/related-post-filter')
+      .send({ filter })
+      .expect(200);
+
+    expect(response.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+      result: expect.any(Array),
+    });
+    expect(response.body.result.length).toBeGreaterThan(0);
+    expect(response.body.result[0]).toEqual(
+      expect.objectContaining({
+        id: FIXTURE_POST_ID.toString(),
+        promoted: true,
+      }),
+    );
+  });
+
   it('POST /api/v1/orders/:orderID/capture is idempotent', async () => {
     await seedVendor(prisma);
     await seedPostGraph(prisma);

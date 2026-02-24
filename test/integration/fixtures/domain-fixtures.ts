@@ -1,4 +1,9 @@
 import { PrismaService } from '../../../src/database/prisma.service';
+import { JwtService } from '@nestjs/jwt';
+
+const jwt = new JwtService({
+  secret: process.env.JWT_SECRET || 'integration-test-secret',
+});
 
 export const FIXTURE_VENDOR_ID = 1001n;
 export const FIXTURE_POST_ID = 2001n;
@@ -7,8 +12,18 @@ export const FIXTURE_PROMOTION_PACKAGE_ID = 1113;
 export async function seedVendor(
   prisma: PrismaService,
   vendorId = FIXTURE_VENDOR_ID,
+  options?: {
+    username?: string;
+    email?: string;
+    password?: string | null;
+    accountName?: string;
+  },
 ): Promise<void> {
   const now = new Date();
+  const username = options?.username ?? `vendor_${vendorId.toString()}`;
+  const email = options?.email ?? `vendor_${vendorId.toString()}@example.com`;
+  const accountName = options?.accountName ?? `vendor-${vendorId.toString()}`;
+  const password = options?.password ?? null;
   await prisma.$executeRawUnsafe(
     `
       INSERT INTO vendor (
@@ -22,22 +37,24 @@ export async function seedVendor(
         name,
         username,
         email,
+        password,
         blocked,
         attemptedLogin,
         verified,
         useDetailsForPosts
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     vendorId,
     now,
     now,
     false,
-    `vendor-${vendorId.toString()}`,
+    accountName,
     true,
     true,
     `Vendor ${vendorId.toString()}`,
-    `vendor_${vendorId.toString()}`,
-    `vendor_${vendorId.toString()}@example.com`,
+    username,
+    email,
+    password,
     false,
     0,
     true,
@@ -146,6 +163,77 @@ export async function seedPromotionPackage(
       price: 9.99,
       deleted: false,
     },
+  });
+}
+
+export async function seedRole(
+  prisma: PrismaService,
+  roleName: string,
+  roleId: number,
+): Promise<void> {
+  const now = new Date();
+  await prisma.role.create({
+    data: {
+      id: roleId,
+      dateCreated: now,
+      dateUpdated: now,
+      deleted: false,
+      name: roleName,
+    },
+  });
+}
+
+export async function seedCarMakeModel(
+  prisma: PrismaService,
+  params: {
+    id: number;
+    make: string;
+    model: string;
+    type?: string;
+    isVariant?: boolean;
+  },
+): Promise<void> {
+  await prisma.car_make_model.create({
+    data: {
+      id: params.id,
+      Make: params.make,
+      Model: params.model,
+      type: params.type ?? 'car',
+      isVariant: params.isVariant ?? false,
+    },
+  });
+}
+
+export async function seedVendorRole(
+  prisma: PrismaService,
+  vendorId: bigint,
+  roleId: number,
+): Promise<void> {
+  await prisma.vendor_role.create({
+    data: {
+      vendor_id: vendorId,
+      role_id: roleId,
+    },
+  });
+}
+
+export async function issueLegacyJwt(params: {
+  userId: string;
+  roles: string[];
+  email?: string;
+  username?: string;
+  name?: string;
+}): Promise<string> {
+  return jwt.signAsync({
+    iat: Math.floor(Date.now() / 1000),
+    iss: 'your.domain.name',
+    nbf: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + 86400,
+    userId: params.userId,
+    roles: params.roles,
+    email: params.email ?? '',
+    username: params.username ?? '',
+    name: params.name ?? '',
   });
 }
 

@@ -15,6 +15,7 @@ export class LegacySearchService {
   private readonly logger = createLogger('legacy-search-service');
   private readonly queryBudgetsMs: Record<string, number> = {
     search: 350,
+    search_promoted: 220,
     result_count: 180,
     price_calculate: 350,
     most_wanted: 200,
@@ -35,6 +36,7 @@ export class LegacySearchService {
     if (!filter) {
       return legacyError('An error occurred while searching for cars', 500);
     }
+    const promoted = await this.findPromotedSearchPost(filter);
     const { whereSql, params } = this.queryBuilder.buildWhere(filter);
     const { orderSql, limit, offset } =
       this.queryBuilder.buildSortAndPagination(filter);
@@ -46,7 +48,12 @@ export class LegacySearchService {
         offset,
       ),
     );
-    return legacySuccess(this.normalizeBigInts(rows));
+    const merged = this.mergeRowsWithPromoted(rows, promoted);
+    return legacySuccess(
+      this.normalizeBigInts(
+        this.annotateRowsWithPromotion(merged, promoted),
+      ),
+    );
   }
 
   async countResults(filterRaw: string | undefined) {
@@ -200,8 +207,16 @@ export class LegacySearchService {
 
   async relatedById(id: string, type = 'car', excludedIds?: string) {
     const row = await this.timeQuery('related_by_id', () =>
-      this.prisma.$queryRawUnsafe<Array<{ make: string | null; model: string | null }>>(
-        'SELECT make, model FROM search WHERE id = ? LIMIT 1',
+      this.prisma.$queryRawUnsafe<
+        Array<{
+          make: string | null;
+          model: string | null;
+          registration: string | null;
+          fuelType: string | null;
+          bodyType: string | null;
+        }>
+      >(
+        'SELECT make, model, registration, fuelType, bodyType FROM search WHERE id = ? LIMIT 1',
         id,
       ),
     );
@@ -211,20 +226,43 @@ export class LegacySearchService {
       return legacySuccess([]);
     }
 
-    const excludedValues = this.queryBuilder.parseCsvValues(excludedIds);
+    const excludedValues = this.queryBuilder
+      .parseCsvValues(excludedIds)
+      .filter((value) => value !== id);
+    excludedValues.push(id);
+    const promoted = await this.findPromotedRelatedPost(
+      {
+        make,
+        model,
+        registration: row[0]?.registration ?? null,
+        fuelType: row[0]?.fuelType ?? null,
+        bodyType: row[0]?.bodyType ?? null,
+      },
+      type,
+      excludedValues,
+    );
+    if (promoted && promoted.id != null) {
+      excludedValues.push(String(promoted.id));
+    }
+
+    const limit = Math.max(0, 4 - (promoted ? 1 : 0));
     const excludedClause =
       excludedValues.length > 0
         ? `AND id NOT IN (${excludedValues.map(() => '?').join(',')})`
         : '';
-    const params: unknown[] = [make, model, id, type, ...excludedValues];
+    const params: unknown[] = [make, model, type, ...excludedValues, limit];
     const rows = await this.timeQuery('related_by_id', () =>
       this.prisma.$queryRawUnsafe<unknown[]>(
         `SELECT id, make, model, variant, registration, mileage, price, transmission, fuelType, engineSize, drivetrain, seats, numberOfDoors, bodyType, customsPaid, canExchange, options, emissionGroup, type, sidecarMedias, accountName, profilePicture, vendorId, contact, vendorContact, promotionTo, highlightedTo, renewTo, renewInterval, renewedTime, mostWantedTo
-       FROM search WHERE make = ? AND model = ? AND id <> ? AND sold = 0 AND deleted = '0' AND type = ? ${excludedClause} ORDER BY dateUpdated DESC LIMIT 4`,
+       FROM search WHERE make = ? AND model = ? AND sold = 0 AND deleted = '0' AND type = ? ${excludedClause} ORDER BY dateUpdated DESC, id DESC LIMIT ?`,
         ...params,
       ),
     );
-    return legacySuccess(this.normalizeBigInts(this.withCarDetail(rows)));
+    return legacySuccess(
+      this.normalizeBigInts(
+        this.annotateRelatedRows(this.withCarDetail(rows), promoted),
+      ),
+    );
   }
 
   async relatedByFilter(
@@ -243,7 +281,25 @@ export class LegacySearchService {
     const terms = this.termMap(filter.searchTerms ?? []);
     const make = this.toStr(terms.get('make1') ?? '');
     const model = this.toStr(terms.get('model1') ?? '');
+    const registration = this.toStr(terms.get('registration') ?? '');
+    const fuelType = this.toStr(terms.get('fuelType') ?? '');
+    const bodyType = this.toStr(terms.get('bodyType') ?? '');
     const excludedValues = this.queryBuilder.parseCsvValues(excludedIds);
+    const promoted = await this.findPromotedRelatedPost(
+      {
+        make: make || null,
+        model: model.replace(' (all)', '') || null,
+        registration: registration || null,
+        fuelType: fuelType || null,
+        bodyType: bodyType || null,
+      },
+      type,
+      excludedValues,
+    );
+    if (promoted && promoted.id != null) {
+      excludedValues.push(String(promoted.id));
+    }
+    const limit = Math.max(0, 4 - (promoted ? 1 : 0));
     const excludedClause =
       excludedValues.length > 0
         ? `AND id NOT IN (${excludedValues.map(() => '?').join(',')})`
@@ -263,11 +319,239 @@ export class LegacySearchService {
     const rows = await this.timeQuery('related_by_filter', () =>
       this.prisma.$queryRawUnsafe<unknown[]>(
         `SELECT id, make, model, variant, registration, mileage, price, transmission, fuelType, engineSize, drivetrain, seats, numberOfDoors, bodyType, customsPaid, canExchange, options, emissionGroup, type, sidecarMedias, accountName, profilePicture, vendorId, contact, vendorContact, promotionTo, highlightedTo, renewTo, renewInterval, renewedTime, mostWantedTo
-       FROM search WHERE ${where} ORDER BY dateUpdated DESC LIMIT 4`,
+       FROM search WHERE ${where} ORDER BY dateUpdated DESC, id DESC LIMIT ?`,
         ...params,
+        limit,
       ),
     );
-    return legacySuccess(this.normalizeBigInts(this.withCarDetail(rows)));
+    return legacySuccess(
+      this.normalizeBigInts(
+        this.annotateRelatedRows(this.withCarDetail(rows), promoted),
+      ),
+    );
+  }
+
+  private async findPromotedRelatedPost(
+    context: {
+      make: string | null;
+      model: string | null;
+      registration: string | null;
+      fuelType: string | null;
+      bodyType: string | null;
+    },
+    type: string,
+    excludedIds: string[],
+  ): Promise<Record<string, unknown> | null> {
+    const now = Math.floor(Date.now() / 1000);
+    const baseWhereParts = [
+      'sold = 0',
+      "deleted = '0'",
+      'type = ?',
+      'promotionTo IS NOT NULL',
+      'promotionTo >= ?',
+    ];
+    const baseParams: unknown[] = [type, now];
+    if (excludedIds.length > 0) {
+      baseWhereParts.push(`id NOT IN (${excludedIds.map(() => '?').join(',')})`);
+      baseParams.push(...excludedIds);
+    }
+
+    const rankCase = this.buildPromotedRankCaseSql(context);
+    const rankParams = this.buildPromotedRankParams(context);
+    const tierClauses: string[] = [];
+    const tierParams: unknown[] = [];
+
+    if (context.make && context.model) {
+      tierClauses.push('(make = ? AND model = ?)');
+      tierParams.push(context.make, context.model);
+    }
+    if (context.make && context.model && context.registration) {
+      tierClauses.push('(make = ? AND model = ? AND registration = ?)');
+      tierParams.push(context.make, context.model, context.registration);
+    }
+    if (context.make && context.model && context.registration && context.fuelType) {
+      tierClauses.push(
+        '(make = ? AND model = ? AND registration = ? AND fuelType = ?)',
+      );
+      tierParams.push(
+        context.make,
+        context.model,
+        context.registration,
+        context.fuelType,
+      );
+    }
+    if (context.bodyType) {
+      tierClauses.push('(bodyType = ?)');
+      tierParams.push(context.bodyType);
+    }
+
+    const select = `SELECT id, make, model, variant, registration, mileage, price, transmission, fuelType, engineSize, drivetrain, seats, numberOfDoors, bodyType, customsPaid, canExchange, options, emissionGroup, type, sidecarMedias, accountName, profilePicture, vendorId, contact, vendorContact, promotionTo, highlightedTo, renewTo, renewInterval, renewedTime, mostWantedTo
+       FROM search`;
+
+    if (tierClauses.length > 0) {
+      const matchRows = await this.timeQuery('related_by_filter', () =>
+        this.prisma.$queryRawUnsafe<unknown[]>(
+          `${select} WHERE ${baseWhereParts.join(' AND ')} AND (${tierClauses.join(' OR ')})
+         ORDER BY ${rankCase} DESC, promotionTo DESC, dateUpdated DESC, id DESC LIMIT 1`,
+          ...baseParams,
+          ...tierParams,
+          ...rankParams,
+        ),
+      );
+      if (matchRows.length > 0) {
+        return this.withCarDetail(matchRows)[0] as Record<string, unknown>;
+      }
+    }
+
+    const fallbackRows = await this.timeQuery('related_by_filter', () =>
+      this.prisma.$queryRawUnsafe<unknown[]>(
+        `${select} WHERE ${baseWhereParts.join(' AND ')}
+         ORDER BY promotionTo DESC, dateUpdated DESC, id DESC LIMIT 1`,
+        ...baseParams,
+      ),
+    );
+    if (fallbackRows.length === 0) {
+      return null;
+    }
+    return this.withCarDetail(fallbackRows)[0] as Record<string, unknown>;
+  }
+
+  private async findPromotedSearchPost(
+    filter: SearchFilter,
+  ): Promise<Record<string, unknown> | null> {
+    const terms = this.termMap(filter.searchTerms ?? []);
+    const make = this.toStr(terms.get('make1') ?? '');
+    const model = this.toStr(terms.get('model1') ?? '').replace(' (all)', '');
+    const registrationRaw = terms.get('registration');
+    const registration =
+      registrationRaw && typeof registrationRaw === 'object'
+        ? this.toStr((registrationRaw as Record<string, unknown>).from ?? '')
+        : this.toStr(registrationRaw ?? '');
+    const fuelType = this.toStr(terms.get('fuelType') ?? '');
+    const bodyType = this.toStr(terms.get('bodyType') ?? '');
+    const type = this.toStr(filter.type ?? '') || 'car';
+
+    const now = Math.floor(Date.now() / 1000);
+    const baseWhereParts = [
+      'sold = 0',
+      "deleted = '0'",
+      'type = ?',
+      'promotionTo IS NOT NULL',
+      'promotionTo >= ?',
+    ];
+    const baseParams: unknown[] = [type, now];
+    const rankContext = {
+      make: make || null,
+      model: model || null,
+      registration: registration || null,
+      fuelType: fuelType || null,
+      bodyType: bodyType || null,
+    };
+    const rankCase = this.buildPromotedRankCaseSql(rankContext);
+    const rankParams = this.buildPromotedRankParams(rankContext);
+    const tierClauses: string[] = [];
+    const tierParams: unknown[] = [];
+
+    if (make && model) {
+      tierClauses.push('(make = ? AND model = ?)');
+      tierParams.push(make, model);
+    }
+    if (make && model && registration) {
+      tierClauses.push('(make = ? AND model = ? AND registration = ?)');
+      tierParams.push(make, model, registration);
+    }
+    if (make && model && registration && fuelType) {
+      tierClauses.push(
+        '(make = ? AND model = ? AND registration = ? AND fuelType = ?)',
+      );
+      tierParams.push(make, model, registration, fuelType);
+    }
+    if (bodyType) {
+      tierClauses.push('(bodyType = ?)');
+      tierParams.push(bodyType);
+    }
+
+    if (tierClauses.length > 0) {
+      const matched = await this.timeQuery('search_promoted', () =>
+        this.prisma.$queryRawUnsafe<unknown[]>(
+          `SELECT * FROM search
+           WHERE ${baseWhereParts.join(' AND ')} AND (${tierClauses.join(' OR ')})
+           ORDER BY ${rankCase} DESC, promotionTo DESC, dateUpdated DESC, id DESC
+           LIMIT 1`,
+          ...baseParams,
+          ...tierParams,
+          ...rankParams,
+        ),
+      );
+      if (matched.length > 0) {
+        return (matched[0] as Record<string, unknown>) ?? null;
+      }
+    }
+
+    const fallback = await this.timeQuery('search_promoted', () =>
+      this.prisma.$queryRawUnsafe<unknown[]>(
+        `SELECT * FROM search
+         WHERE ${baseWhereParts.join(' AND ')}
+         ORDER BY promotionTo DESC, dateUpdated DESC, id DESC
+         LIMIT 1`,
+        ...baseParams,
+      ),
+    );
+    return (fallback[0] as Record<string, unknown>) ?? null;
+  }
+
+  private buildPromotedRankCaseSql(context: {
+    make: string | null;
+    model: string | null;
+    registration: string | null;
+    fuelType: string | null;
+    bodyType: string | null;
+  }): string {
+    const clauses: string[] = [];
+    if (context.make && context.model && context.registration && context.fuelType) {
+      clauses.push('WHEN make = ? AND model = ? AND registration = ? AND fuelType = ? THEN 4');
+    }
+    if (context.make && context.model && context.registration) {
+      clauses.push('WHEN make = ? AND model = ? AND registration = ? THEN 3');
+    }
+    if (context.make && context.model) {
+      clauses.push('WHEN make = ? AND model = ? THEN 2');
+    }
+    if (context.bodyType) {
+      clauses.push('WHEN bodyType = ? THEN 1');
+    }
+    if (clauses.length === 0) {
+      return '0';
+    }
+    return `CASE ${clauses.join(' ')} ELSE 0 END`;
+  }
+
+  private buildPromotedRankParams(context: {
+    make: string | null;
+    model: string | null;
+    registration: string | null;
+    fuelType: string | null;
+    bodyType: string | null;
+  }): unknown[] {
+    const params: unknown[] = [];
+    if (context.make && context.model && context.registration && context.fuelType) {
+      params.push(
+        context.make,
+        context.model,
+        context.registration,
+        context.fuelType,
+      );
+    }
+    if (context.make && context.model && context.registration) {
+      params.push(context.make, context.model, context.registration);
+    }
+    if (context.make && context.model) {
+      params.push(context.make, context.model);
+    }
+    if (context.bodyType) {
+      params.push(context.bodyType);
+    }
+    return params;
   }
 
   private parseFilter(filterRaw: string | undefined): SearchFilter | null {
@@ -624,6 +908,7 @@ export class LegacySearchService {
   private toStr(value: unknown): string {
     if (typeof value === 'string') return value.trim();
     if (typeof value === 'number') return String(value);
+    if (typeof value === 'bigint') return value.toString();
     return '';
   }
 
@@ -686,5 +971,75 @@ export class LegacySearchService {
         },
       };
     });
+  }
+
+  private annotateRowsWithPromotion(
+    rows: unknown[],
+    promoted: Record<string, unknown> | null,
+  ): unknown[] {
+    const now = Math.floor(Date.now() / 1000);
+    const promotedId = promoted ? this.toStr(promoted.id) : '';
+
+    return rows.map((row) => {
+      if (!row || typeof row !== 'object') return row;
+      const item = row as Record<string, unknown>;
+      return {
+        ...item,
+        promoted: promotedId.length > 0 && this.toStr(item.id) === promotedId,
+        highlighted: this.toNullableNumber(item.highlightedTo) > now,
+      };
+    }) as Record<string, unknown>[];
+  }
+
+  private annotateRelatedRows(
+    rows: unknown[],
+    promoted: Record<string, unknown> | null,
+  ): unknown[] {
+    const now = Math.floor(Date.now() / 1000);
+    const promotedId = promoted ? this.toStr(promoted.id) : '';
+    const promotedRow = promoted
+      ? {
+          ...promoted,
+          promoted: true,
+          highlighted:
+            this.toNullableNumber((promoted as Record<string, unknown>).highlightedTo) >
+            now,
+        }
+      : null;
+    const mappedRows = this.annotateRowsWithPromotion(rows, promoted) as Record<
+      string,
+      unknown
+    >[];
+
+    if (!promotedRow) {
+      return mappedRows;
+    }
+    const deduped = mappedRows.filter((row) => this.toStr(row.id) !== promotedId);
+    return [promotedRow, ...deduped].slice(0, 4);
+  }
+
+  private mergeRowsWithPromoted(
+    rows: unknown[],
+    promoted: Record<string, unknown> | null,
+  ): unknown[] {
+    if (!promoted) {
+      return rows;
+    }
+    const promotedId = this.toStr(promoted.id);
+    const deduped = rows.filter((row) => {
+      if (!row || typeof row !== 'object') return true;
+      return this.toStr((row as Record<string, unknown>).id) !== promotedId;
+    });
+    return [promoted, ...deduped];
+  }
+
+  private toNullableNumber(value: unknown): number {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'bigint') return Number(value);
+    if (typeof value === 'string' && value.trim().length > 0) {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    return 0;
   }
 }
