@@ -45,7 +45,11 @@ jobs:
       INSTAGRAM_CLIENT_SECRET: integration-instagram-client-secret
       INSTAGRAM_REDIRECT_URI: http://localhost:3000/callback
       AP_ADMIN_CODE: integration-ap-admin-code
+      CODE: integration-ap-code
       ADMIN_CODE: integration-admin-code
+      DOCS_ACCESS_CODE: integration-docs-code
+      AUTOCONNECT_BASE_URL: http://127.0.0.1:3000
+      AUTOCONNECT_CODE: integration-autoconnect-code
       IMPORT_QUEUE_ENABLED: 'false'
 
     steps:

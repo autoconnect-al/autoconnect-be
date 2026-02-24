@@ -15,8 +15,15 @@ process.env.INSTAGRAM_REDIRECT_URI =
   process.env.INSTAGRAM_REDIRECT_URI?.trim() || 'http://localhost:3000/callback';
 process.env.AP_ADMIN_CODE =
   process.env.AP_ADMIN_CODE?.trim() || 'integration-ap-admin-code';
+process.env.CODE = process.env.CODE?.trim() || 'integration-ap-code';
 process.env.ADMIN_CODE =
   process.env.ADMIN_CODE?.trim() || 'integration-admin-code';
+process.env.DOCS_ACCESS_CODE =
+  process.env.DOCS_ACCESS_CODE?.trim() || 'integration-docs-code';
+process.env.AUTOCONNECT_BASE_URL =
+  process.env.AUTOCONNECT_BASE_URL?.trim() || 'http://127.0.0.1:3000';
+process.env.AUTOCONNECT_CODE =
+  process.env.AUTOCONNECT_CODE?.trim() || 'integration-autoconnect-code';
 process.env.IMPORT_QUEUE_ENABLED = 'false';
 
 const ALLOWLISTED_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);

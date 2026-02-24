@@ -56,7 +56,11 @@ Defaults are provided by `test/integration/setup.ts`, including:
 - `INSTAGRAM_CLIENT_SECRET`
 - `INSTAGRAM_REDIRECT_URI`
 - `AP_ADMIN_CODE`
+- `CODE`
 - `ADMIN_CODE`
+- `DOCS_ACCESS_CODE`
+- `AUTOCONNECT_BASE_URL`
+- `AUTOCONNECT_CODE`
 - `IMPORT_QUEUE_ENABLED=false`
 
 Outbound network is blocked during integration tests by default.
