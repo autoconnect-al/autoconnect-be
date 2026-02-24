@@ -6,12 +6,14 @@ import {
   PAYMENT_PROVIDER,
   selectPaymentProvider,
 } from './payment-provider';
+import { PayPalWebhookService } from './paypal-webhook.service';
 
 @Module({
   controllers: [LegacyPaymentsController],
   providers: [
     LocalPostOrderService,
     LocalUserVendorService,
+    PayPalWebhookService,
     { provide: PAYMENT_PROVIDER, useFactory: selectPaymentProvider },
   ],
 })

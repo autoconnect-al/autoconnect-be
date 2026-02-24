@@ -33,6 +33,10 @@ Validated by `src/app.module.ts`:
 | `PAYPAL_ENV` | No | `sandbox` by default; use `live` for production PayPal endpoint. | `legacy-payments` | High | Orders sent to wrong PayPal environment |
 | `PAYPAL_BASE_URL` | No | Optional explicit PayPal API base URL override. | `legacy-payments` | Medium | Requests target wrong host if misconfigured |
 | `PAYPAL_CURRENCY_CODE` | No | Default `EUR` for PayPal purchase unit currency. | `legacy-group-b`, `legacy-payments` | Medium | Wrong currency in checkout/capture flow |
+| `PAYPAL_WEBHOOK_ID` | No (required for webhook signature verification) | Used by PayPal signature verification endpoint. | `legacy-payments` | High | Webhook events cannot be trusted |
+| `PAYPAL_HTTP_TIMEOUT_MS` | No | Default `10000` ms timeout for outbound PayPal requests. | `legacy-payments` | Medium | Slow requests can hang longer than expected |
+| `PAYPAL_HTTP_RETRY_MAX` | No | Default `2` retries for retryable PayPal failures. | `legacy-payments` | Medium | Reduced resilience or excessive retries |
+| `PAYPAL_HTTP_RETRY_BASE_MS` | No | Default `300` ms base backoff between retries. | `legacy-payments` | Low | Retry backoff too short/long |
 | `PAYMENT_PROVIDER_MODE` | No | Auto-selects PayPal by default; set `local` to force mock provider. | `legacy-payments` | Medium | Unexpected gateway behavior |
 | `PORT` | No | Default `3000`. | app bootstrap | Low | Service binds wrong port |
 | `CORS_ORIGINS` | No | Comma list merged with defaults in `main.ts`. | app bootstrap / web clients | Medium | Browser calls blocked or over-opened CORS |
@@ -86,7 +90,7 @@ These may exist for local tooling or historical reasons:
 
 ### Payments bundle
 - `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`
-- Optional: `PAYPAL_ENV` (`sandbox` or `live`), `PAYPAL_BASE_URL`, `PAYPAL_CURRENCY_CODE`, `PAYMENT_PROVIDER_MODE`
+- Optional: `PAYPAL_ENV` (`sandbox` or `live`), `PAYPAL_BASE_URL`, `PAYPAL_CURRENCY_CODE`, `PAYPAL_WEBHOOK_ID`, `PAYPAL_HTTP_TIMEOUT_MS`, `PAYPAL_HTTP_RETRY_MAX`, `PAYPAL_HTTP_RETRY_BASE_MS`, `PAYMENT_PROVIDER_MODE`
 
 ### Import external services bundle
 - `APIFY_DATASET_URL` or `APIFY_API_TOKEN`

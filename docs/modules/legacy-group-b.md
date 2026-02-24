@@ -49,6 +49,7 @@ Key domains in one service:
 - SSRF/LFI protections for media ingestion
 - Strict capture state transitions + idempotency marker
 - Owner mismatch checks before capture side effects
+- Capture amount/currency reconciliation against expected package totals
 
 ## Observability
 - `local-post-order-service` structured failure code logs (`payment.failure`)

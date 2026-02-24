@@ -62,9 +62,11 @@ const ALLOWED_PROMOTION_FIELDS = new Set([
 ]);
 const ORDER_STATUS_CREATED = 'CREATED';
 const ORDER_STATUS_COMPLETED = 'COMPLETED';
+const ORDER_STATUS_CAPTURE_MISMATCH = 'CAPTURE_MISMATCH';
 const PAYPAL_CURRENCY_CODE = (
   process.env.PAYPAL_CURRENCY_CODE ?? 'EUR'
 ).trim().toUpperCase();
+const CAPTURE_AMOUNT_TOLERANCE = 0.01;
 type PaymentFailureCode =
   | 'PAYMENT_CREATE_INVALID_PAYLOAD'
   | 'PAYMENT_CREATE_INVALID_PACKAGE_IDS'
@@ -383,8 +385,35 @@ export class LocalPostOrderService {
         return this.paymentFailure('PAYMENT_CAPTURE_INVALID_STATE', 409);
       }
 
+      const ownerEmail = this.toSafeString(order.email);
+      if (ownerEmail) {
+        const owner = await this.findVendorAuthByEmail(ownerEmail);
+        if (!owner || owner.id !== post.vendor_id) {
+          return this.paymentFailure('PAYMENT_CAPTURE_OWNER_MISMATCH', 403);
+        }
+      }
+
+      const packageIdStrings = (order.packages ?? '')
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean);
+      const packageIds = packageIdStrings
+        .map((id) => Number(id))
+        .filter((id) => Number.isInteger(id) && id > 0);
+      const expectedTotalAmount = await this.calculateExpectedTotal(packageIds);
+
+      let captureResult:
+        | {
+            amount?: number;
+            currencyCode?: string;
+            captureId?: string;
+            payerEmail?: string;
+            status: string;
+            rawPayload?: unknown;
+          }
+        | undefined;
       try {
-        await this.paymentProvider.captureOrder(orderID, captureKey);
+        captureResult = await this.paymentProvider.captureOrder(orderID, captureKey);
       } catch (providerError) {
         return this.paymentFailure(
           'PAYMENT_CAPTURE_PROVIDER_EXCEPTION',
@@ -394,21 +423,50 @@ export class LocalPostOrderService {
         );
       }
 
-      const ownerEmail = this.toSafeString(order.email);
-      if (ownerEmail) {
-        const owner = await this.findVendorAuthByEmail(ownerEmail);
-        if (!owner || owner.id !== post.vendor_id) {
-          return this.paymentFailure('PAYMENT_CAPTURE_OWNER_MISMATCH', 403);
-        }
+      const capturedAmount = Number(captureResult?.amount ?? Number.NaN);
+      const capturedCurrency = this.toSafeString(captureResult?.currencyCode).toUpperCase();
+      const captureStatus = this.toSafeString(captureResult?.status).toUpperCase();
+      const strictReconciliation = !this.isLocalPaymentMode(orderID);
+      const amountMatches =
+        !strictReconciliation ||
+        (Number.isFinite(capturedAmount) &&
+          Math.abs(capturedAmount - expectedTotalAmount) <= CAPTURE_AMOUNT_TOLERANCE);
+      const currencyMatches =
+        !strictReconciliation ||
+        (!!capturedCurrency && capturedCurrency === PAYPAL_CURRENCY_CODE);
+      if (captureStatus && captureStatus !== ORDER_STATUS_COMPLETED) {
+        return this.paymentFailure('PAYMENT_CAPTURE_PROVIDER_EXCEPTION', 502);
+      }
+      if (!amountMatches || !currencyMatches) {
+        await this.prisma.customer_orders.update({
+          where: { id: order.id },
+          data: {
+            status: ORDER_STATUS_CAPTURE_MISMATCH,
+            dateUpdated: new Date(),
+            capturedAmount: Number.isFinite(capturedAmount) ? capturedAmount : null,
+            capturedCurrency: capturedCurrency || null,
+            paypalCaptureId: this.toSafeString(captureResult?.captureId) || null,
+            paypalPayerEmail: this.toSafeString(captureResult?.payerEmail) || null,
+            paypalOrderStatus: captureStatus || null,
+            paypalCapturePayload: this.toJsonString(captureResult?.rawPayload),
+          } as any,
+        });
+        this.logger.warn('payment.capture.reconciliation_mismatch', {
+          orderID,
+          orderId: String(order.id),
+          expectedAmount: expectedTotalAmount,
+          capturedAmount: Number.isFinite(capturedAmount) ? capturedAmount : null,
+          expectedCurrency: PAYPAL_CURRENCY_CODE,
+          capturedCurrency: capturedCurrency || null,
+        });
+        return this.paymentFailure('PAYMENT_CAPTURE_TRANSITION_FAILED', 409);
       }
 
-      const packageIds = (order.packages ?? '')
-        .split(',')
-        .map((v) => v.trim())
-        .filter(Boolean);
-
       const timePlus14Days = Math.floor(Date.now() / 1000) + 14 * 24 * 3600;
-      const postUpdates = this.buildPromotionUpdates(packageIds, timePlus14Days);
+      const postUpdates = this.buildPromotionUpdates(
+        packageIdStrings,
+        timePlus14Days,
+      );
 
       const captureState = await this.prisma.$transaction(async (tx) => {
         const transition = await tx.customer_orders.updateMany({
@@ -418,6 +476,12 @@ export class LocalPostOrderService {
             captureKey,
             capturedAt: new Date(),
             dateUpdated: new Date(),
+            capturedAmount: capturedAmount,
+            capturedCurrency: capturedCurrency || null,
+            paypalCaptureId: this.toSafeString(captureResult?.captureId) || null,
+            paypalPayerEmail: this.toSafeString(captureResult?.payerEmail) || null,
+            paypalOrderStatus: captureStatus || null,
+            paypalCapturePayload: this.toJsonString(captureResult?.rawPayload),
           } as any,
         } as any);
 
@@ -828,6 +892,40 @@ export class LocalPostOrderService {
     const normalized = raw.replace(/[^a-zA-Z0-9:_-]/g, '').slice(0, 120);
     if (normalized) return normalized;
     return `capture:${orderId}`;
+  }
+
+  private isLocalPaymentMode(orderId: string): boolean {
+    const mode = this.toSafeString(process.env.PAYMENT_PROVIDER_MODE).toLowerCase();
+    if (mode === 'local' || process.env.NODE_ENV === 'test') {
+      return true;
+    }
+    return orderId.startsWith('LOCAL-');
+  }
+
+  private async calculateExpectedTotal(packageIds: number[]): Promise<number> {
+    if (packageIds.length === 0) {
+      return 0;
+    }
+    const packages = await this.prisma.promotion_packages.findMany({
+      where: { id: { in: packageIds }, deleted: false },
+      select: { id: true, price: true },
+    });
+    return packages.reduce((sum, pkg) => {
+      const price = Number(pkg.price ?? 0);
+      return Number.isFinite(price) ? sum + Math.max(0, price) : sum;
+    }, 0);
+  }
+
+  private toJsonString(value: unknown): string | null {
+    if (value === null || value === undefined) {
+      return null;
+    }
+    try {
+      const text = JSON.stringify(value);
+      return text && text.length > 0 ? text : null;
+    } catch {
+      return null;
+    }
   }
 
   private paymentFailure(

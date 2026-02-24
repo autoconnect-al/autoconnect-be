@@ -311,12 +311,18 @@ model customer_orders {
   deleted     Boolean   @default(false)
   captureKey  String?   @unique(map: "customer_orders_capture_key_uq") @db.VarChar(255)
   paypalId    String?   @db.VarChar(255)
+  paypalCaptureId      String?   @db.VarChar(255)
+  paypalPayerEmail     String?   @db.VarChar(255)
+  paypalOrderStatus    String?   @db.VarChar(40)
+  paypalCapturePayload String?   @db.LongText
   postId      String?   @db.VarChar(255)
   packages    String?   @db.VarChar(255)
   email       String?   @db.VarChar(255)
   phoneNumber String?   @db.VarChar(255)
   fullName    String?   @db.VarChar(255)
   status      String?   @db.VarChar(40)
+  capturedAmount       Float?
+  capturedCurrency     String?   @db.VarChar(10)
 }
 
 model promotion_packages {

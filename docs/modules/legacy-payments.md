@@ -12,6 +12,7 @@ Primary code:
 Base route: `/api/v1/orders`
 - `POST /`
 - `POST /:orderID/capture` (accepts `X-Idempotency-Key`)
+- `POST /paypal/webhook` (PayPal webhook signature verification + audit write)
 
 ## Internal Structure
 - Controller handles transport-level legacy error envelope mapping.
@@ -32,7 +33,7 @@ Base route: `/api/v1/orders`
 ## Env Vars Affecting Module
 - `PAYPAL_CLIENT_ID`
 - `PAYPAL_CLIENT_SECRET`
-- Optional: `PAYPAL_ENV`, `PAYPAL_BASE_URL`, `PAYPAL_CURRENCY_CODE`, `PAYMENT_PROVIDER_MODE`
+- Optional: `PAYPAL_ENV`, `PAYPAL_BASE_URL`, `PAYPAL_CURRENCY_CODE`, `PAYPAL_WEBHOOK_ID`, `PAYPAL_HTTP_TIMEOUT_MS`, `PAYPAL_HTTP_RETRY_MAX`, `PAYPAL_HTTP_RETRY_BASE_MS`, `PAYMENT_PROVIDER_MODE`
 - Indirect via provider/service dependencies (`PROMOTION_PACKAGE_MAPPING_JSON`, `JWT_SECRET`)
 
 ## Error and Edge-Case Behavior
@@ -45,9 +46,11 @@ Base route: `/api/v1/orders`
 ## Security Controls
 - Capture idempotency with unique key marker
 - Strict transition checks (`CREATED` -> `COMPLETED` only)
+- Webhook signature verification through PayPal `verify-webhook-signature`
 
 ## Observability
 - Structured payment failure reason codes logged
+- PayPal outbound request success/failure with retries and durations logged
 
 ## Recent Changes Implemented
 - Strict order state and idempotent capture markers.

@@ -9,10 +9,14 @@ import {
 } from '@nestjs/common';
 import { LocalPostOrderService } from '../legacy-group-b/local-post-order.service';
 import type { LegacyResponse } from '../../common/legacy-response';
+import { PayPalWebhookService } from './paypal-webhook.service';
 
 @Controller('api/v1/orders')
 export class LegacyPaymentsController {
-  constructor(private readonly localPostOrderService: LocalPostOrderService) {}
+  constructor(
+    private readonly localPostOrderService: LocalPostOrderService,
+    private readonly payPalWebhookService: PayPalWebhookService,
+  ) {}
 
   private throwLegacy(response: LegacyResponse) {
     throw new HttpException(
@@ -59,5 +63,20 @@ export class LegacyPaymentsController {
       this.throwLegacy(response as LegacyResponse);
     }
     return response;
+  }
+
+  @Post('paypal/webhook')
+  @HttpCode(200)
+  async paypalWebhook(
+    @Headers() headers: Record<string, string | undefined>,
+    @Body() body: unknown,
+  ) {
+    const result = await this.payPalWebhookService.verifyAndProcess(headers, body);
+    return {
+      success: true,
+      statusCode: '200',
+      message: 'Webhook processed',
+      result,
+    };
   }
 }

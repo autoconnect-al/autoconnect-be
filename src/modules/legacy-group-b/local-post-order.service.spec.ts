@@ -78,6 +78,11 @@ describe('LocalPostOrderService.captureOrder promotion writes', () => {
           .fn()
           .mockResolvedValue({ id: 100n, vendor_id: 200n, deleted: false }),
       },
+      promotion_packages: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue([{ id: 1113, price: 9.99, deleted: false }]),
+      },
       $transaction: jest
         .fn()
         .mockImplementation(async (fn: (tx: any) => Promise<unknown>) => fn(tx)),
@@ -139,6 +144,11 @@ describe('LocalPostOrderService.captureOrder promotion writes', () => {
           .fn()
           .mockResolvedValue({ id: 100n, vendor_id: 200n, deleted: false }),
       },
+      promotion_packages: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue([{ id: 1113, price: 9.99, deleted: false }]),
+      },
       $transaction: jest.fn(),
     } as any;
 
@@ -174,6 +184,11 @@ describe('LocalPostOrderService.captureOrder promotion writes', () => {
         findUnique: jest
           .fn()
           .mockResolvedValue({ id: 100n, vendor_id: 200n, deleted: false }),
+      },
+      promotion_packages: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue([{ id: 1113, price: 9.99, deleted: false }]),
       },
     } as any;
 

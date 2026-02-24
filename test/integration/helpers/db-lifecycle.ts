@@ -69,16 +69,59 @@ export async function runMigrationsOnce(): Promise<void> {
       deleted TINYINT(1) NOT NULL DEFAULT 0,
       captureKey VARCHAR(255) NULL,
       paypalId VARCHAR(255) NULL,
+      paypalCaptureId VARCHAR(255) NULL,
+      paypalPayerEmail VARCHAR(255) NULL,
+      paypalOrderStatus VARCHAR(40) NULL,
+      paypalCapturePayload LONGTEXT NULL,
       postId VARCHAR(255) NULL,
       packages VARCHAR(255) NULL,
       email VARCHAR(255) NULL,
       phoneNumber VARCHAR(255) NULL,
       fullName VARCHAR(255) NULL,
       status VARCHAR(40) NULL,
+      capturedAmount FLOAT NULL,
+      capturedCurrency VARCHAR(10) NULL,
       PRIMARY KEY (id),
       UNIQUE KEY customer_orders_capture_key_uq (captureKey)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
+
+  await ensureColumn(
+    db,
+    'customer_orders',
+    'paypalCaptureId',
+    'ALTER TABLE customer_orders ADD COLUMN paypalCaptureId VARCHAR(255) NULL',
+  );
+  await ensureColumn(
+    db,
+    'customer_orders',
+    'paypalPayerEmail',
+    'ALTER TABLE customer_orders ADD COLUMN paypalPayerEmail VARCHAR(255) NULL',
+  );
+  await ensureColumn(
+    db,
+    'customer_orders',
+    'paypalOrderStatus',
+    'ALTER TABLE customer_orders ADD COLUMN paypalOrderStatus VARCHAR(40) NULL',
+  );
+  await ensureColumn(
+    db,
+    'customer_orders',
+    'paypalCapturePayload',
+    'ALTER TABLE customer_orders ADD COLUMN paypalCapturePayload LONGTEXT NULL',
+  );
+  await ensureColumn(
+    db,
+    'customer_orders',
+    'capturedAmount',
+    'ALTER TABLE customer_orders ADD COLUMN capturedAmount FLOAT NULL',
+  );
+  await ensureColumn(
+    db,
+    'customer_orders',
+    'capturedCurrency',
+    'ALTER TABLE customer_orders ADD COLUMN capturedCurrency VARCHAR(10) NULL',
+  );
 
   await db.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS promotion_packages (
