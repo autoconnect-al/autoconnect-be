@@ -31,6 +31,7 @@ const ALLOWLISTED_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 const originalFetch = global.fetch.bind(globalThis);
 const originalConsoleLog = console.log.bind(console);
 const originalConsoleWarn = console.warn.bind(console);
+const originalConsoleError = console.error.bind(console);
 
 function toUrl(input: string | URL | Request): URL | null {
   try {
@@ -73,7 +74,14 @@ function shouldSuppressConsoleLine(value: unknown): boolean {
     return false;
   }
   if (typeof value !== 'string') return false;
-  return value.startsWith('[dotenv@') || value.startsWith('{"ts":"');
+  if (value.startsWith('[dotenv@')) return true;
+  if (
+    value.startsWith('{"ts":"') &&
+    value.includes('Outbound network is blocked in integration tests:')
+  ) {
+    return true;
+  }
+  return false;
 }
 
 console.log = (...args: unknown[]) => {
@@ -84,4 +92,9 @@ console.log = (...args: unknown[]) => {
 console.warn = (...args: unknown[]) => {
   if (shouldSuppressConsoleLine(args[0])) return;
   originalConsoleWarn(...(args as []));
+};
+
+console.error = (...args: unknown[]) => {
+  if (shouldSuppressConsoleLine(args[0])) return;
+  originalConsoleError(...(args as []));
 };

@@ -173,6 +173,92 @@ describe('Integration: write flows and payments', () => {
     expect(post?.renewedTime).toBe(1);
   });
 
+  it('POST /data/create-user-post creates a vendor and post graph when email does not exist', async () => {
+    const unique = Date.now();
+    const postId = 5201n;
+    const email = `create-user-post-${unique}@example.com`;
+
+    const response = await request(app.getHttpServer())
+      .post('/data/create-user-post')
+      .send({
+        post: {
+          id: postId.toString(),
+          email,
+          username: `create_user_post_${unique}`,
+          name: 'Create User Post',
+          phone: '0693333333',
+          whatsapp: '0693333333',
+          location: 'Tirana',
+          caption: 'Create user post integration',
+          createdTime: String(Math.floor(Date.now() / 1000)),
+          cardDetails: {
+            make: 'BMW',
+            model: 'X5',
+            type: 'car',
+            transmission: 'automatic',
+            fuelType: 'diesel',
+            price: 21000,
+            sold: false,
+            published: false,
+          },
+        },
+      })
+      .expect(200);
+
+    expect(response.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+      message: 'User and post created successfully',
+      result: {
+        jwt: expect.any(String),
+        postId: postId.toString(),
+      },
+    });
+    expect(String(response.body.result.jwt).length).toBeGreaterThan(20);
+
+    const vendor = await prisma.vendor.findFirst({
+      where: { email },
+      select: { id: true, email: true, username: true },
+    });
+    expect(vendor).toBeTruthy();
+
+    const post = await prisma.post.findUnique({ where: { id: postId } });
+    const details = await prisma.car_detail.findUnique({ where: { id: postId } });
+    const search = await prisma.search.findUnique({ where: { id: postId } });
+
+    expect(post?.vendor_id).toBe(vendor?.id);
+    expect(details?.post_id).toBe(postId);
+    expect(search?.id).toBe(postId);
+  });
+
+  it('POST /data/create-user-post returns legacy 500 envelope for missing user email', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/data/create-user-post')
+      .send({
+        post: {
+          id: '5301',
+          caption: 'Invalid create-user-post payload',
+          createdTime: String(Math.floor(Date.now() / 1000)),
+          cardDetails: {
+            make: 'BMW',
+            model: 'X3',
+            type: 'car',
+            price: 12000,
+          },
+        },
+      })
+      .expect(500);
+
+    expect(response.body).toMatchObject({
+      success: false,
+      statusCode: '500',
+      message: 'ERROR: Something went wrong',
+    });
+
+    expect(await prisma.post.count()).toBe(0);
+    expect(await prisma.vendor.count()).toBe(0);
+  });
+
   it('POST /api/v1/orders creates order in CREATED state', async () => {
     await seedVendor(prisma);
     await seedPostGraph(prisma);

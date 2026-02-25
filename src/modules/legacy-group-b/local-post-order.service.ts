@@ -254,6 +254,10 @@ export class LocalPostOrderService {
         where: { post_id: BigInt(postId) },
         data: { sold: true, dateUpdated: new Date() },
       });
+      await this.prisma.search.updateMany({
+        where: { id: BigInt(postId) },
+        data: { sold: true, dateUpdated: new Date() },
+      });
 
       return legacySuccess(null, 'Post marked as sold successfully');
     } catch {

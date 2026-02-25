@@ -744,7 +744,9 @@ export class PostImportService {
         customsPaid: customsPaid ?? null,
         sold,
         published: !!carDetails.make && !!carDetails.model,
-        contact: carDetails.contact ? JSON.stringify(carDetails.contact) : '',
+        contact: carDetails.contact
+          ? JSON.stringify(carDetails.contact)
+          : '{"phone_number":"","whatsapp":"","address":""}',
         options: carDetails.options || null,
         post_id: postId,
       },

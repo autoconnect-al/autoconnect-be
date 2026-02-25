@@ -86,6 +86,85 @@ describe('Integration: read/search/sitemap', () => {
     expect(response.body.result).not.toContain('Yamaha');
   });
 
+  it('GET /data/models/:make returns models and supports hyphen normalization and full mode', async () => {
+    await seedCarMakeModel(prisma, {
+      id: 11,
+      make: 'mercedes-benz',
+      model: 'C 220',
+      type: 'car',
+      isVariant: false,
+    });
+    await seedCarMakeModel(prisma, {
+      id: 12,
+      make: 'mercedes-benz',
+      model: 'C 220 AMG',
+      type: 'car',
+      isVariant: true,
+    });
+
+    const basic = await request(app.getHttpServer())
+      .get('/data/models/mercedes-benz')
+      .expect(200);
+
+    expect(basic.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+      result: ['C 220', 'C 220 AMG'],
+    });
+
+    const full = await request(app.getHttpServer())
+      .get('/data/models/mercedes-benz?full=true')
+      .expect(200);
+
+    expect(full.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+      result: [
+        { model: 'C 220', isVariant: 0 },
+        { model: 'C 220 AMG', isVariant: 1 },
+      ],
+    });
+  });
+
+  it('motorcycle make/model endpoints return only motorcycle rows', async () => {
+    await seedCarMakeModel(prisma, {
+      id: 21,
+      make: 'Yamaha',
+      model: 'Tracer 9',
+      type: 'motorcycle',
+    });
+    await seedCarMakeModel(prisma, {
+      id: 22,
+      make: 'Yamaha',
+      model: 'MT-07',
+      type: 'motorcycle',
+    });
+    await seedCarMakeModel(prisma, {
+      id: 23,
+      make: 'BMW',
+      model: 'X5',
+      type: 'car',
+    });
+
+    const makes = await request(app.getHttpServer())
+      .get('/data/makes/motorcycles')
+      .expect(200);
+    expect(makes.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+      result: ['Yamaha'],
+    });
+
+    const models = await request(app.getHttpServer())
+      .get('/data/models/motorcycles/Yamaha')
+      .expect(200);
+    expect(models.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+      result: ['MT-07', 'Tracer 9'],
+    });
+  });
+
   it('POST /car-details/search returns seeded search rows for matching filter', async () => {
     await seedVendor(prisma, FIXTURE_VENDOR_ID, { accountName: 'vendor-read' });
     await seedPostGraph(prisma, { postId: FIXTURE_POST_ID, vendorId: FIXTURE_VENDOR_ID });

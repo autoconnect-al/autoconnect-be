@@ -28,7 +28,7 @@ export class LegacyDataService {
       const rows = await this.prisma.$queryRawUnsafe<
         Array<{ Model: string | null; isVariant: number | boolean | null }>
       >(
-        'SELECT DISTINCT Model, isVariant FROM car_make_model WHERE type = ? AND Make = ? ORDER BY id ASC',
+        'SELECT DISTINCT Model, isVariant FROM car_make_model WHERE type = ? AND Make = ? ORDER BY Model ASC',
         type,
         cleanedMake,
       );
@@ -45,7 +45,7 @@ export class LegacyDataService {
     const rows = await this.prisma.$queryRawUnsafe<
       Array<{ Model: string | null }>
     >(
-      'SELECT DISTINCT Model FROM car_make_model WHERE type = ? AND Make = ? ORDER BY id ASC',
+      'SELECT DISTINCT Model FROM car_make_model WHERE type = ? AND Make = ? ORDER BY Model ASC',
       type,
       cleanedMake,
     );
