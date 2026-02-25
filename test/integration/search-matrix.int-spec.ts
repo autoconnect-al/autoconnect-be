@@ -132,6 +132,34 @@ describe('Integration: search matrix', () => {
     });
   }
 
+  async function seedSearchRowsForCount(baseId: bigint, count: number) {
+    const now = new Date();
+    const vendorId = baseId + 1000000n;
+    await seedVendor(prisma, vendorId, {
+      accountName: `count-vendor-${vendorId.toString()}`,
+      username: `count_user_${vendorId.toString()}`,
+      email: `count_${vendorId.toString()}@example.com`,
+    });
+    const rows = Array.from({ length: count }, (_, index) => {
+      const id = baseId + BigInt(index);
+      return {
+        id,
+        dateCreated: now,
+        dateUpdated: now,
+        deleted: '0',
+        cleanedCaption: `count-row-${index}`,
+        type: 'car',
+        sold: false,
+        vendorId,
+        accountName: `count-vendor-${vendorId.toString()}`,
+        make: 'Count',
+        model: 'Model',
+        price: 1000 + index,
+      };
+    });
+    await prisma.search.createMany({ data: rows });
+  }
+
   it('returns 500 envelope when filter JSON is invalid', async () => {
     const response = await request(app.getHttpServer())
       .post('/car-details/search')
@@ -574,6 +602,101 @@ describe('Integration: search matrix', () => {
       statusCode: '200',
       result: 2,
     });
+  });
+
+  it('result-count applies legacy +500 branch when raw count is between 802 and 999', async () => {
+    await seedSearchRowsForCount(700000n, 802);
+
+    const response = await request(app.getHttpServer())
+      .post('/car-details/result-count')
+      .send({ filter: makeFilter({}) })
+      .expect(200);
+
+    expect(response.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+      result: 1302,
+    });
+  });
+
+  it('result-count applies legacy +1200 branch when raw count is between 1001 and 1999', async () => {
+    await seedSearchRowsForCount(710000n, 1001);
+
+    const response = await request(app.getHttpServer())
+      .post('/car-details/result-count')
+      .send({ filter: makeFilter({}) })
+      .expect(200);
+
+    expect(response.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+      result: 2201,
+    });
+  });
+
+  it('result-count preserves legacy boundary behavior at exactly 801', async () => {
+    await seedSearchRowsForCount(720000n, 801);
+
+    const response = await request(app.getHttpServer())
+      .post('/car-details/result-count')
+      .send({ filter: makeFilter({}) })
+      .expect(200);
+
+    expect(response.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+      result: 5801,
+    });
+  });
+
+  it('generalSearch ignores inputs longer than 75 characters', async () => {
+    await seedSearchRecord({
+      postId: 5731n,
+      vendorId: 6731n,
+      accountName: 'long-search',
+      make: 'Lexus',
+      model: 'RX',
+      price: 17000,
+      cleanedCaption: 'lexus rx long-search',
+    });
+
+    const longInput = 'x'.repeat(90);
+    const response = await request(app.getHttpServer())
+      .post('/car-details/search')
+      .send({ filter: makeFilter({ generalSearch: longInput }) })
+      .expect(200);
+
+    expect(response.body.result.length).toBeGreaterThan(0);
+    expect(response.body.result[0]).toEqual(
+      expect.objectContaining({
+        id: '5731',
+      }),
+    );
+  });
+
+  it('generalSearch applies token cap of 10 terms', async () => {
+    await seedSearchRecord({
+      postId: 5741n,
+      vendorId: 6741n,
+      accountName: 'token-cap',
+      make: 'Opel',
+      model: 'Astra',
+      price: 8000,
+      cleanedCaption: 'token-eleven-only',
+    });
+
+    const response = await request(app.getHttpServer())
+      .post('/car-details/search')
+      .send({
+        filter: makeFilter({
+          generalSearch:
+            't1 t2 t3 t4 t5 t6 t7 t8 t9 t10 token-eleven-only',
+        }),
+      })
+      .expect(200);
+
+    const ids = response.body.result.map((row: { id: string }) => row.id);
+    expect(ids).not.toContain('5741');
   });
 
   it('returns related-post-filter data for make/model matches', async () => {

@@ -218,6 +218,27 @@ describe('Integration: write flows and payments', () => {
     expect(count).toBe(0);
   });
 
+  it('POST /api/v1/orders returns 403 for owner mismatch when email does not match post vendor', async () => {
+    await seedVendor(prisma, FIXTURE_VENDOR_ID, {
+      email: 'owner@example.com',
+      username: 'owner_user',
+      accountName: 'owner-vendor',
+    });
+    await seedPostGraph(prisma);
+    await seedPromotionPackage(prisma);
+
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/orders')
+      .send(buildCreateOrderPayload({ email: 'other@example.com' }))
+      .expect(403);
+
+    expect(response.body).toMatchObject({
+      success: false,
+      statusCode: '403',
+      message: 'ERROR: Something went wrong',
+    });
+  });
+
   it('POST /api/v1/orders/:orderID/capture completes order and updates promotion fields', async () => {
     await seedVendor(prisma);
     await seedPostGraph(prisma);
@@ -333,6 +354,66 @@ describe('Integration: write flows and payments', () => {
     });
     expect(orders).toHaveLength(1);
     expect(orders[0]?.status).toBe('COMPLETED');
+  });
+
+  it('POST /api/v1/orders/:orderID/capture returns 403 for owner mismatch', async () => {
+    await seedVendor(prisma, FIXTURE_VENDOR_ID, {
+      email: 'post-owner@example.com',
+      username: 'post_owner',
+      accountName: 'post-owner',
+    });
+    await seedPostGraph(prisma);
+    await seedPromotionPackage(prisma);
+
+    await prisma.customer_orders.create({
+      data: {
+        id: 987654321n,
+        dateCreated: new Date(),
+        deleted: false,
+        paypalId: 'LOCAL-owner-mismatch',
+        postId: FIXTURE_POST_ID.toString(),
+        packages: String(FIXTURE_PROMOTION_PACKAGE_ID),
+        email: 'different-owner@example.com',
+        status: 'CREATED',
+      },
+    });
+
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/orders/LOCAL-owner-mismatch/capture')
+      .expect(403);
+
+    expect(response.body).toMatchObject({
+      success: false,
+      statusCode: '403',
+      message: 'ERROR: Something went wrong',
+    });
+  });
+
+  it('POST /api/v1/orders/:orderID/capture returns 409 for invalid transition state', async () => {
+    await seedVendor(prisma);
+    await seedPostGraph(prisma);
+    await seedPromotionPackage(prisma);
+
+    const createResponse = await request(app.getHttpServer())
+      .post('/api/v1/orders')
+      .send(buildCreateOrderPayload())
+      .expect(200);
+    const orderId = createResponse.body.id as string;
+
+    await prisma.customer_orders.updateMany({
+      where: { paypalId: orderId },
+      data: { status: 'CAPTURE_MISMATCH' },
+    });
+
+    const response = await request(app.getHttpServer())
+      .post(`/api/v1/orders/${orderId}/capture`)
+      .expect(409);
+
+    expect(response.body).toMatchObject({
+      success: false,
+      statusCode: '409',
+      message: 'ERROR: Something went wrong',
+    });
   });
 
   it('POST /api/v1/orders/:orderID/capture returns 404 for unknown order', async () => {

@@ -16,6 +16,7 @@ import {
   seedVendor,
   seedVendorRole,
 } from './fixtures/domain-fixtures';
+import { JwtService } from '@nestjs/jwt';
 
 jest.setTimeout(120_000);
 
@@ -213,6 +214,138 @@ describe('Integration: auth and guards', () => {
       success: false,
       message: 'Could not get access token. Please check your data.',
       statusCode: '400',
+    });
+  });
+
+  it('POST /user/create-user creates a new vendor user', async () => {
+    const email = `new-user-${Date.now()}@example.com`;
+    const response = await request(app.getHttpServer())
+      .post('/user/create-user')
+      .send({
+        user: {
+          name: 'Integration User',
+          username: `integration_user_${Date.now()}`,
+          email,
+          password: 'Password123!',
+          rewritePassword: 'Password123!',
+          phone: '0690000000',
+          whatsapp: '0690000000',
+          location: 'Tirana',
+        },
+      })
+      .expect(200);
+
+    expect(response.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+      result: true,
+    });
+
+    const created = await prisma.vendor.findFirst({
+      where: { email },
+      select: { id: true, email: true, username: true },
+    });
+    expect(created).toBeTruthy();
+    expect(created?.email).toBe(email);
+  });
+
+  it('POST /user/reset-password sets verification code for existing user', async () => {
+    await seedVendor(prisma, FIXTURE_VENDOR_ID, {
+      username: 'reset_user',
+      email: 'reset_user@example.com',
+      password: await bcrypt.hash('OldPassword123!', 12),
+    });
+
+    const response = await request(app.getHttpServer())
+      .post('/user/reset-password')
+      .send({ email: 'reset_user@example.com' })
+      .expect(200);
+
+    expect(response.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+      result: true,
+    });
+
+    const updated = await prisma.vendor.findUnique({
+      where: { id: FIXTURE_VENDOR_ID },
+      select: { verificationCode: true },
+    });
+    expect(updated?.verificationCode).toBeTruthy();
+  });
+
+  it('POST /user/verify-password resets password when verification code is valid', async () => {
+    const email = 'verify_user@example.com';
+    const resetCode = 'RESET-CODE-123';
+    await seedVendor(prisma, FIXTURE_VENDOR_ID, {
+      username: 'verify_user',
+      email,
+      password: await bcrypt.hash('InitialPass123!', 12),
+    });
+
+    const jwt = new JwtService({
+      secret: process.env.JWT_SECRET || 'integration-test-secret',
+    });
+    const verificationToken = await jwt.signAsync(
+      {
+        userId: FIXTURE_VENDOR_ID.toString(),
+        token: resetCode,
+        iss: 'your.domain.name',
+        nbf: Math.floor(Date.now() / 1000),
+      },
+      { expiresIn: '30m' },
+    );
+    await prisma.vendor.update({
+      where: { id: FIXTURE_VENDOR_ID },
+      data: { verificationCode: verificationToken },
+    });
+
+    const response = await request(app.getHttpServer())
+      .post('/user/verify-password')
+      .send({
+        email,
+        verificationCode: resetCode,
+        newPassword: 'NewPassword123!',
+      })
+      .expect(200);
+
+    expect(response.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+      result: true,
+    });
+
+    const updated = await prisma.vendor.findUnique({
+      where: { id: FIXTURE_VENDOR_ID },
+      select: { password: true, verificationCode: true },
+    });
+    expect(updated?.verificationCode).toBeNull();
+    expect(updated?.password).toBeTruthy();
+    const passwordMatches = await bcrypt.compare(
+      'NewPassword123!',
+      updated?.password ?? '',
+    );
+    expect(passwordMatches).toBe(true);
+  });
+
+  it('POST /authentication/login returns 429 when rate limit is exceeded', async () => {
+    const uniqueEmail = `ratelimit-${Date.now()}@example.com`;
+    for (let i = 0; i < 10; i += 1) {
+      const attempt = await request(app.getHttpServer())
+        .post('/authentication/login')
+        .send({ email: uniqueEmail, password: 'WrongPass123!' });
+      expect([400, 401]).toContain(attempt.status);
+    }
+
+    const limited = await request(app.getHttpServer())
+      .post('/authentication/login')
+      .send({ email: uniqueEmail, password: 'WrongPass123!' })
+      .expect(429);
+
+    expect(limited.body).toMatchObject({
+      success: false,
+      statusCode: 429,
+      message: 'Too many requests. Please try again later.',
     });
   });
 });

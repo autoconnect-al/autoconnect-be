@@ -313,11 +313,27 @@ export class LocalPostOrderService {
         const price = Number(pkg.price ?? 0);
         return Number.isFinite(price) ? sum + Math.max(0, price) : sum;
       }, 0);
-      const providerOrder = await this.paymentProvider.createOrder({
-        orderReference: orderId.toString(),
-        totalAmount,
-        currencyCode: PAYPAL_CURRENCY_CODE,
-      });
+      let providerOrder:
+        | {
+            id: string;
+            status: string;
+            links: Array<{ rel: string; href: string; method: string }>;
+          }
+        | undefined;
+      try {
+        providerOrder = await this.paymentProvider.createOrder({
+          orderReference: orderId.toString(),
+          totalAmount,
+          currencyCode: PAYPAL_CURRENCY_CODE,
+        });
+      } catch (providerError) {
+        return this.paymentFailure(
+          'PAYMENT_CREATE_PROVIDER_EXCEPTION',
+          502,
+          undefined,
+          providerError,
+        );
+      }
       const paypalId = this.toSafeString(providerOrder.id);
       if (!paypalId) {
         return this.paymentFailure('PAYMENT_CREATE_PROVIDER_EXCEPTION', 502);

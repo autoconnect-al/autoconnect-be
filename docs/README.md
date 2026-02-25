@@ -17,6 +17,7 @@ It is designed so maintainers can answer:
 5. Use `RUNBOOKS.md` for operational actions and recovery.
 6. Use `DATA_MODEL_AND_STATE_TRANSITIONS.md` for lifecycle/state logic.
 7. Use `adr/` for architecture decisions and rationale.
+8. Use `INTEGRATION_TEST_COVERAGE.md` for integration test scope and gap map.
 
 ## Stability Levels
 - `Authoritative`: `ARCHITECTURE.md`, `ENVIRONMENT_VARIABLES.md`, `modules/*.md`, `DATA_MODEL_AND_STATE_TRANSITIONS.md`, `RUNBOOKS.md`, `BEHAVIOR_CATALOG.md`, `adr/*`
@@ -28,6 +29,7 @@ It is designed so maintainers can answer:
 - `DATA_MODEL_AND_STATE_TRANSITIONS.md`
 - `BEHAVIOR_CATALOG.md`
 - `RUNBOOKS.md`
+- `INTEGRATION_TEST_COVERAGE.md`
 - `IMPLEMENTED_CHANGES_BY_MODULE.md`
 - `modules/cross-cutting.md`
 - `modules/imports.md`
@@ -57,3 +59,5 @@ It is designed so maintainers can answer:
 - Update `RUNBOOKS.md` if operation/recovery changes.
 - Add/update ADR when architecture decision changed.
 - Update `IMPLEMENTED_CHANGES_BY_MODULE.md` for significant cross-cutting changes.
+- Update `INTEGRATION_TEST_COVERAGE.md` when integration test coverage changes.
+- Update `INTEGRATION_TEST_COVERAGE.md` immediately after each implementation step touching test scope.
