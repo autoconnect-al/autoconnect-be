@@ -78,7 +78,7 @@ Add auth fields to `vendor` (if missing):
 3. Ensure `LegacyJwtAdminGuard` and admin checks consume vendor-derived role arrays.
 
 ## Phase 4: Verification Window (between releases)
-1. Run full suite + contract smoke.
+1. Run full suite (`npm test` + `npm run test:int`).
 2. Validate in staging/production:
 - login/refresh/reset
 - admin panel access (ADMIN vs non-ADMIN)

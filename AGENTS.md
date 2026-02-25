@@ -50,14 +50,11 @@ npm run start:dev
 
 ## Common Commands
 - Run tests: `npm test`
+- Run integration parity suite: `npm run test:int`
 - Run a single test file:
 ```bash
 npm test -- modules/legacy-ap/legacy-ap.service.spec.ts
 ```
-- Run AP contract suites:
-  - `npm run contract:diff:ap:auth`
-  - `npm run contract:diff:ap:admin`
-  - `npm run contract:diff:ap:tooling`
 - Generate AP endpoint ownership matrix:
 ```bash
 npm run contract:matrix:ap
@@ -101,6 +98,6 @@ npm run contract:matrix:ap
   2. Prisma `update/create/upsert` payload shape
   3. Response mapper fields (many responses are flattened manually)
 - For parity issues:
-  - Use contract diff scripts in `test/contracts` and review `test/contracts/report.json`.
+  - Use integration suites in `test/integration` and coverage map in `docs/INTEGRATION_TEST_COVERAGE.md`.
 - For AP route ownership:
   - Check `docs/migration/ap-endpoint-matrix.json`.

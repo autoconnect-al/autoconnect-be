@@ -1,14 +1,10 @@
-# FE Strict Parity Checks (Points 1-12)
+# FE Strict Parity Checks (Historical)
 
-Run:
-
-```bash
-npm run verify:fe:strict
-```
-
-Report output:
-
-- `test/contracts/fe-strict-report.json`
+Status:
+- Deprecated on 2026-02-25.
+- The `verify:fe:strict` script and contract diff artifacts were removed from active workflows.
+- Integration tests are now the parity source of truth (`npm run test:int`).
+- Deprecated contract artifacts were removed from the repository.
 
 Implemented scope:
 
@@ -41,4 +37,4 @@ Implemented scope:
     - `/car-details/price-calculate` (dynamic filter seeded from live DB row)
 12. Post caption success strict parity:
     - `/car-details/post/caption/{id}` (id selected dynamically from live DB row)
-- The script exits with non-zero status when any strict parity check fails.
+- Historical note: this checklist was previously enforced by script-based parity checks.
