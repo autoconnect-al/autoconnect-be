@@ -643,6 +643,13 @@ export class LocalPostOrderService {
       const postId =
         this.toSafeString(postInput.id) || this.generateRandomCode(18, true);
       const postIdBigInt = BigInt(postId);
+      const existing = await this.prisma.post.findUnique({
+        where: { id: postIdBigInt },
+      });
+      if (isUpdate && !existing) {
+        return legacyError('Post data are required.', 400);
+      }
+
       const captionText = this.toSafeString(postInput.caption);
       const cleanedCaption = this.cleanCaption(captionText);
       const sidecarInput = Array.isArray(postInput.sidecarMedias)
@@ -652,6 +659,7 @@ export class LocalPostOrderService {
         sidecarInput,
         vendorId,
         postId,
+        existing?.sidecarMedias,
       );
       const createdTime =
         this.toSafeString(postInput.createdTime) ||
@@ -659,13 +667,6 @@ export class LocalPostOrderService {
       const likesCount = Number(postInput.likesCount ?? 0);
       const origin = this.toSafeString(postInput.origin) || 'MANUAL';
       const status = this.toSafeString(postInput.status) || 'DRAFT';
-
-      const existing = await this.prisma.post.findUnique({
-        where: { id: postIdBigInt },
-      });
-      if (isUpdate && !existing) {
-        return legacyError('Post data are required.', 400);
-      }
 
       const detailsSource =
         ((postInput.cardDetails ?? postInput.details ?? {}) as AnyRecord) || {};
@@ -689,19 +690,6 @@ export class LocalPostOrderService {
       const normalizedCustomsPaid = this.nullableBooleanFrom(
         detailsSource.customsPaid,
       );
-      const existingPromotionTo =
-        this.toNullableInt(existing?.promotionTo) ?? undefined;
-      const existingHighlightedTo =
-        this.toNullableInt(existing?.highlightedTo) ?? undefined;
-      const existingRenewTo =
-        this.toNullableInt(existing?.renewTo) ?? undefined;
-      const existingRenewInterval =
-        this.toNullableString(existing?.renewInterval) ?? undefined;
-      const existingRenewedTime =
-        this.toNullableInt(existing?.renewedTime) ?? undefined;
-      const existingMostWantedTo =
-        this.toNullableInt(existing?.mostWantedTo) ?? undefined;
-
       await this.prisma.$transaction(async (tx) => {
         if (existing) {
           await tx.post.update({
@@ -789,84 +777,6 @@ export class LocalPostOrderService {
           },
         });
 
-        await tx.search.upsert({
-          where: { id: postIdBigInt },
-          update: {
-            dateUpdated: now,
-            deleted: sold ? '1' : '0',
-            caption: encodedCaption,
-            cleanedCaption,
-            createdTime: BigInt(createdTime),
-            sidecarMedias: JSON.stringify(sidecar),
-            likesCount: normalizedLikes,
-            viewsCount: 0,
-            accountName: vendor.accountName,
-            vendorId,
-            profilePicture: vendor.profilePicture,
-            make: this.toNullableString(detailsSource.make),
-            model: this.toNullableString(detailsSource.model),
-            variant: this.toNullableString(detailsSource.variant),
-            registration: this.toNullableString(detailsSource.registration),
-            mileage: this.toNullableInt(detailsSource.mileage),
-            price: this.toNullableInt(detailsSource.price),
-            transmission: this.toNullableString(detailsSource.transmission),
-            fuelType: this.toNullableString(detailsSource.fuelType),
-            engineSize: normalizedEngineSize,
-            drivetrain: this.toNullableString(detailsSource.drivetrain),
-            seats: this.toNullableInt(detailsSource.seats),
-            numberOfDoors: this.toNullableInt(detailsSource.numberOfDoors),
-            bodyType: this.toNullableString(detailsSource.bodyType),
-            emissionGroup: this.toNullableString(detailsSource.emissionGroup),
-            contact: normalizedContact,
-            customsPaid: normalizedCustomsPaid,
-            sold,
-            type: normalizedType,
-            promotionTo: existingPromotionTo,
-            highlightedTo: existingHighlightedTo,
-            renewTo: existingRenewTo,
-            renewInterval: existingRenewInterval,
-            renewedTime: existingRenewedTime,
-            mostWantedTo: existingMostWantedTo,
-          },
-          create: {
-            id: postIdBigInt,
-            dateCreated: now,
-            deleted: sold ? '1' : '0',
-            caption: encodedCaption,
-            cleanedCaption,
-            createdTime: BigInt(createdTime),
-            sidecarMedias: JSON.stringify(sidecar),
-            likesCount: normalizedLikes,
-            viewsCount: 0,
-            accountName: vendor.accountName,
-            vendorId,
-            profilePicture: vendor.profilePicture,
-            make: this.toNullableString(detailsSource.make),
-            model: this.toNullableString(detailsSource.model),
-            variant: this.toNullableString(detailsSource.variant),
-            registration: this.toNullableString(detailsSource.registration),
-            mileage: this.toNullableInt(detailsSource.mileage),
-            price: this.toNullableInt(detailsSource.price),
-            transmission: this.toNullableString(detailsSource.transmission),
-            fuelType: this.toNullableString(detailsSource.fuelType),
-            engineSize: normalizedEngineSize,
-            drivetrain: this.toNullableString(detailsSource.drivetrain),
-            seats: this.toNullableInt(detailsSource.seats),
-            numberOfDoors: this.toNullableInt(detailsSource.numberOfDoors),
-            bodyType: this.toNullableString(detailsSource.bodyType),
-            emissionGroup: this.toNullableString(detailsSource.emissionGroup),
-            contact: normalizedContact,
-            customsPaid: normalizedCustomsPaid,
-            sold,
-            type: normalizedType,
-            promotionTo: existingPromotionTo,
-            highlightedTo: existingHighlightedTo,
-            renewTo: existingRenewTo,
-            renewInterval: existingRenewInterval,
-            renewedTime: existingRenewedTime,
-            mostWantedTo: existingMostWantedTo,
-          },
-        });
       });
 
       return legacySuccess({ postId }, 'Post saved successfully');
@@ -1021,6 +931,7 @@ export class LocalPostOrderService {
     sidecarInput: unknown[],
     vendorId: bigint,
     postId: string,
+    existingSidecarRaw?: unknown,
   ): Promise<
     Array<{ imageStandardResolutionUrl: string; imageThumbnailUrl: string }>
   > {
@@ -1028,43 +939,90 @@ export class LocalPostOrderService {
 
     const vendorFolder = resolve(this.mediaRoot, vendorId.toString(), postId);
     await mkdir(vendorFolder, { recursive: true });
+    const existingSidecar = this.parseExistingSidecar(existingSidecarRaw);
+    const existingById = new Map<
+      string,
+      { imageStandardResolutionUrl: string; imageThumbnailUrl: string }
+    >();
+    for (const item of existingSidecar) {
+      const derivedId = this.extractMediaIdFromPaths(
+        item.imageStandardResolutionUrl,
+        item.imageThumbnailUrl,
+      );
+      if (derivedId && !existingById.has(derivedId)) {
+        existingById.set(derivedId, item);
+      }
+    }
 
     const results: Array<{
       imageStandardResolutionUrl: string;
       imageThumbnailUrl: string;
     }> = [];
 
-    for (const item of sidecarInput) {
+    for (const [index, item] of sidecarInput.entries()) {
       const media = (item ?? {}) as AnyRecord;
       const sourceUrl = this.toSafeString(media.imageStandardResolutionUrl);
       const type = this.toSafeString(media.type) || 'image';
-      if (!sourceUrl || type !== 'image') continue;
+      if (type !== 'image') continue;
 
-      const mediaId =
-        this.toSafeString(media.id) || this.generateRandomCode(18, true);
+      const mediaId = this.toSafeString(media.id);
+
+      if (!sourceUrl) {
+        const existingMatch =
+          (mediaId ? existingById.get(mediaId) : null) ??
+          existingSidecar[index] ??
+          null;
+        if (existingMatch) {
+          results.push(existingMatch);
+          continue;
+        }
+        if (!mediaId) {
+          continue;
+        }
+
+        const standardRelativePath = join(
+          'media',
+          vendorId.toString(),
+          postId,
+          `${mediaId}_standard.webp`,
+        ).replace(/\\/g, '/');
+        const thumbnailRelativePath = join(
+          'media',
+          vendorId.toString(),
+          postId,
+          `${mediaId}_thumbnail.webp`,
+        ).replace(/\\/g, '/');
+        results.push({
+          imageStandardResolutionUrl: standardRelativePath,
+          imageThumbnailUrl: thumbnailRelativePath,
+        });
+        continue;
+      }
+
+      const resolvedMediaId = mediaId || this.generateRandomCode(18, true);
       const standardRelativePath = join(
         'media',
         vendorId.toString(),
         postId,
-        `${mediaId}_standard.webp`,
+        `${resolvedMediaId}_standard.webp`,
       );
       const thumbnailRelativePath = join(
         'media',
         vendorId.toString(),
         postId,
-        `${mediaId}_thumbnail.webp`,
+        `${resolvedMediaId}_thumbnail.webp`,
       );
       const standardPath = resolve(
         this.mediaRoot,
         vendorId.toString(),
         postId,
-        `${mediaId}_standard.webp`,
+        `${resolvedMediaId}_standard.webp`,
       );
       const thumbnailPath = resolve(
         this.mediaRoot,
         vendorId.toString(),
         postId,
-        `${mediaId}_thumbnail.webp`,
+        `${resolvedMediaId}_thumbnail.webp`,
       );
 
       const sourceBuffer = await this.readMediaBuffer(sourceUrl);
@@ -1086,6 +1044,62 @@ export class LocalPostOrderService {
     }
 
     return results;
+  }
+
+  private parseExistingSidecar(
+    raw: unknown,
+  ): Array<{ imageStandardResolutionUrl: string; imageThumbnailUrl: string }> {
+    let parsed: unknown = raw;
+    if (typeof parsed === 'string') {
+      const trimmed = parsed.trim();
+      if (!trimmed) return [];
+      try {
+        parsed = JSON.parse(trimmed);
+      } catch {
+        return [];
+      }
+    }
+
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    const results: Array<{
+      imageStandardResolutionUrl: string;
+      imageThumbnailUrl: string;
+    }> = [];
+    for (const item of parsed) {
+      if (!item || typeof item !== 'object') continue;
+      const media = item as AnyRecord;
+      const standard = this.toSafeString(media.imageStandardResolutionUrl);
+      const thumbnail = this.toSafeString(media.imageThumbnailUrl);
+      if (!standard && !thumbnail) continue;
+      results.push({
+        imageStandardResolutionUrl: standard,
+        imageThumbnailUrl: thumbnail,
+      });
+    }
+
+    return results;
+  }
+
+  private extractMediaIdFromPaths(
+    standardPath: string,
+    thumbnailPath: string,
+  ): string | null {
+    for (const candidate of [standardPath, thumbnailPath]) {
+      const value = this.toSafeString(candidate);
+      if (!value) continue;
+      const fileName = value.split('/').pop() ?? '';
+      if (!fileName) continue;
+      if (fileName.endsWith('_standard.webp')) {
+        return fileName.slice(0, -'_standard.webp'.length);
+      }
+      if (fileName.endsWith('_thumbnail.webp')) {
+        return fileName.slice(0, -'_thumbnail.webp'.length);
+      }
+    }
+    return null;
   }
 
   private async readMediaBuffer(sourceUrl: string): Promise<Buffer | null> {

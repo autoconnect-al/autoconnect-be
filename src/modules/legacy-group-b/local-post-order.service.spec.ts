@@ -208,8 +208,8 @@ describe('LocalPostOrderService.captureOrder promotion writes', () => {
   });
 });
 
-describe('LocalPostOrderService.updatePost search promotion parity', () => {
-  it('keeps existing post promotion fields in search projection on update', async () => {
+describe('LocalPostOrderService.updatePost search projection policy', () => {
+  it('does not update search projection on update', async () => {
     const tx = {
       post: {
         update: jest.fn().mockResolvedValue({}),
@@ -233,12 +233,6 @@ describe('LocalPostOrderService.updatePost search promotion parity', () => {
         findUnique: jest.fn().mockResolvedValue({
           id: 100n,
           vendor_id: 200n,
-          promotionTo: 1700000010,
-          highlightedTo: 1700000020,
-          renewTo: 1700000030,
-          renewInterval: 'weekly',
-          renewedTime: 1700000040,
-          mostWantedTo: 1700000050,
         }),
       },
       $transaction: jest
@@ -273,15 +267,102 @@ describe('LocalPostOrderService.updatePost search promotion parity', () => {
     });
 
     expect(response.success).toBe(true);
-    expect(tx.search.upsert).toHaveBeenCalledWith(
+    expect(tx.search.upsert).not.toHaveBeenCalled();
+  });
+
+  it('preserves existing sidecar items with empty image urls in the sent order', async () => {
+    const tx = {
+      post: {
+        update: jest.fn().mockResolvedValue({}),
+      },
+      car_detail: {
+        upsert: jest.fn().mockResolvedValue({}),
+      },
+    };
+
+    const firstId = '3836079458541428547-thumb.webp';
+    const secondId = '3836079463893356869-thumb.webp';
+
+    const prisma = {
+      vendor: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 200n,
+          accountName: 'vendor-a',
+          profilePicture: null,
+        }),
+      },
+      post: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 100n,
+          vendor_id: 200n,
+          sidecarMedias: JSON.stringify([
+            {
+              imageStandardResolutionUrl: `media/200/100/${secondId}_standard.webp`,
+              imageThumbnailUrl: `media/200/100/${secondId}_thumbnail.webp`,
+            },
+            {
+              imageStandardResolutionUrl: `media/200/100/${firstId}_standard.webp`,
+              imageThumbnailUrl: `media/200/100/${firstId}_thumbnail.webp`,
+            },
+          ]),
+        }),
+      },
+      $transaction: jest
+        .fn()
+        .mockImplementation(async (fn: (tx: any) => Promise<unknown>) => fn(tx)),
+    } as any;
+
+    const paymentProvider = {
+      createOrder: jest.fn(),
+      captureOrder: jest.fn(),
+    } as any;
+
+    const service = new LocalPostOrderService(
+      prisma,
+      {} as any,
+      paymentProvider,
+    );
+
+    const response = await service.updatePost({
+      vendorId: '200',
+      post: {
+        id: '100',
+        caption: 'test caption',
+        sidecarMedias: [
+          {
+            id: firstId,
+            imageStandardResolutionUrl: '',
+            type: 'image',
+          },
+          {
+            id: secondId,
+            imageStandardResolutionUrl: '',
+            type: 'image',
+          },
+        ],
+        cardDetails: {
+          make: 'BMW',
+          model: 'X5',
+          sold: false,
+          price: 10000,
+        },
+      },
+    });
+
+    expect(response.success).toBe(true);
+    expect(tx.post.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        update: expect.objectContaining({
-          promotionTo: 1700000010,
-          highlightedTo: 1700000020,
-          renewTo: 1700000030,
-          renewInterval: 'weekly',
-          renewedTime: 1700000040,
-          mostWantedTo: 1700000050,
+        data: expect.objectContaining({
+          sidecarMedias: JSON.stringify([
+            {
+              imageStandardResolutionUrl: `media/200/100/${firstId}_standard.webp`,
+              imageThumbnailUrl: `media/200/100/${firstId}_thumbnail.webp`,
+            },
+            {
+              imageStandardResolutionUrl: `media/200/100/${secondId}_standard.webp`,
+              imageThumbnailUrl: `media/200/100/${secondId}_thumbnail.webp`,
+            },
+          ]),
         }),
       }),
     );
