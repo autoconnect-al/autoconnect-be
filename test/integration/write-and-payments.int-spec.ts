@@ -42,7 +42,7 @@ describe('Integration: write flows and payments', () => {
     await disconnectDatabase();
   });
 
-  it('POST /data/create-post persists post, car_detail, and search rows', async () => {
+  it('POST /data/create-post persists post and car_detail rows only', async () => {
     await seedVendor(prisma);
     const payload = buildCreatePostPayload();
 
@@ -75,8 +75,7 @@ describe('Integration: write flows and payments', () => {
     expect(details).toBeTruthy();
     expect(details?.price).toBe(15500);
 
-    expect(search).toBeTruthy();
-    expect(search?.price).toBe(15500);
+    expect(search).toBeNull();
   });
 
   it('POST /data/create-post returns legacy error envelope and does not write rows for invalid payload', async () => {
@@ -95,7 +94,7 @@ describe('Integration: write flows and payments', () => {
     expect(postCount).toBe(0);
   });
 
-  it('POST /data/update-post updates existing row graph', async () => {
+  it('POST /data/update-post updates post and car_detail without syncing search', async () => {
     await seedVendor(prisma);
     await seedPostGraph(prisma);
 
@@ -128,7 +127,7 @@ describe('Integration: write flows and payments', () => {
 
     expect(post?.cleanedCaption).toBe('Updated caption from integration');
     expect(details?.price).toBe(19000);
-    expect(search?.price).toBe(19000);
+    expect(search?.price).toBeNull();
   });
 
   it('POST /data/update-post does not allow untrusted promotion field overwrites', async () => {
@@ -228,7 +227,7 @@ describe('Integration: write flows and payments', () => {
 
     expect(post?.vendor_id).toBe(vendor?.id);
     expect(details?.post_id).toBe(postId);
-    expect(search?.id).toBe(postId);
+    expect(search).toBeNull();
   });
 
   it('POST /data/create-user-post returns legacy 500 envelope for missing user email', async () => {

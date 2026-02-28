@@ -528,7 +528,7 @@ describe('Integration: legacy-ap admin/tooling surfaces', () => {
     const updatedPost = await prisma.post.findUnique({ where: { id: 9972n } });
     const updatedSearch = await prisma.search.findUnique({ where: { id: 9972n } });
     expect(updatedPost?.cleanedCaption).toBe('AP updated post');
-    expect(updatedSearch?.price).toBe(22000);
+    expect(updatedSearch).toBeNull();
 
     await seedVendor(prisma, 9703n, { accountName: 'vendor-admin-target' });
     await request(app.getHttpServer())
