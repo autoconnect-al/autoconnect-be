@@ -99,38 +99,7 @@ Examples:
 - `/vendor-management/all?code=your-secret-code`
 - `/car-details/generate-prompt?code=your-secret-code`
 
-## Contract Diff Runner
-
-Run both services locally:
-- PHP legacy backend (default expected at `http://localhost:8000`)
-- Nest rewrite (default expected at `http://localhost:3000`)
-
-Then execute:
-```bash
-npm run contract:diff
-```
-
-Override base URLs if needed:
-```bash
-PHP_BASE_URL=http://localhost:8080 NEST_BASE_URL=http://localhost:3001 npm run contract:diff
-```
-
-Report output:
-- `test/contracts/report.json`
-
-### AP Endpoint Contract Suites
-
-Generate AP case fixtures:
-```bash
-npm run contract:cases:ap
-```
-
-Run AP suites independently:
-```bash
-npm run contract:diff:ap:auth
-npm run contract:diff:ap:admin
-npm run contract:diff:ap:tooling
-```
+## AP Endpoint Ownership Matrix
 
 Generate AP endpoint ownership matrix:
 ```bash
@@ -139,6 +108,11 @@ npm run contract:matrix:ap
 
 Output:
 - `docs/migration/ap-endpoint-matrix.json`
+
+## Test Strategy
+
+Contract diff suites are deprecated and removed from active workflows.  
+Integration tests (`npm run test:int`) are the parity and regression source of truth.
 
 ## Deferred Proxy Groups
 

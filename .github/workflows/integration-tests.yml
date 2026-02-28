@@ -10,6 +10,12 @@ on:
       - 'src/modules/legacy-admin/**'
       - 'src/modules/legacy-ap/**'
       - 'src/modules/legacy-data/**'
+      - 'src/modules/legacy-docs/**'
+      - 'src/modules/legacy-favourites/**'
+      - 'src/modules/imports/**'
+      - 'src/modules/legacy-group-a/**'
+      - 'src/modules/legacy-search/**'
+      - 'src/modules/legacy-sitemap/**'
       - 'src/modules/legacy-group-b/**'
       - 'src/modules/legacy-payments/**'
       - 'src/database/**'
@@ -43,6 +49,8 @@ jobs:
       AUTOCONNECT_BASE_URL: http://127.0.0.1:3000
       AUTOCONNECT_CODE: integration-autoconnect-code
       IMPORT_QUEUE_ENABLED: 'false'
+      SHOW_LOGS: 'false'
+      INTEGRATION_SUPPRESS_LOGS: 'true'
 
     steps:
       - name: Checkout

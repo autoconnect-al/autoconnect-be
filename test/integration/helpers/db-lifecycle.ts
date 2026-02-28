@@ -12,6 +12,7 @@ const RESET_TABLES_IN_DELETE_ORDER = [
   'vendor',
   'user',
   'role',
+  'car_make_model',
 ];
 let prisma: PrismaService | null = null;
 let didRunMigrations = false;

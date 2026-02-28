@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { DatabaseModule } from './database/database.module';
 import { LegacyAuthModule } from './modules/legacy-auth/legacy-auth.module';
 import { LegacySearchModule } from './modules/legacy-search/legacy-search.module';
@@ -55,6 +56,7 @@ function validateEnvironment(config: Record<string, unknown>) {
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnvironment }),
+    ScheduleModule.forRoot(),
     DatabaseModule,
     LegacyAuthModule,
     LegacySearchModule,

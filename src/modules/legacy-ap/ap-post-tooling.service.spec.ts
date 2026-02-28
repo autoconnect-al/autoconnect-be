@@ -85,6 +85,111 @@ describe('ApPostToolingService', () => {
     expect(row.car_detail_car_detail_post_idTopost).toBeUndefined();
   });
 
+  it('getPostsByIds should skip rows when either post or car_detail is deleted', async () => {
+    const prisma = {
+      post: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 11n,
+            caption: Buffer.from('Visible').toString('base64'),
+            cleanedCaption: 'Visible',
+            sidecarMedias: '[]',
+            createdTime: '1770995188',
+            likesCount: 10,
+            viewsCount: 20,
+            status: 'TO_BE_PUBLISHED',
+            origin: 'INSTAGRAM',
+            revalidate: false,
+            vendor_id: 2n,
+            deleted: false,
+            vendor: {
+              id: 2n,
+              accountName: 'vendor.a',
+              profilePicture: null,
+              biography: null,
+              contact: null,
+            },
+            car_detail_post_car_detail_idTocar_detail: null,
+            car_detail_car_detail_post_idTopost: [
+              {
+                deleted: false,
+                make: 'BMW',
+              },
+            ],
+          },
+          {
+            id: 12n,
+            caption: Buffer.from('Deleted details').toString('base64'),
+            cleanedCaption: 'Deleted details',
+            sidecarMedias: '[]',
+            createdTime: '1770995188',
+            likesCount: 10,
+            viewsCount: 20,
+            status: 'TO_BE_PUBLISHED',
+            origin: 'INSTAGRAM',
+            revalidate: false,
+            vendor_id: 2n,
+            deleted: false,
+            vendor: {
+              id: 2n,
+              accountName: 'vendor.a',
+              profilePicture: null,
+              biography: null,
+              contact: null,
+            },
+            car_detail_post_car_detail_idTocar_detail: null,
+            car_detail_car_detail_post_idTopost: [
+              {
+                deleted: true,
+                make: 'BMW',
+              },
+            ],
+          },
+          {
+            id: 13n,
+            caption: Buffer.from('Deleted post').toString('base64'),
+            cleanedCaption: 'Deleted post',
+            sidecarMedias: '[]',
+            createdTime: '1770995188',
+            likesCount: 10,
+            viewsCount: 20,
+            status: 'TO_BE_PUBLISHED',
+            origin: 'INSTAGRAM',
+            revalidate: false,
+            vendor_id: 2n,
+            deleted: true,
+            vendor: {
+              id: 2n,
+              accountName: 'vendor.a',
+              profilePicture: null,
+              biography: null,
+              contact: null,
+            },
+            car_detail_post_car_detail_idTocar_detail: null,
+            car_detail_car_detail_post_idTopost: [
+              {
+                deleted: false,
+                make: 'BMW',
+              },
+            ],
+          },
+        ]),
+      },
+    } as any;
+
+    const service = new ApPostToolingService(prisma, {} as any);
+    const response = await service.getPostsByIds('11,12,13');
+
+    expect(response.success).toBe(true);
+    expect(response.result).toHaveLength(1);
+    expect((response.result as Array<Record<string, unknown>>)[0]).toEqual(
+      expect.objectContaining({
+        id: '11',
+        caption: 'Visible',
+      }),
+    );
+  });
+
   it('calculates minPrice/maxPrice from similar posts', async () => {
     const prisma = {
       $queryRaw: jest.fn().mockResolvedValue([

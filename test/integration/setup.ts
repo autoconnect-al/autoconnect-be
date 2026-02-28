@@ -25,9 +25,13 @@ process.env.AUTOCONNECT_BASE_URL =
 process.env.AUTOCONNECT_CODE =
   process.env.AUTOCONNECT_CODE?.trim() || 'integration-autoconnect-code';
 process.env.IMPORT_QUEUE_ENABLED = 'false';
+process.env.SHOW_LOGS = 'false';
 
 const ALLOWLISTED_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 const originalFetch = global.fetch.bind(globalThis);
+const originalConsoleLog = console.log.bind(console);
+const originalConsoleWarn = console.warn.bind(console);
+const originalConsoleError = console.error.bind(console);
 
 function toUrl(input: string | URL | Request): URL | null {
   try {
@@ -63,4 +67,34 @@ global.fetch = async (
   }
 
   return originalFetch(input as any, init);
+};
+
+function shouldSuppressConsoleLine(value: unknown): boolean {
+  if (String(process.env.INTEGRATION_SUPPRESS_LOGS ?? 'true') === 'false') {
+    return false;
+  }
+  if (typeof value !== 'string') return false;
+  if (value.startsWith('[dotenv@')) return true;
+  if (
+    value.startsWith('{"ts":"') &&
+    value.includes('Outbound network is blocked in integration tests:')
+  ) {
+    return true;
+  }
+  return false;
+}
+
+console.log = (...args: unknown[]) => {
+  if (shouldSuppressConsoleLine(args[0])) return;
+  originalConsoleLog(...(args as []));
+};
+
+console.warn = (...args: unknown[]) => {
+  if (shouldSuppressConsoleLine(args[0])) return;
+  originalConsoleWarn(...(args as []));
+};
+
+console.error = (...args: unknown[]) => {
+  if (shouldSuppressConsoleLine(args[0])) return;
+  originalConsoleError(...(args as []));
 };
