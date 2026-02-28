@@ -17,7 +17,7 @@ export class ImageDownloadService {
   private readonly baseUploadDir = process.env.UPLOAD_DIR || './tmp/uploads';
   private readonly baseProdPath = '/var/www/backend_main/'; // Production path prefix to remove
   private readonly mainQuality = 90; // Increased for better quality
-  private readonly thumbnailSize = 400; // Increased size for better quality
+  private readonly thumbnailSize = 500; // Increased size for better quality
   private readonly thumbnailQuality = 85; // Increased quality
   private readonly metadataSize = 200; // Increased size for better quality
   private readonly metadataQuality = 80; // Increased quality
