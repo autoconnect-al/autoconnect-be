@@ -62,63 +62,58 @@ export class ApPostToolingService {
       },
     });
 
-    const mapped = rows.map((row) => {
-      const details =
-        row.car_detail_post_car_detail_idTocar_detail ??
-        row.car_detail_car_detail_post_idTopost?.find(
-          (item) => item.id === row.car_detail_id,
-        ) ??
-        row.car_detail_car_detail_post_idTopost?.find(
-          (item) => item.post_id === row.id,
-        ) ??
-        row.car_detail_car_detail_post_idTopost?.[0] ??
-        null;
-      return this.normalizeBigInts({
-        id: row.id,
-        caption: row.caption
-          ? Buffer.from(row.caption, 'base64').toString('utf8')
-          : row.caption,
-        cleanedCaption: row.cleanedCaption,
-        sidecarMedias: row.sidecarMedias,
-        createdTime: row.createdTime,
-        likesCount: row.likesCount,
-        viewsCount: row.viewsCount,
-        status: row.status,
-        origin: row.origin,
-        promotionTo: row.promotionTo,
-        highlightedTo: row.highlightedTo,
-        renewTo: row.renewTo,
-        renewInterval: row.renewInterval,
-        renewedTime: row.renewedTime,
-        mostWantedTo: row.mostWantedTo,
-        make: details?.make ?? null,
-        model: details?.model ?? null,
-        variant: details?.variant ?? null,
-        registration: details?.registration ?? null,
-        price: details?.price ?? null,
-        mileage: details?.mileage ?? null,
-        fuelType: details?.fuelType ?? null,
-        engineSize: details?.engineSize ?? null,
-        sold: details?.sold ?? null,
-        contact: details?.contact ?? null,
-        transmission: details?.transmission ?? null,
-        drivetrain: details?.drivetrain ?? null,
-        seats: details?.seats ?? null,
-        numberOfDoors: details?.numberOfDoors ?? null,
-        bodyType: details?.bodyType ?? null,
-        customsPaid: details?.customsPaid ?? null,
-        type: details?.type ?? null,
-        vendorId: row.vendor?.id ?? row.vendor_id,
-        accountName: row.vendor?.accountName ?? null,
-        profilePicture: row.vendor?.profilePicture ?? null,
-        biography: row.vendor?.biography ?? null,
-        vendorContact: row.vendor?.contact ?? null,
-        priceVerified: details?.priceVerified ?? null,
-        mileageVerified: details?.mileageVerified ?? null,
-        fuelVerified: details?.fuelVerified ?? null,
-        revalidate: row.revalidate,
-      });
-    });
+    const mapped = rows
+      .map((row) => {
+        const details = this.resolveCarDetails(row);
+        if (this.isDeletedPostGraph(row, details)) return null;
+
+        return this.normalizeBigInts({
+          id: row.id,
+          caption: row.caption
+            ? Buffer.from(row.caption, 'base64').toString('utf8')
+            : row.caption,
+          cleanedCaption: row.cleanedCaption,
+          sidecarMedias: row.sidecarMedias,
+          createdTime: row.createdTime,
+          likesCount: row.likesCount,
+          viewsCount: row.viewsCount,
+          status: row.status,
+          origin: row.origin,
+          promotionTo: row.promotionTo,
+          highlightedTo: row.highlightedTo,
+          renewTo: row.renewTo,
+          renewInterval: row.renewInterval,
+          renewedTime: row.renewedTime,
+          mostWantedTo: row.mostWantedTo,
+          make: details?.make ?? null,
+          model: details?.model ?? null,
+          variant: details?.variant ?? null,
+          registration: details?.registration ?? null,
+          price: details?.price ?? null,
+          mileage: details?.mileage ?? null,
+          fuelType: details?.fuelType ?? null,
+          engineSize: details?.engineSize ?? null,
+          sold: details?.sold ?? null,
+          contact: details?.contact ?? null,
+          transmission: details?.transmission ?? null,
+          drivetrain: details?.drivetrain ?? null,
+          seats: details?.seats ?? null,
+          numberOfDoors: details?.numberOfDoors ?? null,
+          bodyType: details?.bodyType ?? null,
+          customsPaid: details?.customsPaid ?? null,
+          type: details?.type ?? null,
+          vendorId: row.vendor?.id ?? row.vendor_id,
+          accountName: row.vendor?.accountName ?? null,
+          profilePicture: row.vendor?.profilePicture ?? null,
+          biography: row.vendor?.biography ?? null,
+          vendorContact: row.vendor?.contact ?? null,
+          priceVerified: details?.priceVerified ?? null,
+          mileageVerified: details?.mileageVerified ?? null,
+          fuelVerified: details?.fuelVerified ?? null,
+          revalidate: row.revalidate,
+        });
+      })
+      .filter((row): row is NonNullable<typeof row> => row !== null);
     return legacySuccess(mapped);
   }
 
@@ -539,6 +534,24 @@ export class ApPostToolingService {
     }
 
     return null;
+  }
+
+  private resolveCarDetails(row: AnyRecord): AnyRecord | null {
+    return (
+      row.car_detail_post_car_detail_idTocar_detail ??
+      (row.car_detail_car_detail_post_idTopost as Array<AnyRecord> | undefined)?.find(
+        (item) => item.id === row.car_detail_id,
+      ) ??
+      (row.car_detail_car_detail_post_idTopost as Array<AnyRecord> | undefined)?.find(
+        (item) => item.post_id === row.id,
+      ) ??
+      (row.car_detail_car_detail_post_idTopost as Array<AnyRecord> | undefined)?.[0] ??
+      null
+    ) as AnyRecord | null;
+  }
+
+  private isDeletedPostGraph(row: AnyRecord, details: AnyRecord | null): boolean {
+    return Boolean(row.deleted) || Boolean(details?.deleted);
   }
 
   private toSafeString(value: unknown): string {

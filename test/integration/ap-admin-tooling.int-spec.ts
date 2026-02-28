@@ -378,6 +378,26 @@ describe('Integration: legacy-ap admin/tooling surfaces', () => {
         }),
       ],
     });
+
+    await prisma.car_detail.update({
+      where: { id: 9901n },
+      data: { deleted: true },
+    });
+    await prisma.post.update({
+      where: { id: 9901n },
+      data: { deleted: false },
+    });
+
+    const deletedFromDetails = await request(app.getHttpServer())
+      .get('/post/posts?ids=9901')
+      .set('x-admin-code', 'integration-ap-admin-code')
+      .expect(200);
+
+    expect(deletedFromDetails.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+      result: [],
+    });
   });
 
   it('vendor-management crawl and toggle endpoints update expected vendor/post states', async () => {

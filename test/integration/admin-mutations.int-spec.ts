@@ -134,6 +134,31 @@ describe('Integration: admin mutations', () => {
     });
   });
 
+  it('GET /admin/posts/:id treats row as deleted when car_detail.deleted is true', async () => {
+    await seedAdminIdentity();
+    await seedPostGraph(prisma, { postId: ADMIN_POST_ID, vendorId: ADMIN_VENDOR_ID });
+    await prisma.post.update({
+      where: { id: ADMIN_POST_ID },
+      data: { deleted: false },
+    });
+    await prisma.car_detail.update({
+      where: { id: ADMIN_POST_ID },
+      data: { deleted: true },
+    });
+
+    const adminToken = await issueAdminToken();
+    const response = await request(app.getHttpServer())
+      .get(`/admin/posts/${ADMIN_POST_ID.toString()}`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(response.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+      result: null,
+    });
+  });
+
   it('DELETE /admin/posts/:id marks post graph as deleted', async () => {
     await seedAdminIdentity();
     await seedPostGraph(prisma, { postId: ADMIN_POST_ID, vendorId: ADMIN_VENDOR_ID });

@@ -32,8 +32,16 @@ export class LegacyAdminService {
       },
     } as any);
 
+    const visibleRows = rows
+      .map((row) => {
+        const details = this.resolveCarDetails(row);
+        if (this.isDeletedPostGraph(row, details)) return null;
+        return this.toAdminPostReadModel(row, details);
+      })
+      .filter((row): row is NonNullable<typeof row> => row !== null);
+
     return legacySuccess(
-      this.normalizeBigInts(rows.map((row) => this.toAdminPostReadModel(row))),
+      this.normalizeBigInts(visibleRows),
     );
   }
 
@@ -56,7 +64,12 @@ export class LegacyAdminService {
       return legacySuccess(this.normalizeBigInts(null));
     }
 
-    return legacySuccess(this.normalizeBigInts(this.toAdminPostReadModel(row)));
+    const details = this.resolveCarDetails(row);
+    if (this.isDeletedPostGraph(row, details)) {
+      return legacySuccess(this.normalizeBigInts(null));
+    }
+
+    return legacySuccess(this.normalizeBigInts(this.toAdminPostReadModel(row, details)));
   }
 
   async getUser(userId: string) {
@@ -160,17 +173,7 @@ export class LegacyAdminService {
     return this.localPostOrderService.markAsSold(id, userId);
   }
 
-  private toAdminPostReadModel(row: any) {
-    const details =
-      row.car_detail_post_car_detail_idTocar_detail ??
-      row.car_detail_car_detail_post_idTopost?.find(
-        (item: any) => item.id === row.car_detail_id,
-      ) ??
-      row.car_detail_car_detail_post_idTopost?.find(
-        (item: any) => item.post_id === row.id,
-      ) ??
-      row.car_detail_car_detail_post_idTopost?.[0] ??
-      null;
+  private toAdminPostReadModel(row: any, details = this.resolveCarDetails(row)) {
 
     return {
       id: row.id,
@@ -222,6 +225,24 @@ export class LegacyAdminService {
       contactEmail: row.contactEmail ?? 0,
       contactInstagram: row.contactInstagram ?? 0,
     };
+  }
+
+  private resolveCarDetails(row: any) {
+    return (
+      row.car_detail_post_car_detail_idTocar_detail ??
+      row.car_detail_car_detail_post_idTopost?.find(
+        (item: any) => item.id === row.car_detail_id,
+      ) ??
+      row.car_detail_car_detail_post_idTopost?.find(
+        (item: any) => item.post_id === row.id,
+      ) ??
+      row.car_detail_car_detail_post_idTopost?.[0] ??
+      null
+    );
+  }
+
+  private isDeletedPostGraph(row: any, details: any) {
+    return Boolean(row?.deleted) || Boolean(details?.deleted);
   }
 
   private normalizeBigInts<T>(input: T): T {
