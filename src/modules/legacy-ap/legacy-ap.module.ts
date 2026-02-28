@@ -25,6 +25,7 @@ import {
 import { ApArticleService } from './ap-article.service';
 import { ApMakeModelService } from './ap-make-model.service';
 import { ApPaymentReminderService } from './ap-payment-reminder.service';
+import { ApMaintenanceCronService } from './ap-maintenance-cron.service';
 import { ApPostToolingService } from './ap-post-tooling.service';
 import { ApPromptRepository } from './ap-prompt.repository';
 import { ApPromptService } from './ap-prompt.service';
@@ -54,6 +55,7 @@ import { ApVendorManagementService } from './ap-vendor-management.service';
     ApMakeModelService,
     ApSitemapAdminService,
     ApPaymentReminderService,
+    ApMaintenanceCronService,
     ApVendorManagementService,
     ApRoleService,
     ApUserVendorService,
