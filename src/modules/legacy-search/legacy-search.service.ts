@@ -148,25 +148,30 @@ export class LegacySearchService {
     const excludeIdValues = this.queryBuilder.parseCsvValues(excludeIds);
     const excludeAccountValues = this.queryBuilder.parseCsvValues(excludedAccounts);
 
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const clauses: string[] = ['sold = 0', "(deleted = '0' OR deleted = 0)"];
-    const params: unknown[] = [sevenDaysAgo];
-    clauses.push('dateCreated > ?');
+    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    const clauses: string[] = [
+      's.sold = 0',
+      "(s.deleted = '0' OR s.deleted = 0)",
+      'p.deleted = 0',
+      'p.dateCreated > ?',
+    ];
+    const params: unknown[] = [twoDaysAgo];
     if (excludeIdValues.length > 0) {
-      clauses.push(`id NOT IN (${excludeIdValues.map(() => '?').join(',')})`);
+      clauses.push(`s.id NOT IN (${excludeIdValues.map(() => '?').join(',')})`);
       params.push(...excludeIdValues);
     }
     if (excludeAccountValues.length > 0) {
       clauses.push(
-        `accountName NOT IN (${excludeAccountValues.map(() => '?').join(',')})`,
+        `s.accountName NOT IN (${excludeAccountValues.map(() => '?').join(',')})`,
       );
       params.push(...excludeAccountValues);
     }
 
-    const query = `SELECT id, make, model, variant, registration, mileage, price, transmission, fuelType, engineSize, drivetrain, seats, numberOfDoors, bodyType, customsPaid, canExchange, options, emissionGroup, type, accountName, sidecarMedias, contact, vendorContact, profilePicture, vendorId, promotionTo, highlightedTo, renewTo, renewInterval, renewedTime, mostWantedTo
-      FROM search
+    const query = `SELECT s.id, s.make, s.model, s.variant, s.registration, s.mileage, s.price, s.transmission, s.fuelType, s.engineSize, s.drivetrain, s.seats, s.numberOfDoors, s.bodyType, s.customsPaid, s.canExchange, s.options, s.emissionGroup, s.type, s.accountName, s.sidecarMedias, s.contact, s.vendorContact, s.profilePicture, s.vendorId, s.promotionTo, s.highlightedTo, s.renewTo, s.renewInterval, s.renewedTime, s.mostWantedTo
+      FROM search s
+      INNER JOIN post p ON p.id = s.id
       WHERE ${clauses.join(' AND ')}
-      ORDER BY mostWantedTo DESC
+      ORDER BY s.mostWantedTo DESC, p.clicks DESC
       LIMIT 4`;
     const rows = await this.timeQuery('most_wanted', () =>
       this.prisma.$queryRawUnsafe<unknown[]>(query, ...params),

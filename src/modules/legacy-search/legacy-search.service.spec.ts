@@ -298,6 +298,10 @@ describe('LegacySearchService', () => {
     expect(query).toContain('renewInterval');
     expect(query).toContain('renewedTime');
     expect(query).toContain('mostWantedTo');
+    expect(query).toContain('FROM search s');
+    expect(query).toContain('INNER JOIN post p ON p.id = s.id');
+    expect(query).toContain('p.dateCreated > ?');
+    expect(query).toContain('ORDER BY s.mostWantedTo DESC, p.clicks DESC');
   });
 
   it('getCarDetails should decode base64 caption to text', async () => {
@@ -334,12 +338,32 @@ describe('LegacySearchService', () => {
 
     const call = prisma.$queryRawUnsafe.mock.calls[0];
     const query = call[0] as string;
-    expect(query).toContain('id NOT IN (?,?,?)');
-    expect(query).toContain('accountName NOT IN (?,?)');
+    expect(query).toContain('s.id NOT IN (?,?,?)');
+    expect(query).toContain('s.accountName NOT IN (?,?)');
     expect(query).not.toContain("bar' OR 1=1 --");
     expect(call.slice(2)).toEqual(
       expect.arrayContaining(['1', '2', "'3", 'foo', "bar' OR 1=1 --"]),
     );
+  });
+
+  it('mostWanted should apply a 2-day recency filter', async () => {
+    const prisma = {
+      $queryRawUnsafe: jest.fn().mockResolvedValue([]),
+    } as any;
+    const service = new LegacySearchService(prisma, new LegacySearchQueryBuilder());
+
+    const before = Date.now();
+    await service.mostWanted();
+    const after = Date.now();
+
+    const call = prisma.$queryRawUnsafe.mock.calls[0];
+    const recencyParam = call[1] as Date;
+    expect(recencyParam).toBeInstanceOf(Date);
+
+    const minExpected = before - 2 * 24 * 60 * 60 * 1000;
+    const maxExpected = after - 2 * 24 * 60 * 60 * 1000;
+    expect(recencyParam.getTime()).toBeGreaterThanOrEqual(minExpected);
+    expect(recencyParam.getTime()).toBeLessThanOrEqual(maxExpected);
   });
 
   it('relatedById should use parameterized excluded ids list', async () => {
