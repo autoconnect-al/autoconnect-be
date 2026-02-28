@@ -387,6 +387,17 @@ export class ApPostToolingService {
       lastSeenId = posts[posts.length - 1]?.id ?? null;
     }
 
+    const removedCount = await this.prisma.$executeRaw`
+      DELETE s
+      FROM search s
+      LEFT JOIN post p ON p.id = s.id
+      LEFT JOIN car_detail cd ON cd.post_id = s.id AND cd.deleted = 0
+      WHERE p.id IS NULL OR p.deleted = 1 OR cd.id IS NULL
+    `;
+    this.logger.info('rebuild-search.deleted-graph-pruned', {
+      removedCount: Number(removedCount),
+    });
+
     if (upsertedCount === 0) {
       this.logger.warn('rebuild-search.skip-cleanup.no-upserts', {
         horizonDays: rebuildHorizonDays,

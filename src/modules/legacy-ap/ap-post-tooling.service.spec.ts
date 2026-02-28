@@ -267,6 +267,7 @@ describe('ApPostToolingService', () => {
 
   it('movePostsToSearch marks TO_BE_PUBLISHED posts as PUBLISHED after search upsert', async () => {
     const prisma = {
+      $executeRaw: jest.fn().mockResolvedValue(0),
       post: {
         findMany: jest
           .fn()
@@ -349,10 +350,12 @@ describe('ApPostToolingService', () => {
       }),
     );
     expect(prisma.search.deleteMany).not.toHaveBeenCalled();
+    expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
   });
 
-  it('movePostsToSearch does not prune search when no rows were upserted', async () => {
+  it('movePostsToSearch removes stale deleted graphs even when no rows were upserted', async () => {
     const prisma = {
+      $executeRaw: jest.fn().mockResolvedValue(3),
       post: {
         findMany: jest.fn().mockResolvedValue([]),
         updateMany: jest.fn().mockResolvedValue({ count: 0 }),
@@ -369,5 +372,6 @@ describe('ApPostToolingService', () => {
     expect(response.success).toBe(true);
     expect(prisma.search.upsert).not.toHaveBeenCalled();
     expect(prisma.search.deleteMany).not.toHaveBeenCalled();
+    expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
   });
 });
