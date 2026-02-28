@@ -68,6 +68,9 @@ export class ApPostToolingService {
         row.car_detail_car_detail_post_idTopost?.find(
           (item) => item.id === row.car_detail_id,
         ) ??
+        row.car_detail_car_detail_post_idTopost?.find(
+          (item) => item.post_id === row.id,
+        ) ??
         row.car_detail_car_detail_post_idTopost?.[0] ??
         null;
       return this.normalizeBigInts({

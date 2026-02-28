@@ -100,6 +100,10 @@ describe('Integration: admin mutations', () => {
   it('GET /admin/posts/:id returns post details for owner and null for missing post', async () => {
     await seedAdminIdentity();
     await seedPostGraph(prisma, { postId: ADMIN_POST_ID, vendorId: ADMIN_VENDOR_ID });
+    await prisma.car_detail.update({
+      where: { id: ADMIN_POST_ID },
+      data: { registration: '2026' },
+    });
 
     const adminToken = await issueAdminToken();
 
@@ -114,6 +118,7 @@ describe('Integration: admin mutations', () => {
       result: expect.objectContaining({
         id: ADMIN_POST_ID.toString(),
         vendorId: ADMIN_VENDOR_ID.toString(),
+        registration: '2026',
       }),
     });
 

@@ -344,6 +344,23 @@ describe('Integration: legacy-ap admin/tooling surfaces', () => {
 
     await seedVendor(prisma, 9305n, { accountName: 'post-tooling-vendor' });
     await seedPostGraph(prisma, { postId: 9901n, vendorId: 9305n });
+    await prisma.car_detail.update({
+      where: { id: 9901n },
+      data: {
+        registration: '2026',
+        price: 22000,
+      },
+    });
+    await prisma.$executeRawUnsafe(
+      `
+      UPDATE search
+      SET registration = ?, price = ?
+      WHERE id = ?
+      `,
+      '1999',
+      1,
+      9901n,
+    );
 
     const withCode = await request(app.getHttpServer())
       .get('/post/posts?ids=9901')
@@ -353,7 +370,13 @@ describe('Integration: legacy-ap admin/tooling surfaces', () => {
     expect(withCode.body).toMatchObject({
       success: true,
       statusCode: '200',
-      result: [expect.objectContaining({ id: '9901' })],
+      result: [
+        expect.objectContaining({
+          id: '9901',
+          registration: '2026',
+          price: 22000,
+        }),
+      ],
     });
   });
 
