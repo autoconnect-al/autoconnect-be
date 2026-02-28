@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { requireEnv } from '../../common/require-env.util';
+import { createLogger } from '../../common/logger.util';
 
 type Post = {
   pk?: number;
@@ -20,11 +22,10 @@ type Post = {
 
 @Injectable()
 export class RemotePostSaverService {
+  private readonly logger = createLogger('remote-post-saver-service');
   // keep same defaults as your script; you can move these to env later
-  private readonly basePath =
-    process.env.AUTOCONNECT_BASE_URL ?? 'https://ap-be.autoconnect.al';
-  private readonly code =
-    process.env.AUTOCONNECT_CODE ?? 'ejkuU89EcU6LinIHVUvhpQz65gY8DOgG';
+  private readonly basePath = requireEnv('AUTOCONNECT_BASE_URL');
+  private readonly code = requireEnv('AUTOCONNECT_CODE');
 
   // Import your existing PostModel from your project (same as save-post.ts)
   // Adjust the path to wherever you keep it in Nest.
@@ -32,21 +33,7 @@ export class RemotePostSaverService {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment,@typescript-eslint/no-require-imports,@typescript-eslint/no-unsafe-member-access
   private readonly PostModel = require('./types/instagram').PostModel;
 
-  async getJwt(): Promise<string> {
-    const resp = await fetch(
-      `${this.basePath}/authentication/login-with-code?code=${this.code}`,
-    );
-    if (!resp.ok) {
-      throw new Error(`Login failed: ${resp.status} ${resp.statusText}`);
-    }
-    const data = (await resp.json()) as { result?: string };
-    if (!data?.result) throw new Error('Login succeeded but no JWT returned');
-    return data.result;
-    // This matches your script’s behavior:
-    // GET `${basePath}/authentication/login-with-code?code=${code}` then jwt = result
-  }
-
-  async savePost(post: Post, jwt: string): Promise<string> {
+  async savePost(post: Post): Promise<string> {
     // Keep script gate:
     if (
       post['product_type'] !== 'carousel_container' &&
@@ -86,20 +73,19 @@ export class RemotePostSaverService {
       vendorId: post.user?.pk ?? 1,
     };
 
-    // Same request as script (note header name):
-    const response = await fetch(
-      `${this.basePath}/post/save-post?code=${this.code}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Http-Authorization': 'Bearer ' + jwt,
-        },
-        body: JSON.stringify(body),
+    // Direct admin header auth; no login-with-code bootstrap.
+    const response = await fetch(`${this.basePath}/post/save-post`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Admin-Code': this.code,
       },
-    ).catch((e) => {
+      body: JSON.stringify(body),
+    }).catch((e) => {
       // script catches errors per request
-      console.error(e);
+      this.logger.error('save post request failed', {
+        error: e instanceof Error ? e.message : String(e),
+      });
     });
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const json = await response?.json();

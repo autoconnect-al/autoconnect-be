@@ -2,6 +2,8 @@ import { PostImportService } from './post-import.service';
 import { PrismaService } from '../../../database/prisma.service';
 
 class MockPrismaService {
+  $executeRawUnsafe = jest.fn();
+  $queryRawUnsafe = jest.fn();
   post = {
     findUnique: jest.fn(),
     upsert: jest.fn(),
@@ -28,6 +30,8 @@ describe('PostImportService.importPost', () => {
 
   beforeEach(() => {
     prisma = new MockPrismaService();
+    prisma.$executeRawUnsafe.mockResolvedValue(1);
+    prisma.$queryRawUnsafe.mockResolvedValue([]);
     service = new PostImportService(
       prisma as unknown as PrismaService,
       new MockOpenAIService() as any,
@@ -111,6 +115,27 @@ describe('PostImportService.importPost', () => {
       data: { post_id: postId },
     });
   });
+
+  it('skips replayed payload when idempotency key+hash is already completed', async () => {
+    const postId = 999n;
+    prisma.$executeRawUnsafe.mockResolvedValueOnce(0);
+    prisma.$queryRawUnsafe.mockResolvedValueOnce([{ status: 'completed' }]);
+
+    const result = await service.importPost(
+      {
+        id: postId.toString(),
+        caption: 'Replay',
+        origin: 'INSTAGRAM',
+        sidecarMedias: [],
+      },
+      1,
+      false,
+      false,
+    );
+
+    expect(result).toBe(postId);
+    expect(prisma.post.upsert).not.toHaveBeenCalled();
+  });
 });
 
 describe('PostImportService.incrementPostMetric', () => {
@@ -141,6 +166,9 @@ describe('PostImportService.incrementPostMetric', () => {
         postOpen: {
           increment: 1,
         },
+        clicks: {
+          increment: 1,
+        },
       },
     });
   });
@@ -164,19 +192,48 @@ describe('PostImportService.incrementPostMetric', () => {
     });
   });
 
-  it('should increment reach metric', async () => {
+  it('should increment reach only once for a unique visitor on impression', async () => {
     const postId = 789n;
-    prisma.post.update.mockResolvedValue({
-      id: postId,
-      reach: 10,
+    prisma.$executeRawUnsafe.mockResolvedValue(1);
+    prisma.post.update.mockResolvedValue({ id: postId });
+
+    await service.incrementPostMetric(postId, 'impressions', {
+      visitorId: 'visitor-1',
     });
 
-    await service.incrementPostMetric(postId, 'reach');
-
-    expect(prisma.post.update).toHaveBeenCalledWith({
+    expect(prisma.post.update).toHaveBeenNthCalledWith(1, {
+      where: { id: postId },
+      data: {
+        impressions: {
+          increment: 1,
+        },
+      },
+    });
+    expect(prisma.$executeRawUnsafe).toHaveBeenCalledTimes(1);
+    expect(prisma.post.update).toHaveBeenNthCalledWith(2, {
       where: { id: postId },
       data: {
         reach: {
+          increment: 1,
+        },
+      },
+    });
+  });
+
+  it('should not increment reach when visitor was already counted for the post', async () => {
+    const postId = 790n;
+    prisma.$executeRawUnsafe.mockResolvedValue(0);
+    prisma.post.update.mockResolvedValue({ id: postId });
+
+    await service.incrementPostMetric(postId, 'impressions', {
+      visitorId: 'visitor-1',
+    });
+
+    expect(prisma.post.update).toHaveBeenCalledTimes(1);
+    expect(prisma.post.update).toHaveBeenCalledWith({
+      where: { id: postId },
+      data: {
+        impressions: {
           increment: 1,
         },
       },
@@ -209,6 +266,30 @@ describe('PostImportService.incrementPostMetric', () => {
       contact: 2,
     });
 
+    await service.incrementPostMetric(postId, 'contact', {
+      contactMethod: 'call',
+    });
+
+    expect(prisma.post.update).toHaveBeenCalledWith({
+      where: { id: postId },
+      data: {
+        contact: {
+          increment: 1,
+        },
+        contactCall: {
+          increment: 1,
+        },
+      },
+    });
+  });
+
+  it('should increment contact metric without method breakdown when method is omitted', async () => {
+    const postId = 223n;
+    prisma.post.update.mockResolvedValue({
+      id: postId,
+      contact: 1,
+    });
+
     await service.incrementPostMetric(postId, 'contact');
 
     expect(prisma.post.update).toHaveBeenCalledWith({
@@ -221,11 +302,118 @@ describe('PostImportService.incrementPostMetric', () => {
     });
   });
 
+  it('should increment legacy reach metric', async () => {
+    const postId = 224n;
+    prisma.post.update.mockResolvedValue({ id: postId, reach: 5 });
+
+    await service.incrementPostMetric(postId, 'reach');
+
+    expect(prisma.post.update).toHaveBeenCalledWith({
+      where: { id: postId },
+      data: {
+        reach: {
+          increment: 1,
+        },
+      },
+    });
+  });
+
+  it('should throw error for invalid contact method', async () => {
+    const postId = 225n;
+
+    await expect(
+      service.incrementPostMetric(postId, 'contact', {
+        contactMethod: 'sms' as any,
+      }),
+    ).rejects.toThrow('Invalid contact method');
+  });
+
   it('should throw error for invalid metric', async () => {
     const postId = 123n;
 
     await expect(
       service.incrementPostMetric(postId, 'invalid' as any),
     ).rejects.toThrow('Invalid metric: invalid');
+  });
+});
+
+describe('PostImportService.importResult promotion guards', () => {
+  let service: PostImportService;
+  let prisma: MockPrismaService;
+
+  beforeEach(() => {
+    prisma = new MockPrismaService();
+    service = new PostImportService(
+      prisma as unknown as PrismaService,
+      new MockOpenAIService() as any,
+      new MockImageDownloadService() as any,
+    );
+  });
+
+  it('does not update promotion fields from AI import payload', async () => {
+    const postId = 123n;
+    prisma.car_detail.findFirst.mockResolvedValue({
+      id: 777n,
+      post_id: postId,
+      model: 'X5',
+      make: 'BMW',
+      variant: null,
+      registration: null,
+      mileage: null,
+      transmission: null,
+      fuelType: null,
+      engineSize: null,
+      drivetrain: null,
+      seats: null,
+      numberOfDoors: null,
+      bodyType: null,
+      price: null,
+      emissionGroup: null,
+      sold: false,
+      customsPaid: false,
+      contact: null,
+      type: 'car',
+      priceVerified: false,
+      mileageVerified: false,
+    });
+    prisma.car_detail.update.mockResolvedValue({});
+    prisma.post.findUnique.mockResolvedValue({
+      id: postId,
+      status: 'TO_BE_PUBLISHED',
+      origin: 'INSTAGRAM',
+      renewTo: 1700000000,
+      highlightedTo: 1700000001,
+      promotionTo: 1700000002,
+      mostWantedTo: 1700000003,
+    });
+    prisma.post.update.mockResolvedValue({});
+
+    const response = await service.importResult(
+      JSON.stringify([
+        {
+          id: '123',
+          make: 'BMW',
+          model: 'X5',
+          renewTo: 1,
+          highlightedTo: 2,
+          promotionTo: 3,
+          mostWantedTo: 4,
+        },
+      ]),
+    );
+
+    expect(response.success).toBe(true);
+    expect(prisma.post.update).toHaveBeenCalledTimes(1);
+    const updateArg = prisma.post.update.mock.calls[0][0];
+    expect(updateArg.data).not.toHaveProperty('renewTo');
+    expect(updateArg.data).not.toHaveProperty('highlightedTo');
+    expect(updateArg.data).not.toHaveProperty('promotionTo');
+    expect(updateArg.data).not.toHaveProperty('mostWantedTo');
+    expect(updateArg.data).toMatchObject({
+      status: 'TO_BE_PUBLISHED',
+      origin: 'INSTAGRAM',
+      live: true,
+      revalidate: false,
+    });
   });
 });

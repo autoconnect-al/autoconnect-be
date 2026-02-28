@@ -1,38 +1,73 @@
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { HealthController } from './health/health.controller';
 import { ConfigModule } from '@nestjs/config';
-import { ThrottlerModule } from '@nestjs/throttler';
-import { AuthModule } from './modules/auth/auth.module';
-import { SearchModule } from './modules/search/search.module';
-import { IngestModule } from './modules/imports/apify-import.module';
+import { ScheduleModule } from '@nestjs/schedule';
 import { DatabaseModule } from './database/database.module';
-import { VendorModule } from './modules/vendor/vendor.module';
-import { BulkImportModule } from './modules/bulk-import/bulk-import.module';
+import { LegacyAuthModule } from './modules/legacy-auth/legacy-auth.module';
+import { LegacySearchModule } from './modules/legacy-search/legacy-search.module';
+import { LegacyDataModule } from './modules/legacy-data/legacy-data.module';
+import { LegacyFavouritesModule } from './modules/legacy-favourites/legacy-favourites.module';
+import { LegacyAdminModule } from './modules/legacy-admin/legacy-admin.module';
+import { LegacySitemapModule } from './modules/legacy-sitemap/legacy-sitemap.module';
+import { LegacyDocsModule } from './modules/legacy-docs/legacy-docs.module';
+import { LegacyPaymentsModule } from './modules/legacy-payments/legacy-payments.module';
+import { LegacyApModule } from './modules/legacy-ap/legacy-ap.module';
+import { IngestModule } from './modules/imports/apify-import.module';
 
-void ConfigModule.forRoot({
-  isGlobal: true,
-});
+function validateEnvironment(config: Record<string, unknown>) {
+  const env = config as Record<string, string | undefined>;
+  const isTest = env.NODE_ENV === 'test';
+
+  if (isTest) {
+    return config;
+  }
+
+  const required = [
+    'DATABASE_URL',
+    'JWT_SECRET',
+    'AP_ADMIN_CODE',
+    'ADMIN_CODE',
+    'INSTAGRAM_CLIENT_ID',
+    'INSTAGRAM_CLIENT_SECRET',
+    'INSTAGRAM_REDIRECT_URI',
+  ];
+
+  const paymentProviderMode = String(env.PAYMENT_PROVIDER_MODE ?? '')
+    .trim()
+    .toLowerCase();
+  const usesLocalProvider = paymentProviderMode === 'local';
+  if (!usesLocalProvider) {
+    required.push('PAYPAL_CLIENT_ID', 'PAYPAL_CLIENT_SECRET');
+  }
+
+  const missing = required.filter((key) => {
+    const value = env[key];
+    return !value || value.trim().length === 0;
+  });
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing required environment variable(s): ${missing.join(', ')}`,
+    );
+  }
+
+  return config;
+}
 
 @Module({
   imports: [
-    ThrottlerModule.forRoot({
-      throttlers: [
-        {
-          ttl: 60, // seconds
-          limit: 10, // max 10 requests per ttl
-        },
-      ],
-    }),
-    AuthModule,
-    SearchModule,
-    IngestModule,
+    ConfigModule.forRoot({ isGlobal: true, validate: validateEnvironment }),
+    ScheduleModule.forRoot(),
     DatabaseModule,
-    VendorModule,
-    BulkImportModule,
+    LegacyAuthModule,
+    LegacySearchModule,
+    LegacyDataModule,
+    LegacyFavouritesModule,
+    LegacyAdminModule,
+    LegacySitemapModule,
+    LegacyDocsModule,
+    LegacyPaymentsModule,
+    LegacyApModule,
+    IngestModule,
   ],
-  controllers: [AppController, HealthController],
-  providers: [AppService],
 })
 export class AppModule {}

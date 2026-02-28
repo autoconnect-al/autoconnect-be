@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PostImportService } from '../services/post-import.service';
 import { isWithinThreeMonths } from '../utils/date-filter';
+import { createLogger } from '../../../common/logger.util';
 
 // Reuse your existing scrape function file.
 // Adjust import path to wherever you place your migrated `save-from-encar.ts`.
@@ -9,6 +10,7 @@ import { scrapeEncar } from './save-from-encar';
 @Injectable()
 export class EncarScrapeService {
   private readonly CHUNK_SIZE = 10;
+  private readonly logger = createLogger('encar-scrape-service');
 
   constructor(private readonly postImportService: PostImportService) {}
 
@@ -37,7 +39,7 @@ export class EncarScrapeService {
             // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
             if (!isWithinThreeMonths(p.createdTime)) {
               // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-              console.log(`Skipping Encar post ${p.id} - older than 3 months`);
+              this.logger.info('skipping old encar post', { postId: String(p.id) });
               return Promise.resolve('skipped:old');
             }
 

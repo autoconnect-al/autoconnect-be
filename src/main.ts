@@ -1,85 +1,118 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ValidationPipe, VersioningType } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { Request, Response, json, urlencoded } from 'express';
-import { BigIntInterceptor } from './common/big-int.interceptor';
+import express from 'express';
+import { getMediaRootPath } from './common/media-path.util';
+import { createLogger } from './common/logger.util';
+import { LegacyDocsService } from './modules/legacy-docs/legacy-docs.service';
+
+const defaultAllowedOrigins = [
+  'https://ap.autoconnect.al',
+  'https://www.autoconnect.al',
+  'https://autoconnect.al',
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://localhost:5173',
+];
+
+function getAllowedCorsOrigins(): string[] {
+  const fromEnv = String(process.env.CORS_ORIGINS ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const merged = new Set<string>([...defaultAllowedOrigins, ...fromEnv]);
+  return Array.from(merged);
+}
 
 async function bootstrap() {
-  // Critical: disable Nest’s built-in bodyParser
+  const logger = createLogger('http-access');
   const app = await NestFactory.create(AppModule, { bodyParser: false });
+  const allowedOrigins = getAllowedCorsOrigins();
+  const strictCors = String(process.env.CORS_STRICT ?? '').toLowerCase() === 'true';
 
-  // Enable CORS for all routes
+  app.use(express.json({ limit: '10mb' }));
+  app.use(
+    express.urlencoded({
+      extended: true,
+      limit: '10mb',
+    }),
+  );
+
   app.enableCors({
-    origin: true, // Allow all origins
+    origin: strictCors
+      ? (origin, callback) => {
+          // Allow non-browser calls (no Origin header).
+          if (!origin) {
+            callback(null, true);
+            return;
+          }
+          if (allowedOrigins.includes(origin)) {
+            callback(null, true);
+            return;
+          }
+          callback(new Error(`CORS origin not allowed: ${origin}`), false);
+        }
+      : true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
+    allowedHeaders: [
+      'Authorization',
+      'X-Http-Authorization',
+      'Content-Type',
+      'Accept',
+      'Origin',
+      'X-Requested-With',
+      'X-Admin-Code',
+    ],
+    exposedHeaders: ['Authorization'],
     maxAge: 3600,
   });
 
-  // Re-enable JSON parsing for "normal" routes.
-  // IMPORTANT: do not apply this to /imports/apify (our streaming endpoint).
-  app.use((req: Request, res: Response, next) => {
-    if (req.path.startsWith('/imports/apify')) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-return,@typescript-eslint/no-unsafe-call
-      return next();
-    }
-    return json({ limit: '2mb' })(req, res, next); // tune limit for normal APIs
+  app.use((req, res, next) => {
+    const start = Date.now();
+    res.on('finish', () => {
+      const durationMs = Date.now() - start;
+      logger.info('request.finished', {
+        method: req.method,
+        path: req.originalUrl ?? req.url,
+        status: res.statusCode,
+        durationMs,
+      });
+    });
+    next();
   });
 
-  // Optionally also enable urlencoded for normal routes
-  app.use((req: Request, res: Response, next) => {
-    if (req.path.startsWith('/imports/apify')) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call,@typescript-eslint/no-unsafe-return
-      return next();
-    }
-    return urlencoded({ extended: true, limit: '2mb' })(req, res, next);
-  });
+  app.use('/media', express.static(getMediaRootPath()));
 
-  app.setGlobalPrefix('api');
-  app.enableVersioning({
-    type: VersioningType.URI,
-  });
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
-      forbidNonWhitelisted: true,
+      forbidNonWhitelisted: false,
       transform: true,
     }),
   );
-  // main.ts
-  app.useGlobalInterceptors(new BigIntInterceptor());
 
-  const config = new DocumentBuilder()
-    .setTitle('Vehicle API')
-    .setDescription(
-      'Comprehensive API for vehicle search, vendor management, authentication, and data import.',
-    )
-    .setVersion('1.0.0')
-    .setContact(
-      'Support',
-      'https://github.com/reipano/vehicle-api',
-      'support@example.com',
-    )
-    .setLicense('UNLICENSED', '')
-    .addBearerAuth(
+  const openApiConfig = new DocumentBuilder()
+    .setTitle('Vehicle API Legacy Compatibility')
+    .setVersion('0.1.0')
+    .addApiKey(
       {
-        type: 'http',
-        scheme: 'bearer',
-        bearerFormat: 'JWT',
-        description: 'Enter JWT token',
+        type: 'apiKey',
+        in: 'header',
+        name: 'X-Http-Authorization',
+        description: 'Use value: Bearer <jwt_token>',
       },
-      'JWT-auth',
+      'XHttpAuthorization',
     )
-    .addTag('Health', 'Health check and system status endpoints')
-    .addTag('Auth', 'Authentication endpoints for login and password reset')
-    .addTag('Search', 'Search and filtering endpoints for vehicles')
-    .addTag('Vendor', 'Vendor management endpoints')
-    .addTag('Imports', 'Data import and synchronization endpoints')
     .build();
+  const openApiDocument = SwaggerModule.createDocument(app, openApiConfig);
+  app.get(LegacyDocsService).setOpenApiDocument(
+    openApiDocument as unknown as Record<string, unknown>,
+  );
 
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api-docs', app, document);
-  await app.listen(process.env.PORT ?? 3000);
+  const port = Number(process.env.PORT ?? 3000);
+  await app.listen(port);
 }
+
 void bootstrap();

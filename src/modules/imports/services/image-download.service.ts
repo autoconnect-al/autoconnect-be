@@ -3,6 +3,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import sharp from 'sharp';
 import * as process from 'node:process';
+import { createLogger } from '../../../common/logger.util';
 
 export interface ImageVariants {
   imageStandardResolutionUrl: string; // Path to main image (WebP, good quality)
@@ -12,10 +13,11 @@ export interface ImageVariants {
 
 @Injectable()
 export class ImageDownloadService {
+  private readonly logger = createLogger('image-download-service');
   private readonly baseUploadDir = process.env.UPLOAD_DIR || './tmp/uploads';
   private readonly baseProdPath = '/var/www/backend_main/'; // Production path prefix to remove
   private readonly mainQuality = 90; // Increased for better quality
-  private readonly thumbnailSize = 400; // Increased size for better quality
+  private readonly thumbnailSize = 500; // Increased size for better quality
   private readonly thumbnailQuality = 85; // Increased quality
   private readonly metadataSize = 200; // Increased size for better quality
   private readonly metadataQuality = 80; // Increased quality
@@ -62,9 +64,9 @@ export class ImageDownloadService {
 
         if (filesExist) {
           if (process.env.SHOW_LOGS) {
-            console.log(
-              `Images already exist for ${imageIdStr}, skipping download`,
-            );
+            this.logger.info('images already exist; skipping download', {
+              imageId: imageIdStr,
+            });
           }
           return {
             imageStandardResolutionUrl: mainPath.replace(this.baseProdPath, ''),
@@ -74,7 +76,7 @@ export class ImageDownloadService {
         }
       } else {
         if (process.env.SHOW_LOGS) {
-          console.log(`Force downloading images for ${imageIdStr}`);
+          this.logger.info('force downloading images', { imageId: imageIdStr });
         }
       }
 
@@ -118,12 +120,16 @@ export class ImageDownloadService {
         };
       } catch (e) {
         if (process.env.SHOW_LOGS) {
-          console.warn('Sharp processing failed, using fallback:', e);
+          this.logger.warn('Sharp processing failed, using fallback', {
+            error: e instanceof Error ? e.message : String(e),
+          });
         }
         return this.saveFallbackVariants(buffer, uploadDir, imageId.toString());
       }
     } catch (error) {
-      console.error('Error processing image:', error);
+      this.logger.error('Error processing image', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       throw error;
     }
   }
@@ -171,7 +177,7 @@ export class ImageDownloadService {
     ]);
 
     if (process.env.SHOW_LOGS) {
-      console.warn(
+      this.logger.warn(
         'Sharp not available - images saved without processing. Install sharp for proper image optimization.',
       );
     }
@@ -213,7 +219,11 @@ export class ImageDownloadService {
         );
         results.push(variants);
       } catch (error) {
-        console.error(`Failed to process image ${i} (${imageUrl}):`, error);
+        this.logger.error('Failed to process image', {
+          index: i,
+          imageUrl,
+          error: error instanceof Error ? error.message : String(error),
+        });
         // Continue with other images
       }
     }

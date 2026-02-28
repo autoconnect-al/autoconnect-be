@@ -9,6 +9,7 @@ import {
 } from '../services/post-import.service';
 import { isWithinThreeMonths } from '../utils/date-filter';
 import { generateCleanedCaption, isSold } from '../utils/caption-processor';
+import { createLogger } from '../../../common/logger.util';
 
 type ApifyPost = {
   pk?: number;
@@ -29,15 +30,12 @@ type ApifyPost = {
 @Injectable()
 export class ApifyDatasetImportService {
   private readonly CHUNK_SIZE = 10;
+  private readonly logger = createLogger('apify-dataset-import-service');
 
   // You can hardcode, but env is safer
   private readonly apifyDatasetUrl =
     process.env.APIFY_DATASET_URL ??
     `https://api.apify.com/v2/acts/instagram-scraper~fast-instagram-post-scraper/runs/last/dataset/items?token=${process.env.APIFY_API_TOKEN}`;
-
-  private batch: ApifyPost[] = [];
-  private totalSeen = 0;
-  private totalQueuedForSave = 0;
 
   constructor(private readonly postImportService: PostImportService) {}
 
@@ -47,8 +45,10 @@ export class ApifyDatasetImportService {
     forceDownloadImages = false,
     forceDownloadImagesDays?: number,
   ) {
+    const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
     if (process.env.SHOW_LOGS) {
-      console.log('[ApifyImport] starting import from dataset URL');
+      this.logger.info('starting import', { runId });
     }
 
     // 1) Fetch dataset items (JSON array)
@@ -71,12 +71,17 @@ export class ApifyDatasetImportService {
     const nodeStream = this.toNodeReadable(resp.body);
     if (!nodeStream) throw new Error('Apify response body is empty');
     const idsSeen = new Set<number>();
+    let batch: ApifyPost[] = [];
+    let totalQueuedForSave = 0;
 
     const flush = async () => {
-      if (this.batch.length === 0) return;
+      if (batch.length === 0) return;
+      const toProcess = batch;
+      batch = [];
+
       // Process each item and save to DB
       const results = await Promise.allSettled(
-        this.batch.map(async (item) => {
+        toProcess.map(async (item) => {
           // Skip non-carousel posts
           if (item['product_type'] !== 'carousel_container') {
             return 'skipped';
@@ -88,23 +93,20 @@ export class ApifyDatasetImportService {
           // Skip posts older than 3 months
           if (!isWithinThreeMonths(postData.createdTime)) {
             if (process.env.SHOW_LOGS) {
-              console.log(`Skipping post ${postData.id} - older than 3 months`);
+              this.logger.info('skipping old post', {
+                runId,
+                postId: String(postData.id),
+              });
             }
             return 'skipped:old';
           }
 
           // Check if post is sold - PHP logic: NEW sold posts are skipped
-          // First check if post exists
           const postId = BigInt(postData.id);
-          const existingPost = await this.postImportService[
-            'prisma'
-          ].post.findUnique({
-            where: { id: postId },
-            select: { id: true, deleted: true },
-          });
+          const existingPost = await this.postImportService.getPostState(postId);
 
           // If post doesn't exist (new post), check if sold
-          if (!existingPost || existingPost.deleted) {
+          if (!existingPost.exists || existingPost.deleted) {
             const cleanedCaption = generateCleanedCaption(
               postData.caption || '',
             );
@@ -112,9 +114,10 @@ export class ApifyDatasetImportService {
 
             if (soldStatus) {
               if (process.env.SHOW_LOGS) {
-                console.log(
-                  `Skipping new sold post ${postData.id} - caption indicates sold`,
-                );
+                this.logger.info('skipping new sold post', {
+                  runId,
+                  postId: String(postData.id),
+                });
               }
               return 'skipped:sold';
             }
@@ -134,18 +137,17 @@ export class ApifyDatasetImportService {
         }),
       );
 
-      this.batch.forEach((item) => {
+      toProcess.forEach((item) => {
         if (item.pk) idsSeen.add(item.pk);
       });
 
-      this.totalQueuedForSave += this.batch.length;
-      this.batch = [];
+      totalQueuedForSave += toProcess.length;
       if (process.env.SHOW_LOGS) {
-        console.log(
-          '[ApifyImport] flushed batch, totalSeen=%d totalQueuedForSave=%d',
-          idsSeen.size,
-          this.totalQueuedForSave,
-        );
+        this.logger.info('flushed batch', {
+          runId,
+          totalSeen: idsSeen.size,
+          totalQueuedForSave,
+        });
       }
       return results;
     };
@@ -154,19 +156,20 @@ export class ApifyDatasetImportService {
 
     type StreamData = { value: ApifyPost };
     for await (const data of pipeline as AsyncIterable<StreamData>) {
-      this.totalSeen++;
-      this.batch.push(data.value);
+      batch.push(data.value);
 
-      if (this.batch.length >= this.CHUNK_SIZE) {
+      if (batch.length >= this.CHUNK_SIZE) {
         await flush();
       }
     }
 
     await flush();
     if (process.env.SHOW_LOGS) {
-      console.log(
-        `[ApifyImport] done. totalSeen=${idsSeen.size} totalSaved=${this.totalQueuedForSave}`,
-      );
+      this.logger.info('import done', {
+        runId,
+        totalSeen: idsSeen.size,
+        totalSaved: totalQueuedForSave,
+      });
     }
   }
 
@@ -189,9 +192,9 @@ export class ApifyDatasetImportService {
       // This ensures the post is not filtered out by date checks
       createdTimeStr = Math.floor(Date.now() / 1000).toString();
       if (process.env.SHOW_LOGS) {
-        console.warn(
-          `Post ${post.pk} has no timestamp field (date/taken_at) - using current time`,
-        );
+        this.logger.warn('post has no timestamp; using current time', {
+          postId: post.pk ?? null,
+        });
       }
     }
 

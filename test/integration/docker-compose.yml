@@ -1,0 +1,15 @@
+services:
+  mysql-int:
+    image: mysql:8.4
+    container_name: vehicle-api-mysql-int
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootroot
+      MYSQL_DATABASE: vehicle_api_int
+    ports:
+      - '3307:3306'
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', '127.0.0.1', '-prootroot']
+      interval: 5s
+      timeout: 5s
+      retries: 30

@@ -1,0 +1,151 @@
+name: Tests and DEV Deploy
+
+on:
+  pull_request:
+    branches:
+      - main
+      - development
+    paths:
+      - 'src/modules/legacy-auth/**'
+      - 'src/modules/legacy-admin/**'
+      - 'src/modules/legacy-ap/**'
+      - 'src/modules/legacy-data/**'
+      - 'src/modules/legacy-docs/**'
+      - 'src/modules/legacy-favourites/**'
+      - 'src/modules/imports/**'
+      - 'src/modules/legacy-group-a/**'
+      - 'src/modules/legacy-search/**'
+      - 'src/modules/legacy-sitemap/**'
+      - 'src/modules/legacy-group-b/**'
+      - 'src/modules/legacy-payments/**'
+      - 'src/database/**'
+      - 'src/common/**'
+      - 'prisma/**'
+      - 'test/integration/**'
+      - 'test/jest-integration.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'scripts/prisma-migrate-with-retry.js'
+      - '.github/workflows/integration-tests.yml'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NODE_ENV: test
+      DATABASE_URL: mysql://root:rootroot@127.0.0.1:3306/vehicle_api_int
+      JWT_SECRET: integration-test-secret
+      INSTAGRAM_CLIENT_ID: integration-instagram-client-id
+      INSTAGRAM_CLIENT_SECRET: integration-instagram-client-secret
+      INSTAGRAM_REDIRECT_URI: http://localhost:3000/callback
+      AP_ADMIN_CODE: integration-ap-admin-code
+      CODE: integration-ap-code
+      ADMIN_CODE: integration-admin-code
+      DOCS_ACCESS_CODE: integration-docs-code
+      AUTOCONNECT_BASE_URL: http://127.0.0.1:3000
+      AUTOCONNECT_CODE: integration-autoconnect-code
+      IMPORT_QUEUE_ENABLED: 'false'
+      SHOW_LOGS: 'false'
+      INTEGRATION_SUPPRESS_LOGS: 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run prisma:generate
+
+      - name: Run unit tests
+        run: npm test -- --runInBand
+
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: rootroot
+          MYSQL_DATABASE: vehicle_api_int
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -prootroot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: mysql://root:rootroot@127.0.0.1:3306/vehicle_api_int
+      JWT_SECRET: integration-test-secret
+      INSTAGRAM_CLIENT_ID: integration-instagram-client-id
+      INSTAGRAM_CLIENT_SECRET: integration-instagram-client-secret
+      INSTAGRAM_REDIRECT_URI: http://localhost:3000/callback
+      AP_ADMIN_CODE: integration-ap-admin-code
+      CODE: integration-ap-code
+      ADMIN_CODE: integration-admin-code
+      DOCS_ACCESS_CODE: integration-docs-code
+      AUTOCONNECT_BASE_URL: http://127.0.0.1:3000
+      AUTOCONNECT_CODE: integration-autoconnect-code
+      IMPORT_QUEUE_ENABLED: 'false'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run prisma:generate
+
+      - name: Run integration tests
+        run: npm run test:int
+
+  deploy-dev:
+    needs:
+      - unit
+      - integration
+    if: ${{ github.event_name == 'pull_request' && github.base_ref == 'development' && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy PR branch to DEV on VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script: |
+            bash -lc '
+            set -e
+            BRANCH="${{ github.head_ref }}"
+            echo "Deploying Nest DEV from branch: $BRANCH"
+
+            APP_NAME="autoconnect-be-dev" \
+            APP_DIR="/var/www/autoconnect-be-dev" \
+            MODE="dev" \
+            DEFAULT_BRANCH="development" \
+            /var/www/autoconnect-be-dev/deploy.sh "$BRANCH"
+            '
