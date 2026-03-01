@@ -156,6 +156,7 @@ export function isCustomsPaid(
     'deri ne porte',
     'deri ne portë',
     'shipping price',
+    'ne portin e durresit',
   ];
 
   // Check for customs paid terms first
