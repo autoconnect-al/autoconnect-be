@@ -267,6 +267,54 @@ describe('LegacySearchService', () => {
     );
   });
 
+  it('search should map variant-only models to variant LIKE filters', async () => {
+    const prisma = {
+      $queryRawUnsafe: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ Model: 'X5', isVariant: 1 }])
+        .mockResolvedValueOnce([
+          {
+            id: 11,
+            make: 'BMW',
+            model: '5 Series',
+            variant: 'X5 M Sport',
+          },
+        ]),
+    } as any;
+    const service = new LegacySearchService(prisma, new LegacySearchQueryBuilder());
+
+    const response = await service.search(
+      JSON.stringify({
+        type: 'car',
+        searchTerms: [
+          { key: 'make1', value: 'BMW' },
+          { key: 'model1', value: 'X5' },
+        ],
+        sortTerms: [{ key: 'renewedTime', order: 'DESC' }],
+        page: 0,
+        maxResults: 10,
+      }),
+    );
+
+    expect(response.success).toBe(true);
+    expect(response.result).toHaveLength(1);
+
+    const searchCall = prisma.$queryRawUnsafe.mock.calls.find(
+      (args: unknown[]) =>
+        String(args[0]).includes('SELECT * FROM search') &&
+        String(args[0]).includes('LIMIT ? OFFSET ?'),
+    ) as unknown[] | undefined;
+
+    expect(String(searchCall?.[0])).toContain(
+      '(variant LIKE ? OR variant LIKE ? OR variant LIKE ?)',
+    );
+    expect(searchCall?.slice(1)).toEqual(
+      expect.arrayContaining(['BMW', '% X5 %', 'X5%', '%X5']),
+    );
+  });
+
   it('search should enrich result rows with post stats and exclude postOpen', async () => {
     const prisma = {
       $queryRawUnsafe: jest

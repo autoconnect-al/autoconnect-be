@@ -64,6 +64,44 @@ describe('LegacySearchQueryBuilder', () => {
     expect(built.offset).toBe(0);
   });
 
+  it('buildWhere uses variant matching when resolved model is a variant', () => {
+    const built = builder.buildWhere(
+      {
+        type: 'car',
+        searchTerms: [
+          { key: 'make1', value: 'BMW' },
+          { key: 'model1', value: 'X5' },
+        ],
+      },
+      { model: 'X5', isVariant: true },
+    );
+
+    expect(built.whereSql).toContain(
+      '(variant LIKE ? OR variant LIKE ? OR variant LIKE ?)',
+    );
+    expect(built.whereSql).not.toContain('model = ?');
+    expect(built.params).toEqual(
+      expect.arrayContaining(['BMW', '% X5 %', 'X5%', '%X5']),
+    );
+  });
+
+  it('buildWhere keeps model equality for "(all)" input even when model is variant', () => {
+    const built = builder.buildWhere(
+      {
+        type: 'car',
+        searchTerms: [
+          { key: 'make1', value: 'BMW' },
+          { key: 'model1', value: 'X5 (all)' },
+        ],
+      },
+      { model: 'X5 (all)', isVariant: true },
+    );
+
+    expect(built.whereSql).toContain('model = ?');
+    expect(built.whereSql).not.toContain('variant LIKE');
+    expect(built.params).toEqual(expect.arrayContaining(['X5']));
+  });
+
   it('parseFilter + parseCsvValues + extractRegistrationFrom handle invalid inputs safely', () => {
     expect(builder.parseFilter(undefined)).toBeNull();
     expect(builder.parseFilter('not-json')).toBeNull();
