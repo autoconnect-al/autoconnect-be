@@ -70,6 +70,19 @@ describe('Integration: favourites', () => {
 
   it('GET /favourites/get returns matching rows and ignores invalid ids', async () => {
     await seedFavouritesGraph();
+    await prisma.post.update({
+      where: { id: 7101n },
+      data: {
+        impressions: 33,
+        reach: 28,
+        clicks: 12,
+        contact: 4,
+        contactCall: 2,
+        contactWhatsapp: 1,
+        contactEmail: 1,
+        contactInstagram: 0,
+      },
+    });
 
     const response = await request(app.getHttpServer())
       .get('/favourites/get?favourites=7101,7102,7103,x')
@@ -82,8 +95,21 @@ describe('Integration: favourites', () => {
     });
     expect(response.body.result).toHaveLength(1);
     expect(response.body.result[0]).toEqual(
-      expect.objectContaining({ id: '7101', deleted: '0', sold: false }),
+      expect.objectContaining({
+        id: '7101',
+        deleted: '0',
+        sold: false,
+        impressions: 33,
+        reach: 28,
+        clicks: 12,
+        contactCount: 4,
+        contactCall: 2,
+        contactWhatsapp: 1,
+        contactEmail: 1,
+        contactInstagram: 0,
+      }),
     );
+    expect(response.body.result[0]).not.toHaveProperty('postOpen');
   });
 
   it('favourites cache key normalization treats duplicate/reordered ids as the same request', async () => {

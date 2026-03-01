@@ -205,6 +205,63 @@ describe('LegacySearchService', () => {
     );
   });
 
+  it('search should enrich result rows with post stats and exclude postOpen', async () => {
+    const prisma = {
+      $queryRawUnsafe: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          {
+            id: 11,
+            make: 'BMW',
+            model: 'X5',
+          },
+        ]),
+      post: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 11n,
+            impressions: 100,
+            reach: 80,
+            clicks: 25,
+            contact: 9,
+            contactCall: 4,
+            contactWhatsapp: 3,
+            contactEmail: 1,
+            contactInstagram: 1,
+          },
+        ]),
+      },
+    } as any;
+    const service = new LegacySearchService(prisma, new LegacySearchQueryBuilder());
+
+    const response = await service.search(
+      JSON.stringify({
+        type: 'car',
+        searchTerms: [],
+        sortTerms: [{ key: 'renewedTime', order: 'DESC' }],
+        page: 0,
+        maxResults: 10,
+      }),
+    );
+
+    expect(response.success).toBe(true);
+    expect(response.result[0]).toEqual(
+      expect.objectContaining({
+        id: 11,
+        impressions: 100,
+        reach: 80,
+        clicks: 25,
+        contactCount: 9,
+        contactCall: 4,
+        contactWhatsapp: 3,
+        contactEmail: 1,
+        contactInstagram: 1,
+      }),
+    );
+    expect(response.result[0]).not.toHaveProperty('postOpen');
+  });
+
   it('relatedById should select sidecarMedias for related cards', async () => {
     const prisma = {
       $queryRawUnsafe: jest

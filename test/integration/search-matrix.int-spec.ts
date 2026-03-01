@@ -716,6 +716,19 @@ describe('Integration: search matrix', () => {
       model: 'Civic',
       price: 10000,
     });
+    await prisma.post.update({
+      where: { id: 5802n },
+      data: {
+        impressions: 19,
+        reach: 17,
+        clicks: 6,
+        contact: 3,
+        contactCall: 1,
+        contactWhatsapp: 1,
+        contactEmail: 1,
+        contactInstagram: 0,
+      },
+    });
 
     const filter = makeFilter({
       searchTerms: [
@@ -735,6 +748,22 @@ describe('Integration: search matrix', () => {
       result: expect.any(Array),
     });
     expect(response.body.result.length).toBeGreaterThan(0);
+    const enrichedRow = response.body.result.find(
+      (row: { id: string }) => row.id === '5802',
+    );
+    expect(enrichedRow).toEqual(
+      expect.objectContaining({
+        impressions: 19,
+        reach: 17,
+        clicks: 6,
+        contactCount: 3,
+        contactCall: 1,
+        contactWhatsapp: 1,
+        contactEmail: 1,
+        contactInstagram: 0,
+      }),
+    );
+    expect(enrichedRow).not.toHaveProperty('postOpen');
   });
 
   it('related-post-filter returns matching promoted post first when available', async () => {
@@ -973,6 +1002,19 @@ describe('Integration: search matrix', () => {
       bodyType: 'SUV',
       price: 19000,
     });
+    await prisma.post.update({
+      where: { id: 5851n },
+      data: {
+        impressions: 80,
+        reach: 65,
+        clicks: 30,
+        contact: 10,
+        contactCall: 4,
+        contactWhatsapp: 4,
+        contactEmail: 1,
+        contactInstagram: 1,
+      },
+    });
 
     const response = await request(app.getHttpServer())
       .get('/car-details/related-post/5850')
@@ -984,8 +1026,21 @@ describe('Integration: search matrix', () => {
       result: expect.any(Array),
     });
     expect(response.body.result[0]).toEqual(
-      expect.objectContaining({ id: '5851', promoted: true, highlighted: true }),
+      expect.objectContaining({
+        id: '5851',
+        promoted: true,
+        highlighted: true,
+        impressions: 80,
+        reach: 65,
+        clicks: 30,
+        contactCount: 10,
+        contactCall: 4,
+        contactWhatsapp: 4,
+        contactEmail: 1,
+        contactInstagram: 1,
+      }),
     );
+    expect(response.body.result[0]).not.toHaveProperty('postOpen');
     const ids = response.body.result.map((row: { id: string }) => row.id);
     expect(ids).not.toContain('5850');
   });
@@ -1087,6 +1142,19 @@ describe('Integration: search matrix', () => {
       mostWantedTo: now + 3000,
       promotionTo: now + 3000,
     });
+    await prisma.post.update({
+      where: { id: 5881n },
+      data: {
+        impressions: 70,
+        reach: 66,
+        clicks: 22,
+        contact: 7,
+        contactCall: 3,
+        contactWhatsapp: 2,
+        contactEmail: 1,
+        contactInstagram: 1,
+      },
+    });
 
     const response = await request(app.getHttpServer())
       .get('/car-details/most-wanted?excludeIds=5882&excludedAccounts=most-excluded-account')
@@ -1111,6 +1179,19 @@ describe('Integration: search matrix', () => {
     expect(response.body.result[0]).toHaveProperty('renewInterval');
     expect(response.body.result[0]).toHaveProperty('renewedTime');
     expect(response.body.result[0]).toHaveProperty('mostWantedTo');
+    expect(response.body.result[0]).toEqual(
+      expect.objectContaining({
+        impressions: 70,
+        reach: 66,
+        clicks: 22,
+        contactCount: 7,
+        contactCall: 3,
+        contactWhatsapp: 2,
+        contactEmail: 1,
+        contactInstagram: 1,
+      }),
+    );
+    expect(response.body.result[0]).not.toHaveProperty('postOpen');
   });
 
   it('price-calculate returns rows when required terms are provided', async () => {

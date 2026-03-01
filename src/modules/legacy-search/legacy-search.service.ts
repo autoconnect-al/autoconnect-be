@@ -12,6 +12,7 @@ import {
   PersonalizationService,
   type PersonalizationTermScore,
 } from '../personalization/personalization.service';
+import { enrichRowsWithPostStats } from '../../common/post-stats-enrichment.util';
 
 @Injectable()
 export class LegacySearchService {
@@ -74,9 +75,10 @@ export class LegacySearchService {
       );
 
     const merged = this.mergeRowsWithPromoted(rows, promoted);
+    const enrichedRows = await enrichRowsWithPostStats(this.prisma, merged);
     return legacySuccess(
       this.normalizeBigInts(
-        this.annotateRowsWithPromotion(merged, promoted),
+        this.annotateRowsWithPromotion(enrichedRows, promoted),
       ),
     );
   }
@@ -228,7 +230,11 @@ export class LegacySearchService {
         ...personalizedSort.orderParams,
       ),
     );
-    return legacySuccess(this.normalizeBigInts(this.withCarDetail(rows)));
+    const enrichedRows = await enrichRowsWithPostStats(
+      this.prisma,
+      this.withCarDetail(rows),
+    );
+    return legacySuccess(this.normalizeBigInts(enrichedRows));
   }
 
   async getCarDetails(id: string) {
@@ -241,7 +247,8 @@ export class LegacySearchService {
     if (rows.length === 0) {
       return legacyError('Car details not found', 404);
     }
-    return legacySuccess(this.normalizeBigInts(rows));
+    const enrichedRows = await enrichRowsWithPostStats(this.prisma, rows);
+    return legacySuccess(this.normalizeBigInts(enrichedRows));
   }
 
   async getCaption(id: string) {
@@ -315,11 +322,9 @@ export class LegacySearchService {
         ...params,
       ),
     );
-    return legacySuccess(
-      this.normalizeBigInts(
-        this.annotateRelatedRows(this.withCarDetail(rows), promoted),
-      ),
-    );
+    const annotatedRows = this.annotateRelatedRows(this.withCarDetail(rows), promoted);
+    const enrichedRows = await enrichRowsWithPostStats(this.prisma, annotatedRows);
+    return legacySuccess(this.normalizeBigInts(enrichedRows));
   }
 
   async relatedByFilter(
@@ -381,11 +386,9 @@ export class LegacySearchService {
         limit,
       ),
     );
-    return legacySuccess(
-      this.normalizeBigInts(
-        this.annotateRelatedRows(this.withCarDetail(rows), promoted),
-      ),
-    );
+    const annotatedRows = this.annotateRelatedRows(this.withCarDetail(rows), promoted);
+    const enrichedRows = await enrichRowsWithPostStats(this.prisma, annotatedRows);
+    return legacySuccess(this.normalizeBigInts(enrichedRows));
   }
 
   private async findPromotedRelatedPost(
