@@ -14,12 +14,48 @@ import {
 } from '../personalization/personalization.service';
 import { enrichRowsWithPostStats } from '../../common/post-stats-enrichment.util';
 
+type RankablePersonalizationTerm = {
+  termKey: string;
+  termValue: string;
+  normalizedValue: string;
+  score: number;
+  searchCount: number;
+  openCount: number;
+  contactCount: number;
+  impressionCount: number;
+  dateUpdatedMs: number | null;
+  lastEventAtMs: number | null;
+};
+
+type ActiveRankTerm = RankablePersonalizationTerm & {
+  affinity: number;
+};
+
+type PersonalizedCandidate = {
+  id: string;
+  row: Record<string, unknown>;
+  make: string;
+  model: string;
+  renewedTime: number;
+  baselineRank: number;
+  freshnessScore: number;
+  interestScore: number;
+  finalScore: number;
+};
+
+const PERSONALIZATION_KEY_WEIGHTS: Record<string, number> = {
+  model: 0.35,
+  make: 0.2,
+  bodyType: 0.2,
+  fuelType: 0.1,
+  transmission: 0.1,
+  type: 0.05,
+};
+
 @Injectable()
 export class LegacySearchService {
   private readonly skipQuickSearchFix = new Set(['benz', 'mercedes']);
   private readonly logger = createLogger('legacy-search-service');
-  private readonly personalizedSearchCandidateMultiplier = 4;
-  private readonly maxPersonalizedSearchCandidates = 400;
   private readonly queryBudgetsMs: Record<string, number> = {
     search: 350,
     search_promoted: 220,
@@ -54,27 +90,28 @@ export class LegacySearchService {
     const promoted = await this.findPromotedSearchPost(filter);
     const { whereSql, params } = this.queryBuilder.buildWhere(filter);
     const { limit, offset } = this.queryBuilder.buildSortAndPagination(filter);
-    const personalizedSort = this.buildPersonalizedSearchOrder(personalizationTerms);
-    const shouldDiversifyPersonalizedSearch =
-      this.shouldDiversifyPersonalizedSearch(personalizationTerms);
-    const orderSql = personalizedSort.orderSql
-      ?? this.queryBuilder.buildSortAndPagination(filter).orderSql;
-    const queryLimit = shouldDiversifyPersonalizedSearch
+    const orderSql = this.queryBuilder.buildSortAndPagination(filter).orderSql;
+    const queryLimit = shouldApplyPersonalization
       ? this.buildPersonalizedSearchCandidateLimit(limit, offset)
       : limit;
-    const queryOffset = shouldDiversifyPersonalizedSearch ? 0 : offset;
+    const queryOffset = shouldApplyPersonalization ? 0 : offset;
 
     const rawRows = await this.timeQuery('search', () =>
       this.prisma.$queryRawUnsafe<unknown[]>(
         `SELECT * FROM search ${whereSql} ${orderSql} LIMIT ? OFFSET ?`,
         ...params,
-        ...personalizedSort.orderParams,
         queryLimit,
         queryOffset,
       ),
     );
-    const rows = shouldDiversifyPersonalizedSearch
-      ? this.diversifyPersonalizedRows(rawRows, personalizationTerms, limit, offset)
+    const rows = shouldApplyPersonalization
+      ? this.composePersonalizedRows(
+          rawRows,
+          personalizationTerms,
+          limit,
+          offset,
+          'search',
+        )
       : rawRows;
 
     const recordSignalPromise =
@@ -224,23 +261,32 @@ export class LegacySearchService {
     const personalizationTerms = shouldApplyPersonalization
       ? ((await this.personalizationService?.getTopTerms(visitorId)) ?? [])
       : [];
-    const personalizedSort = this.buildPersonalizedMostWantedOrder(personalizationTerms);
-    const orderSql =
-      personalizedSort.orderSql ?? 'ORDER BY s.mostWantedTo DESC, p.clicks DESC';
+    const orderSql = 'ORDER BY s.mostWantedTo DESC, p.clicks DESC';
+    const limit = shouldApplyPersonalization
+      ? this.getMostWantedPersonalizationCandidates()
+      : 4;
 
     const query = `SELECT s.id, s.make, s.model, s.variant, s.registration, s.mileage, s.price, s.transmission, s.fuelType, s.engineSize, s.drivetrain, s.seats, s.numberOfDoors, s.bodyType, s.customsPaid, s.canExchange, s.options, s.emissionGroup, s.type, s.accountName, s.sidecarMedias, s.contact, s.vendorContact, s.profilePicture, s.vendorId, s.promotionTo, s.highlightedTo, s.renewTo, s.renewInterval, s.renewedTime, s.mostWantedTo
       FROM search s
       INNER JOIN post p ON p.id = s.id
       WHERE ${clauses.join(' AND ')}
       ${orderSql}
-      LIMIT 4`;
-    const rows = await this.timeQuery('most_wanted', () =>
+      LIMIT ${limit}`;
+    const rawRows = await this.timeQuery('most_wanted', () =>
       this.prisma.$queryRawUnsafe<unknown[]>(
         query,
         ...params,
-        ...personalizedSort.orderParams,
       ),
     );
+    const rows = shouldApplyPersonalization
+      ? this.composePersonalizedRows(
+          rawRows,
+          personalizationTerms,
+          4,
+          0,
+          'most_wanted',
+        )
+      : rawRows;
     const enrichedRows = await enrichRowsWithPostStats(
       this.prisma,
       this.withCarDetail(rows),
@@ -1065,70 +1111,392 @@ export class LegacySearchService {
     return key === 'renewedTime' && order === 'DESC';
   }
 
-  private buildPersonalizedSearchOrder(terms: PersonalizationTermScore[]): {
-    orderSql: string | null;
-    orderParams: unknown[];
-  } {
-    const relevant = this.pickRankableTerms(terms);
-    if (relevant.length === 0) {
-      return { orderSql: null, orderParams: [] };
+  private composePersonalizedRows(
+    rows: unknown[],
+    terms: PersonalizationTermScore[],
+    limit: number,
+    offset: number,
+    context: 'search' | 'most_wanted',
+  ): unknown[] {
+    const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 24;
+    const safeOffset = Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0;
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return [];
     }
 
-    const interestParts: string[] = [];
-    const orderParams: unknown[] = [];
-    for (const term of relevant) {
-      const column = this.rankColumnForKey(term.termKey);
-      if (!column) continue;
-      interestParts.push(`CASE WHEN ${column} = ? THEN ? ELSE 0 END`);
-      orderParams.push(term.termValue, term.score);
+    const activeTerms = this.buildActiveRankTerms(terms);
+    const activeTermsByKey = this.buildActiveTermsByKey(activeTerms);
+    if (activeTerms.length === 0) {
+      this.logger.info(`personalization.${context}.compose`, {
+        candidateSize: rows.length,
+        activeTermsByKey,
+        reason: 'no_active_terms',
+      });
+      return rows.slice(safeOffset, safeOffset + safeLimit);
     }
 
-    if (interestParts.length === 0) {
-      return { orderSql: null, orderParams: [] };
+    const candidates = this.buildPersonalizationCandidates(rows, activeTerms);
+    if (candidates.length === 0) {
+      this.logger.info(`personalization.${context}.compose`, {
+        candidateSize: rows.length,
+        activeTermsByKey,
+        reason: 'no_candidate_rows',
+      });
+      return rows.slice(safeOffset, safeOffset + safeLimit);
     }
 
-    const interestExpr = interestParts.join(' + ');
-    return {
-      orderSql: `ORDER BY ((0.7 * (${interestExpr})) + (0.3 * (COALESCE(renewedTime, 0) / 2147483647))) DESC, renewedTime DESC, id DESC`,
-      orderParams,
-    };
+    const pageSize = Math.max(1, safeLimit);
+    const personalizedSlots = Math.max(
+      0,
+      Math.min(
+        pageSize,
+        Math.floor(pageSize * this.getPersonalizationMaxPersonalizedShare()),
+      ),
+    );
+    const modelCap = Math.max(
+      1,
+      Math.ceil(pageSize * this.getPersonalizationModelMaxShare()),
+    );
+    const makeCap = Math.max(
+      1,
+      Math.ceil(pageSize * this.getPersonalizationMakeMaxShare()),
+    );
+
+    const personalizedPool = [...candidates]
+      .filter((candidate) => candidate.interestScore > 0)
+      .sort(
+        (a, b) =>
+          b.finalScore - a.finalScore
+          || b.freshnessScore - a.freshnessScore
+          || b.renewedTime - a.renewedTime
+          || b.id.localeCompare(a.id),
+      );
+    const freshPool = [...candidates].sort(
+      (a, b) =>
+        a.baselineRank - b.baselineRank
+        || b.renewedTime - a.renewedTime
+        || b.id.localeCompare(a.id),
+    );
+
+    const selectedIds = new Set<string>();
+    const ordered: PersonalizedCandidate[] = [];
+    const firstPageCapHits = { model: 0, make: 0 };
+    let firstPagePersonalizedCount = 0;
+
+    while (ordered.length < candidates.length) {
+      const pageRows: PersonalizedCandidate[] = [];
+      const modelCounts = new Map<string, number>();
+      const makeCounts = new Map<string, number>();
+      const capHits = { model: 0, make: 0 };
+
+      const personalizedCount = this.addFromCandidatePool(
+        personalizedPool,
+        pageRows,
+        selectedIds,
+        personalizedSlots,
+        modelCounts,
+        makeCounts,
+        modelCap,
+        makeCap,
+        capHits,
+      );
+
+      this.addFromCandidatePool(
+        freshPool,
+        pageRows,
+        selectedIds,
+        pageSize - pageRows.length,
+        modelCounts,
+        makeCounts,
+        modelCap,
+        makeCap,
+        capHits,
+      );
+
+      if (pageRows.length < pageSize) {
+        this.addFromCandidatePool(
+          personalizedPool,
+          pageRows,
+          selectedIds,
+          pageSize - pageRows.length,
+          modelCounts,
+          makeCounts,
+          modelCap,
+          makeCap,
+          capHits,
+        );
+      }
+
+      if (ordered.length === 0) {
+        firstPageCapHits.model = capHits.model;
+        firstPageCapHits.make = capHits.make;
+        firstPagePersonalizedCount = personalizedCount;
+        if (personalizedCount < personalizedSlots) {
+          this.logger.warn(`personalization.${context}.below-target`, {
+            candidateSize: candidates.length,
+            personalizedSlots,
+            personalizedCount,
+            capHits,
+            activeTermsByKey,
+          });
+        }
+      }
+
+      if (pageRows.length === 0) {
+        this.logger.warn(`personalization.${context}.compose-empty-page`, {
+          candidateSize: candidates.length,
+          selectedCount: ordered.length,
+          pageSize,
+          activeTermsByKey,
+        });
+        break;
+      }
+
+      ordered.push(...pageRows);
+    }
+
+    this.logger.info(`personalization.${context}.compose`, {
+      candidateSize: candidates.length,
+      activeTermsByKey,
+      pageSize,
+      personalizedSlots,
+      modelCap,
+      makeCap,
+      firstPagePersonalizedCount,
+      firstPageCapHits,
+    });
+
+    return ordered
+      .slice(safeOffset, safeOffset + safeLimit)
+      .map((candidate) => candidate.row);
   }
 
-  private buildPersonalizedMostWantedOrder(terms: PersonalizationTermScore[]): {
-    orderSql: string | null;
-    orderParams: unknown[];
-  } {
-    const relevant = this.pickRankableTerms(terms);
-    if (relevant.length === 0) {
-      return { orderSql: null, orderParams: [] };
+  private addFromCandidatePool(
+    pool: PersonalizedCandidate[],
+    destination: PersonalizedCandidate[],
+    selectedIds: Set<string>,
+    maxToAdd: number,
+    modelCounts: Map<string, number>,
+    makeCounts: Map<string, number>,
+    modelCap: number,
+    makeCap: number,
+    capHits: { model: number; make: number },
+  ): number {
+    if (maxToAdd <= 0) {
+      return 0;
     }
 
-    const interestParts: string[] = [];
-    const orderParams: unknown[] = [];
-    for (const term of relevant) {
-      const column = this.rankColumnForKey(term.termKey, 's');
-      if (!column) continue;
-      interestParts.push(`CASE WHEN ${column} = ? THEN ? ELSE 0 END`);
-      orderParams.push(term.termValue, term.score);
+    let added = 0;
+    for (const candidate of pool) {
+      if (added >= maxToAdd) {
+        break;
+      }
+      if (selectedIds.has(candidate.id)) {
+        continue;
+      }
+      if (
+        !this.canSelectCandidateWithCaps(
+          candidate,
+          modelCounts,
+          makeCounts,
+          modelCap,
+          makeCap,
+          capHits,
+        )
+      ) {
+        continue;
+      }
+
+      destination.push(candidate);
+      selectedIds.add(candidate.id);
+      added += 1;
+
+      if (candidate.model) {
+        modelCounts.set(candidate.model, (modelCounts.get(candidate.model) ?? 0) + 1);
+      }
+      if (candidate.make) {
+        makeCounts.set(candidate.make, (makeCounts.get(candidate.make) ?? 0) + 1);
+      }
     }
 
-    if (interestParts.length === 0) {
-      return { orderSql: null, orderParams: [] };
+    return added;
+  }
+
+  private canSelectCandidateWithCaps(
+    candidate: PersonalizedCandidate,
+    modelCounts: Map<string, number>,
+    makeCounts: Map<string, number>,
+    modelCap: number,
+    makeCap: number,
+    capHits: { model: number; make: number },
+  ): boolean {
+    if (candidate.model && (modelCounts.get(candidate.model) ?? 0) >= modelCap) {
+      capHits.model += 1;
+      return false;
+    }
+    if (candidate.make && (makeCounts.get(candidate.make) ?? 0) >= makeCap) {
+      capHits.make += 1;
+      return false;
+    }
+    return true;
+  }
+
+  private buildPersonalizationCandidates(
+    rows: unknown[],
+    activeTerms: ActiveRankTerm[],
+  ): PersonalizedCandidate[] {
+    const objects = rows
+      .map((row, baselineRank) => {
+        if (!row || typeof row !== 'object') {
+          return null;
+        }
+        return {
+          row: row as Record<string, unknown>,
+          baselineRank,
+        };
+      })
+      .filter(
+        (
+          item,
+        ): item is {
+          row: Record<string, unknown>;
+          baselineRank: number;
+        } => Boolean(item),
+      );
+
+    if (objects.length === 0) {
+      return [];
     }
 
-    const interestExpr = interestParts.join(' + ');
-    const baseExpr =
-      '(COALESCE(s.mostWantedTo, 0) / 2147483647) + (COALESCE(p.clicks, 0) / 10000)';
+    const renewedTimes = objects.map((item) =>
+      this.toNullableNumber(item.row.renewedTime),
+    );
+    const minRenewedTime = Math.min(...renewedTimes);
+    const maxRenewedTime = Math.max(...renewedTimes);
 
-    return {
-      orderSql: `ORDER BY ((0.7 * (${interestExpr})) + (0.3 * (${baseExpr}))) DESC, s.mostWantedTo DESC, p.clicks DESC`,
-      orderParams,
-    };
+    return objects.map((item) => {
+      const id = this.toStr(item.row.id) || `candidate-${item.baselineRank}`;
+      const make = this.normalizeComparableValue(item.row.make);
+      const model = this.normalizeComparableValue(item.row.model);
+      const renewedTime = this.toNullableNumber(item.row.renewedTime);
+      const freshnessScore =
+        maxRenewedTime > minRenewedTime
+          ? (renewedTime - minRenewedTime) / (maxRenewedTime - minRenewedTime)
+          : 0;
+      const interestScore = this.scoreRowInterest(item.row, activeTerms);
+      const finalScore = 0.6 * interestScore + 0.4 * freshnessScore;
+
+      return {
+        id,
+        row: item.row,
+        make,
+        model,
+        renewedTime,
+        baselineRank: item.baselineRank,
+        freshnessScore,
+        interestScore,
+        finalScore,
+      };
+    });
+  }
+
+  private scoreRowInterest(
+    row: Record<string, unknown>,
+    activeTerms: ActiveRankTerm[],
+  ): number {
+    let score = 0;
+
+    for (const [termKey, weight] of Object.entries(PERSONALIZATION_KEY_WEIGHTS)) {
+      const rowValue = this.normalizeComparableValue(this.valueForTermKey(row, termKey));
+      if (!rowValue) {
+        continue;
+      }
+
+      let bestAffinity = 0;
+      for (const term of activeTerms) {
+        if (term.termKey !== termKey) continue;
+        if (term.normalizedValue !== rowValue) continue;
+        if (term.affinity > bestAffinity) {
+          bestAffinity = term.affinity;
+        }
+      }
+      if (bestAffinity > 0) {
+        score += weight * bestAffinity;
+      }
+    }
+
+    return score;
+  }
+
+  private valueForTermKey(row: Record<string, unknown>, termKey: string): unknown {
+    switch (termKey) {
+      case 'make':
+        return row.make;
+      case 'model':
+        return row.model;
+      case 'bodyType':
+        return row.bodyType;
+      case 'fuelType':
+        return row.fuelType;
+      case 'transmission':
+        return row.transmission;
+      case 'type':
+        return row.type;
+      default:
+        return '';
+    }
+  }
+
+  private buildActiveRankTerms(terms: PersonalizationTermScore[]): ActiveRankTerm[] {
+    const rankableTerms = this.pickRankableTerms(terms);
+    if (rankableTerms.length === 0) {
+      return [];
+    }
+
+    const maxScoreByKey = new Map<string, number>();
+    for (const term of rankableTerms) {
+      const current = maxScoreByKey.get(term.termKey) ?? 0;
+      if (term.score > current) {
+        maxScoreByKey.set(term.termKey, term.score);
+      }
+    }
+
+    return rankableTerms
+      .filter((term) => this.isTermActive(term))
+      .map((term) => {
+        const maxScoreWithinKey = maxScoreByKey.get(term.termKey) ?? 0;
+        const keyNormalizedScore =
+          maxScoreWithinKey > 0 ? term.score / maxScoreWithinKey : 0;
+        const eventStrength =
+          (1.0 * term.searchCount)
+          + (2.0 * term.openCount)
+          + (5.0 * term.contactCount)
+          + (0.25 * term.impressionCount);
+        const eventConfidence = Math.min(
+          1,
+          Math.log1p(eventStrength) / Math.log1p(12),
+        );
+        const eventTimeMs = term.lastEventAtMs ?? term.dateUpdatedMs;
+        const ageDays = eventTimeMs
+          ? Math.max(0, (Date.now() - eventTimeMs) / (24 * 60 * 60 * 1000))
+          : 0;
+        const recencyDecay = Math.exp(-ageDays / 21);
+        const affinity = keyNormalizedScore * eventConfidence * recencyDecay;
+
+        return {
+          ...term,
+          affinity,
+        };
+      })
+      .filter((term) => Number.isFinite(term.affinity) && term.affinity > 0)
+      .sort((a, b) => b.affinity - a.affinity)
+      .slice(0, 80);
   }
 
   private pickRankableTerms(
     terms: PersonalizationTermScore[],
-  ): PersonalizationTermScore[] {
+  ): RankablePersonalizationTerm[] {
     if (!Array.isArray(terms)) return [];
 
     const allowed = new Set([
@@ -1144,147 +1512,160 @@ export class LegacySearchService {
       .map((term) => ({
         termKey: this.toStr(term.termKey),
         termValue: this.toStr(term.termValue),
+        normalizedValue: this.normalizeComparableValue(term.termValue),
         score: Number(term.score ?? 0),
+        searchCount: this.toNonNegativeInt(term.searchCount),
+        openCount: this.toNonNegativeInt(term.openCount),
+        contactCount: this.toNonNegativeInt(term.contactCount),
+        impressionCount: this.toNonNegativeInt(term.impressionCount),
+        dateUpdatedMs: this.toTimestampMs(term.dateUpdated),
+        lastEventAtMs: this.toTimestampMs(term.lastEventAt),
       }))
       .filter(
         (term) =>
-          allowed.has(term.termKey) &&
-          term.termValue.length > 0 &&
-          Number.isFinite(term.score) &&
-          term.score > 0,
+          allowed.has(term.termKey)
+          && term.termValue.length > 0
+          && Number.isFinite(term.score)
+          && term.score > 0,
       )
-      .slice(0, 40);
+      .slice(0, 100);
   }
 
-  private rankColumnForKey(termKey: string, alias?: string): string | null {
-    const prefix = alias ? `${alias}.` : '';
+  private isTermActive(term: RankablePersonalizationTerm): boolean {
+    if (term.contactCount >= this.getPersonalizationContactThreshold()) {
+      return true;
+    }
+    return term.openCount >= this.getOpenThresholdForTermKey(term.termKey);
+  }
+
+  private getOpenThresholdForTermKey(termKey: string): number {
     switch (termKey) {
-      case 'make':
-        return `${prefix}make`;
       case 'model':
-        return `${prefix}model`;
+        return this.getPersonalizationModelOpenThreshold();
+      case 'make':
+        return this.getPersonalizationMakeOpenThreshold();
       case 'bodyType':
-        return `${prefix}bodyType`;
-      case 'fuelType':
-        return `${prefix}fuelType`;
-      case 'transmission':
-        return `${prefix}transmission`;
-      case 'type':
-        return `${prefix}type`;
+        return this.getPersonalizationBodyTypeOpenThreshold();
       default:
-        return null;
+        return this.getPersonalizationGenericOpenThreshold();
     }
   }
 
-  private shouldDiversifyPersonalizedSearch(
-    terms: PersonalizationTermScore[],
-  ): boolean {
-    return this.extractPreferredMakes(terms).length > 1;
+  private buildActiveTermsByKey(terms: ActiveRankTerm[]): Record<string, number> {
+    const byKey: Record<string, number> = {};
+    for (const term of terms) {
+      byKey[term.termKey] = (byKey[term.termKey] ?? 0) + 1;
+    }
+    return byKey;
   }
 
   private buildPersonalizedSearchCandidateLimit(limit: number, offset: number): number {
     const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 24;
     const safeOffset = Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0;
     const requestedRows = safeOffset + safeLimit;
-    const expanded = requestedRows * this.personalizedSearchCandidateMultiplier;
+    const expanded =
+      requestedRows * this.getPersonalizationSearchCandidateMultiplier();
     return Math.max(
       safeLimit,
-      Math.min(this.maxPersonalizedSearchCandidates, expanded),
+      Math.min(this.getPersonalizationSearchCandidateMax(), expanded),
     );
   }
 
-  private diversifyPersonalizedRows(
-    rows: unknown[],
-    terms: PersonalizationTermScore[],
-    limit: number,
-    offset: number,
-  ): unknown[] {
-    const preferredMakes = this.extractPreferredMakes(terms);
-    if (preferredMakes.length < 2) {
-      return rows.slice(offset, offset + limit);
-    }
-
-    const makeBuckets = new Map<string, Record<string, unknown>[]>();
-    for (const make of preferredMakes) {
-      makeBuckets.set(make, []);
-    }
-    const otherRows: Record<string, unknown>[] = [];
-
-    for (const row of rows) {
-      if (!row || typeof row !== 'object') continue;
-      const item = row as Record<string, unknown>;
-      const normalizedMake = this.toStr(item.make).toLowerCase();
-      const bucket = normalizedMake ? makeBuckets.get(normalizedMake) : null;
-      if (bucket) {
-        bucket.push(item);
-      } else {
-        otherRows.push(item);
-      }
-    }
-
-    const bucketIndexes = new Map<string, number>();
-    for (const make of preferredMakes) {
-      bucketIndexes.set(make, 0);
-    }
-
-    const diversified: unknown[] = [];
-    let otherIndex = 0;
-    let hasProgress = true;
-
-    while (hasProgress) {
-      hasProgress = false;
-
-      for (const make of preferredMakes) {
-        const bucket = makeBuckets.get(make);
-        if (!bucket || bucket.length === 0) continue;
-        const index = bucketIndexes.get(make) ?? 0;
-        if (index >= bucket.length) continue;
-        diversified.push(bucket[index]);
-        bucketIndexes.set(make, index + 1);
-        hasProgress = true;
-      }
-
-      if (otherIndex < otherRows.length) {
-        diversified.push(otherRows[otherIndex]);
-        otherIndex += 1;
-        hasProgress = true;
-      }
-    }
-
-    return diversified.slice(offset, offset + limit);
+  private getMostWantedPersonalizationCandidates(): number {
+    return Math.max(
+      4,
+      this.readPositiveIntEnv('PERSONALIZATION_MOST_WANTED_CANDIDATES', 24),
+    );
   }
 
-  private extractPreferredMakes(terms: PersonalizationTermScore[]): string[] {
-    const rankedMakes = Array.isArray(terms)
-      ? terms
-          .map((term) => ({
-            termKey: this.toStr(term.termKey),
-            termValue: this.toStr(term.termValue),
-            score: Number(term.score ?? 0),
-          }))
-          .filter(
-            (term) =>
-              term.termKey === 'make'
-              && term.termValue.length > 0
-              && Number.isFinite(term.score)
-              && term.score > 0,
-          )
-          .sort((a, b) => b.score - a.score)
-      : [];
+  private getPersonalizationMaxPersonalizedShare(): number {
+    return this.readRatioEnv('PERSONALIZATION_MAX_PERSONALIZED_SHARE', 0.6);
+  }
 
-    const uniqueMakes: string[] = [];
-    const seen = new Set<string>();
-    for (const make of rankedMakes) {
-      const normalized = make.termValue.toLowerCase();
-      if (seen.has(normalized)) continue;
-      seen.add(normalized);
-      uniqueMakes.push(normalized);
-      if (uniqueMakes.length >= 3) {
-        break;
-      }
+  private getPersonalizationModelMaxShare(): number {
+    return this.readRatioEnv('PERSONALIZATION_MODEL_MAX_SHARE', 0.25);
+  }
+
+  private getPersonalizationMakeMaxShare(): number {
+    return this.readRatioEnv('PERSONALIZATION_MAKE_MAX_SHARE', 0.4);
+  }
+
+  private getPersonalizationSearchCandidateMultiplier(): number {
+    return this.readPositiveIntEnv('PERSONALIZATION_SEARCH_CANDIDATE_MULTIPLIER', 5);
+  }
+
+  private getPersonalizationSearchCandidateMax(): number {
+    return this.readPositiveIntEnv('PERSONALIZATION_SEARCH_CANDIDATE_MAX', 500);
+  }
+
+  private getPersonalizationModelOpenThreshold(): number {
+    return this.readPositiveIntEnv('PERSONALIZATION_MODEL_OPEN_THRESHOLD', 3);
+  }
+
+  private getPersonalizationMakeOpenThreshold(): number {
+    return this.readPositiveIntEnv('PERSONALIZATION_MAKE_OPEN_THRESHOLD', 2);
+  }
+
+  private getPersonalizationBodyTypeOpenThreshold(): number {
+    return this.readPositiveIntEnv('PERSONALIZATION_BODYTYPE_OPEN_THRESHOLD', 2);
+  }
+
+  private getPersonalizationGenericOpenThreshold(): number {
+    return this.readPositiveIntEnv('PERSONALIZATION_GENERIC_OPEN_THRESHOLD', 3);
+  }
+
+  private getPersonalizationContactThreshold(): number {
+    return this.readPositiveIntEnv('PERSONALIZATION_CONTACT_THRESHOLD', 1);
+  }
+
+  private readPositiveIntEnv(name: string, fallback: number): number {
+    const raw = process.env[name];
+    if (typeof raw !== 'string' || raw.trim().length === 0) {
+      return fallback;
     }
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) {
+      return fallback;
+    }
+    return Math.max(1, Math.floor(parsed));
+  }
 
-    return uniqueMakes;
+  private readRatioEnv(name: string, fallback: number): number {
+    const raw = process.env[name];
+    if (typeof raw !== 'string' || raw.trim().length === 0) {
+      return fallback;
+    }
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) {
+      return fallback;
+    }
+    return Math.max(0, Math.min(1, parsed));
+  }
+
+  private normalizeComparableValue(value: unknown): string {
+    return this.toStr(value).toLowerCase();
+  }
+
+  private toNonNegativeInt(value: unknown): number {
+    const numericValue = Number(value ?? 0);
+    if (!Number.isFinite(numericValue)) return 0;
+    return Math.max(0, Math.trunc(numericValue));
+  }
+
+  private toTimestampMs(value: unknown): number | null {
+    if (value instanceof Date) {
+      const timestamp = value.getTime();
+      return Number.isNaN(timestamp) ? null : timestamp;
+    }
+    if (typeof value === 'number') {
+      if (!Number.isFinite(value)) return null;
+      return value > 1_000_000_000_000 ? value : value * 1000;
+    }
+    if (typeof value === 'string' && value.trim().length > 0) {
+      const parsed = Date.parse(value);
+      return Number.isNaN(parsed) ? null : parsed;
+    }
+    return null;
   }
 
   private getMostWantedRecencyDays(): number {

@@ -28,6 +28,40 @@ describe('PersonalizationService', () => {
     await expect(service.getTopTerms('visitor-1')).resolves.toEqual([]);
   });
 
+  it('returns top terms with counters and timestamps when enabled', async () => {
+    process.env.PERSONALIZATION_ENABLED = 'true';
+    const { service, prisma } = makeService();
+    prisma.$queryRawUnsafe.mockResolvedValue([
+      {
+        termKey: 'model',
+        termValue: 'Q5',
+        score: 14.2,
+        searchCount: 3,
+        openCount: 4,
+        contactCount: 1,
+        impressionCount: 6,
+        dateUpdated: '2026-03-01T10:00:00.000Z',
+        lastEventAt: '2026-03-01T11:00:00.000Z',
+      },
+    ]);
+
+    const result = await service.getTopTerms('visitor-1');
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        termKey: 'model',
+        termValue: 'Q5',
+        score: 14.2,
+        searchCount: 3,
+        openCount: 4,
+        contactCount: 1,
+        impressionCount: 6,
+      }),
+    ]);
+    expect(result[0]?.dateUpdated).toBeInstanceOf(Date);
+    expect(result[0]?.lastEventAt).toBeInstanceOf(Date);
+  });
+
   it('records search terms by touching profile and writing weighted terms', async () => {
     process.env.PERSONALIZATION_ENABLED = 'true';
     const { service, prisma } = makeService();
@@ -47,6 +81,37 @@ describe('PersonalizationService', () => {
     expect(prisma.$executeRawUnsafe).toHaveBeenCalled();
     const firstCall = prisma.$executeRawUnsafe.mock.calls[0][0] as string;
     expect(firstCall).toContain('INSERT INTO visitor_profile');
+    const upsertCall = prisma.$executeRawUnsafe.mock.calls.find((call: unknown[]) =>
+      String(call[0]).includes('INSERT INTO visitor_interest_term'),
+    ) as unknown[];
+    expect(upsertCall?.[0]).toContain(
+      'search_count = search_count + VALUES(search_count)',
+    );
+    expect(upsertCall.slice(5, 9)).toEqual([1, 0, 0, 0]);
+  });
+
+  it('records open post signal with open counter increment', async () => {
+    process.env.PERSONALIZATION_ENABLED = 'true';
+    const { service, prisma } = makeService();
+    prisma.$executeRawUnsafe.mockResolvedValue(1);
+    prisma.$queryRawUnsafe.mockResolvedValue([
+      {
+        make: 'Mercedes-benz',
+        model: 'GLC',
+        bodyType: 'SUV/Off-Road/Pick-up',
+        fuelType: 'diesel',
+        transmission: 'automatic',
+        type: 'car',
+      },
+    ]);
+
+    await service.recordPostSignalByPostId(10n, 'visitor-2', 'open');
+
+    const upsertCall = prisma.$executeRawUnsafe.mock.calls.find((call: unknown[]) =>
+      String(call[0]).includes('INSERT INTO visitor_interest_term'),
+    ) as unknown[];
+    expect(upsertCall?.[0]).toContain('open_count = open_count + VALUES(open_count)');
+    expect(upsertCall.slice(5, 9)).toEqual([0, 1, 0, 0]);
   });
 
   it('returns false on reset for invalid visitor id', async () => {

@@ -236,6 +236,11 @@ model visitor_interest_term {
   term_key    String          @db.VarChar(64)
   term_value  String          @db.VarChar(255)
   score       Float           @default(0)
+  search_count Int            @default(0) @db.UnsignedInt
+  open_count  Int             @default(0) @db.UnsignedInt
+  contact_count Int           @default(0) @db.UnsignedInt
+  impression_count Int        @default(0) @db.UnsignedInt
+  last_event_at DateTime      @default(now()) @db.DateTime(0)
   dateCreated DateTime        @default(now()) @db.DateTime(0)
   dateUpdated DateTime        @updatedAt @db.DateTime(0)
   profile     visitor_profile @relation(fields: [visitor_hash], references: [visitor_hash], onDelete: Cascade, onUpdate: NoAction, map: "visitor_interest_term_profile_fk")

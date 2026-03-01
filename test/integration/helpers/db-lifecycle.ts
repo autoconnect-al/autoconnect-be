@@ -3,6 +3,8 @@ import { PrismaService } from '../../../src/database/prisma.service';
 
 const RESET_TABLES_IN_DELETE_ORDER = [
   'post_reach_unique',
+  'visitor_interest_term',
+  'visitor_profile',
   'car_detail',
   'search',
   'post',

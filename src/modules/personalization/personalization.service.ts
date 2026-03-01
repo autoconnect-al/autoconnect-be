@@ -10,12 +10,26 @@ export type PersonalizationTermScore = {
   termKey: string;
   termValue: string;
   score: number;
+  searchCount?: number;
+  openCount?: number;
+  contactCount?: number;
+  impressionCount?: number;
+  dateUpdated?: Date | string | number | null;
+  lastEventAt?: Date | string | number | null;
+};
+
+type EventCounters = {
+  searchCount: number;
+  openCount: number;
+  contactCount: number;
+  impressionCount: number;
 };
 
 type WeightedTerm = {
   termKey: string;
   termValue: string;
   delta: number;
+  counters: EventCounters;
 };
 
 type PostSignalRow = {
@@ -25,6 +39,18 @@ type PostSignalRow = {
   fuelType: string | null;
   transmission: string | null;
   type: string | null;
+};
+
+type TopTermRow = {
+  termKey: string;
+  termValue: string;
+  score: number;
+  searchCount: number | null;
+  openCount: number | null;
+  contactCount: number | null;
+  impressionCount: number | null;
+  dateUpdated: Date | string | null;
+  lastEventAt: Date | string | null;
 };
 
 const MAX_VISITOR_ID_LENGTH = 255;
@@ -91,10 +117,16 @@ export class PersonalizationService {
       ? Math.max(1, Math.min(100, Math.floor(limit)))
       : 40;
 
-    const rows = await this.prisma.$queryRawUnsafe<
-      Array<{ termKey: string; termValue: string; score: number }>
-    >(
-      `SELECT term_key AS termKey, term_value AS termValue, score
+    const rows = await this.prisma.$queryRawUnsafe<TopTermRow[]>(
+      `SELECT term_key AS termKey,
+              term_value AS termValue,
+              score,
+              search_count AS searchCount,
+              open_count AS openCount,
+              contact_count AS contactCount,
+              impression_count AS impressionCount,
+              dateUpdated,
+              last_event_at AS lastEventAt
        FROM visitor_interest_term
        WHERE visitor_hash = ?
        ORDER BY score DESC, dateUpdated DESC
@@ -108,6 +140,12 @@ export class PersonalizationService {
         termKey: this.normalizeTermKey(row.termKey),
         termValue: this.normalizeTermValue(row.termValue),
         score: Number(row.score ?? 0),
+        searchCount: this.toNonNegativeInt(row.searchCount),
+        openCount: this.toNonNegativeInt(row.openCount),
+        contactCount: this.toNonNegativeInt(row.contactCount),
+        impressionCount: this.toNonNegativeInt(row.impressionCount),
+        dateUpdated: this.toDateOrNull(row.dateUpdated),
+        lastEventAt: this.toDateOrNull(row.lastEventAt),
       }))
       .filter((row) => row.termKey.length > 0 && row.termValue.length > 0 && row.score > 0);
   }
@@ -216,15 +254,24 @@ export class PersonalizationService {
     for (const term of terms) {
       await this.prisma.$executeRawUnsafe(
         `INSERT INTO visitor_interest_term
-          (visitor_hash, term_key, term_value, score, dateCreated, dateUpdated)
-         VALUES (?, ?, ?, ?, NOW(), NOW())
+          (visitor_hash, term_key, term_value, score, search_count, open_count, contact_count, impression_count, last_event_at, dateCreated, dateUpdated)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), NOW())
          ON DUPLICATE KEY UPDATE
            score = LEAST(?, (score * ?) + VALUES(score)),
+           search_count = search_count + VALUES(search_count),
+           open_count = open_count + VALUES(open_count),
+           contact_count = contact_count + VALUES(contact_count),
+           impression_count = impression_count + VALUES(impression_count),
+           last_event_at = NOW(),
            dateUpdated = NOW()`,
         visitorHash,
         term.termKey,
         term.termValue,
         term.delta,
+        term.counters.searchCount,
+        term.counters.openCount,
+        term.counters.contactCount,
+        term.counters.impressionCount,
         MAX_TERM_SCORE,
         SCORE_DECAY_ON_WRITE,
       );
@@ -244,14 +291,17 @@ export class PersonalizationService {
         if (!normalizedKey || !normalizedValue) continue;
         const mapKey = `${normalizedKey}::${normalizedValue}`;
         const delta = FIELD_WEIGHTS[fieldKey] * eventMultiplier;
+        const counters = this.countersForEvent('search');
         const existing = weightedTerms.get(mapKey);
         if (existing) {
           existing.delta += delta;
+          existing.counters = this.mergeCounters(existing.counters, counters);
         } else {
           weightedTerms.set(mapKey, {
             termKey: normalizedKey,
             termValue: normalizedValue,
             delta,
+            counters,
           });
         }
       }
@@ -303,14 +353,17 @@ export class PersonalizationService {
 
         const mapKey = `${normalizedKey}::${normalizedValue}`;
         const delta = FIELD_WEIGHTS[fieldKey] * eventMultiplier;
+        const counters = this.countersForEvent(event);
         const existing = weightedTerms.get(mapKey);
         if (existing) {
           existing.delta += delta;
+          existing.counters = this.mergeCounters(existing.counters, counters);
         } else {
           weightedTerms.set(mapKey, {
             termKey: normalizedKey,
             termValue: normalizedValue,
             delta,
+            counters,
           });
         }
       }
@@ -324,6 +377,55 @@ export class PersonalizationService {
     add('type', row.type, 'type');
 
     return Array.from(weightedTerms.values());
+  }
+
+  private countersForEvent(event: PersonalizationEvent): EventCounters {
+    switch (event) {
+      case 'search':
+        return {
+          searchCount: 1,
+          openCount: 0,
+          contactCount: 0,
+          impressionCount: 0,
+        };
+      case 'open':
+        return {
+          searchCount: 0,
+          openCount: 1,
+          contactCount: 0,
+          impressionCount: 0,
+        };
+      case 'contact':
+        return {
+          searchCount: 0,
+          openCount: 0,
+          contactCount: 1,
+          impressionCount: 0,
+        };
+      case 'impression':
+        return {
+          searchCount: 0,
+          openCount: 0,
+          contactCount: 0,
+          impressionCount: 1,
+        };
+      default:
+        return {
+          searchCount: 0,
+          openCount: 0,
+          contactCount: 0,
+          impressionCount: 0,
+        };
+    }
+  }
+
+  private mergeCounters(base: EventCounters, delta: EventCounters): EventCounters {
+    return {
+      searchCount: base.searchCount + delta.searchCount,
+      openCount: base.openCount + delta.openCount,
+      contactCount: base.contactCount + delta.contactCount,
+      impressionCount: base.impressionCount + delta.impressionCount,
+    };
   }
 
   private valuesFromRaw(raw: unknown): string[] {
@@ -363,6 +465,23 @@ export class PersonalizationService {
     const parsed = Number(process.env.PERSONALIZATION_RETENTION_DAYS ?? '90');
     if (!Number.isFinite(parsed)) return 90;
     return Math.max(1, Math.floor(parsed));
+  }
+
+  private toNonNegativeInt(value: unknown): number {
+    const numericValue = Number(value ?? 0);
+    if (!Number.isFinite(numericValue)) return 0;
+    return Math.max(0, Math.trunc(numericValue));
+  }
+
+  private toDateOrNull(value: unknown): Date | null {
+    if (value instanceof Date) {
+      return Number.isNaN(value.getTime()) ? null : value;
+    }
+    if (typeof value === 'string' || typeof value === 'number') {
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+    return null;
   }
 
   private hashVisitorId(visitorId: string): string {
