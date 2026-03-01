@@ -286,6 +286,57 @@ describe('LegacySearchService', () => {
     expect(response.result[0]).not.toHaveProperty('postOpen');
   });
 
+  it('search should diversify personalized default results across preferred makes', async () => {
+    const prisma = {
+      $queryRawUnsafe: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          { id: 101, make: 'Audi', model: 'Q5' },
+          { id: 102, make: 'Audi', model: 'A6' },
+          { id: 103, make: 'Audi', model: 'A4' },
+          { id: 104, make: 'BMW', model: 'X5' },
+          { id: 105, make: 'Audi', model: 'Q7' },
+          { id: 106, make: 'Audi', model: 'Q3' },
+        ]),
+    } as any;
+    const personalizationService = {
+      isEnabled: jest.fn().mockReturnValue(true),
+      isPersonalizationDisabled: jest.fn().mockReturnValue(false),
+      sanitizeVisitorId: jest.fn().mockReturnValue('visitor-1'),
+      getTopTerms: jest.fn().mockResolvedValue([
+        { termKey: 'make', termValue: 'audi', score: 80 },
+        { termKey: 'make', termValue: 'bmw', score: 60 },
+      ]),
+      recordSearchSignal: jest.fn().mockResolvedValue(undefined),
+    } as any;
+    const service = new LegacySearchService(
+      prisma,
+      new LegacySearchQueryBuilder(),
+      personalizationService,
+    );
+
+    const response = await service.search(
+      JSON.stringify({
+        type: 'car',
+        searchTerms: [{ key: 'type', value: 'car' }],
+        sortTerms: [{ key: 'renewedTime', order: 'DESC' }],
+        visitorId: 'visitor-1',
+        page: 0,
+        maxResults: 4,
+      }),
+    );
+
+    expect(response.success).toBe(true);
+    expect(response.result).toHaveLength(4);
+    const makes = response.result.map((row: { make: string }) => row.make.toLowerCase());
+    expect(makes).toEqual(expect.arrayContaining(['audi', 'bmw']));
+
+    const searchCall = prisma.$queryRawUnsafe.mock.calls[1];
+    expect(searchCall[searchCall.length - 2]).toBe(16);
+    expect(searchCall[searchCall.length - 1]).toBe(0);
+  });
+
   it('relatedById should select sidecarMedias for related cards', async () => {
     const prisma = {
       $queryRawUnsafe: jest

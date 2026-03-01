@@ -18,6 +18,8 @@ import { enrichRowsWithPostStats } from '../../common/post-stats-enrichment.util
 export class LegacySearchService {
   private readonly skipQuickSearchFix = new Set(['benz', 'mercedes']);
   private readonly logger = createLogger('legacy-search-service');
+  private readonly personalizedSearchCandidateMultiplier = 4;
+  private readonly maxPersonalizedSearchCandidates = 400;
   private readonly queryBudgetsMs: Record<string, number> = {
     search: 350,
     search_promoted: 220,
@@ -53,18 +55,27 @@ export class LegacySearchService {
     const { whereSql, params } = this.queryBuilder.buildWhere(filter);
     const { limit, offset } = this.queryBuilder.buildSortAndPagination(filter);
     const personalizedSort = this.buildPersonalizedSearchOrder(personalizationTerms);
+    const shouldDiversifyPersonalizedSearch =
+      this.shouldDiversifyPersonalizedSearch(personalizationTerms);
     const orderSql = personalizedSort.orderSql
       ?? this.queryBuilder.buildSortAndPagination(filter).orderSql;
+    const queryLimit = shouldDiversifyPersonalizedSearch
+      ? this.buildPersonalizedSearchCandidateLimit(limit, offset)
+      : limit;
+    const queryOffset = shouldDiversifyPersonalizedSearch ? 0 : offset;
 
-    const rows = await this.timeQuery('search', () =>
+    const rawRows = await this.timeQuery('search', () =>
       this.prisma.$queryRawUnsafe<unknown[]>(
         `SELECT * FROM search ${whereSql} ${orderSql} LIMIT ? OFFSET ?`,
         ...params,
         ...personalizedSort.orderParams,
-        limit,
-        offset,
+        queryLimit,
+        queryOffset,
       ),
     );
+    const rows = shouldDiversifyPersonalizedSearch
+      ? this.diversifyPersonalizedRows(rawRows, personalizationTerms, limit, offset)
+      : rawRows;
 
     const recordSignalPromise =
       this.personalizationService?.recordSearchSignal(filter);
@@ -1163,6 +1174,117 @@ export class LegacySearchService {
       default:
         return null;
     }
+  }
+
+  private shouldDiversifyPersonalizedSearch(
+    terms: PersonalizationTermScore[],
+  ): boolean {
+    return this.extractPreferredMakes(terms).length > 1;
+  }
+
+  private buildPersonalizedSearchCandidateLimit(limit: number, offset: number): number {
+    const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 24;
+    const safeOffset = Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0;
+    const requestedRows = safeOffset + safeLimit;
+    const expanded = requestedRows * this.personalizedSearchCandidateMultiplier;
+    return Math.max(
+      safeLimit,
+      Math.min(this.maxPersonalizedSearchCandidates, expanded),
+    );
+  }
+
+  private diversifyPersonalizedRows(
+    rows: unknown[],
+    terms: PersonalizationTermScore[],
+    limit: number,
+    offset: number,
+  ): unknown[] {
+    const preferredMakes = this.extractPreferredMakes(terms);
+    if (preferredMakes.length < 2) {
+      return rows.slice(offset, offset + limit);
+    }
+
+    const makeBuckets = new Map<string, Record<string, unknown>[]>();
+    for (const make of preferredMakes) {
+      makeBuckets.set(make, []);
+    }
+    const otherRows: Record<string, unknown>[] = [];
+
+    for (const row of rows) {
+      if (!row || typeof row !== 'object') continue;
+      const item = row as Record<string, unknown>;
+      const normalizedMake = this.toStr(item.make).toLowerCase();
+      const bucket = normalizedMake ? makeBuckets.get(normalizedMake) : null;
+      if (bucket) {
+        bucket.push(item);
+      } else {
+        otherRows.push(item);
+      }
+    }
+
+    const bucketIndexes = new Map<string, number>();
+    for (const make of preferredMakes) {
+      bucketIndexes.set(make, 0);
+    }
+
+    const diversified: unknown[] = [];
+    let otherIndex = 0;
+    let hasProgress = true;
+
+    while (hasProgress) {
+      hasProgress = false;
+
+      for (const make of preferredMakes) {
+        const bucket = makeBuckets.get(make);
+        if (!bucket || bucket.length === 0) continue;
+        const index = bucketIndexes.get(make) ?? 0;
+        if (index >= bucket.length) continue;
+        diversified.push(bucket[index]);
+        bucketIndexes.set(make, index + 1);
+        hasProgress = true;
+      }
+
+      if (otherIndex < otherRows.length) {
+        diversified.push(otherRows[otherIndex]);
+        otherIndex += 1;
+        hasProgress = true;
+      }
+    }
+
+    return diversified.slice(offset, offset + limit);
+  }
+
+  private extractPreferredMakes(terms: PersonalizationTermScore[]): string[] {
+    const rankedMakes = Array.isArray(terms)
+      ? terms
+          .map((term) => ({
+            termKey: this.toStr(term.termKey),
+            termValue: this.toStr(term.termValue),
+            score: Number(term.score ?? 0),
+          }))
+          .filter(
+            (term) =>
+              term.termKey === 'make'
+              && term.termValue.length > 0
+              && Number.isFinite(term.score)
+              && term.score > 0,
+          )
+          .sort((a, b) => b.score - a.score)
+      : [];
+
+    const uniqueMakes: string[] = [];
+    const seen = new Set<string>();
+    for (const make of rankedMakes) {
+      const normalized = make.termValue.toLowerCase();
+      if (seen.has(normalized)) continue;
+      seen.add(normalized);
+      uniqueMakes.push(normalized);
+      if (uniqueMakes.length >= 3) {
+        break;
+      }
+    }
+
+    return uniqueMakes;
   }
 
   private getMostWantedRecencyDays(): number {
