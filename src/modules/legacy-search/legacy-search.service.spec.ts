@@ -366,6 +366,33 @@ describe('LegacySearchService', () => {
     expect(recencyParam.getTime()).toBeLessThanOrEqual(maxExpected);
   });
 
+  it('mostWanted should allow disabling recency filter via env', async () => {
+    const previousRecency = process.env.MOST_WANTED_RECENCY_DAYS;
+    process.env.MOST_WANTED_RECENCY_DAYS = '0';
+    try {
+      const prisma = {
+        $queryRawUnsafe: jest.fn().mockResolvedValue([]),
+      } as any;
+      const service = new LegacySearchService(
+        prisma,
+        new LegacySearchQueryBuilder(),
+      );
+
+      await service.mostWanted();
+
+      const call = prisma.$queryRawUnsafe.mock.calls[0];
+      const query = call[0] as string;
+      expect(query).not.toContain('p.dateCreated > ?');
+      expect(call).toHaveLength(1);
+    } finally {
+      if (previousRecency == null) {
+        delete process.env.MOST_WANTED_RECENCY_DAYS;
+      } else {
+        process.env.MOST_WANTED_RECENCY_DAYS = previousRecency;
+      }
+    }
+  });
+
   it('relatedById should use parameterized excluded ids list', async () => {
     const prisma = {
       $queryRawUnsafe: jest
