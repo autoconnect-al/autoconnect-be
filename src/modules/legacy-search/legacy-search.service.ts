@@ -8,6 +8,49 @@ import {
   type FilterTerm,
   type SearchFilter,
 } from './legacy-search-query-builder';
+import {
+  PersonalizationService,
+  type PersonalizationTermScore,
+} from '../personalization/personalization.service';
+import { enrichRowsWithPostStats } from '../../common/post-stats-enrichment.util';
+
+type RankablePersonalizationTerm = {
+  termKey: string;
+  termValue: string;
+  normalizedValue: string;
+  score: number;
+  searchCount: number;
+  openCount: number;
+  contactCount: number;
+  impressionCount: number;
+  dateUpdatedMs: number | null;
+  lastEventAtMs: number | null;
+};
+
+type ActiveRankTerm = RankablePersonalizationTerm & {
+  affinity: number;
+};
+
+type PersonalizedCandidate = {
+  id: string;
+  row: Record<string, unknown>;
+  make: string;
+  model: string;
+  renewedTime: number;
+  baselineRank: number;
+  freshnessScore: number;
+  interestScore: number;
+  finalScore: number;
+};
+
+const PERSONALIZATION_KEY_WEIGHTS: Record<string, number> = {
+  model: 0.35,
+  make: 0.2,
+  bodyType: 0.2,
+  fuelType: 0.1,
+  transmission: 0.1,
+  type: 0.05,
+};
 
 @Injectable()
 export class LegacySearchService {
@@ -29,6 +72,7 @@ export class LegacySearchService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly queryBuilder: LegacySearchQueryBuilder,
+    private readonly personalizationService?: PersonalizationService,
   ) {}
 
   async search(filterRaw: string | undefined) {
@@ -36,22 +80,53 @@ export class LegacySearchService {
     if (!filter) {
       return legacyError('An error occurred while searching for cars', 500);
     }
+    const shouldApplyPersonalization =
+      this.shouldApplySearchPersonalization(filter);
+    const personalizationTerms = shouldApplyPersonalization
+      ? ((await this.personalizationService?.getTopTerms(filter.visitorId)) ??
+        [])
+      : [];
+
     const promoted = await this.findPromotedSearchPost(filter);
     const { whereSql, params } = this.queryBuilder.buildWhere(filter);
-    const { orderSql, limit, offset } =
-      this.queryBuilder.buildSortAndPagination(filter);
-    const rows = await this.timeQuery('search', () =>
+    const { limit, offset } = this.queryBuilder.buildSortAndPagination(filter);
+    const orderSql = this.queryBuilder.buildSortAndPagination(filter).orderSql;
+    const queryLimit = shouldApplyPersonalization
+      ? this.buildPersonalizedSearchCandidateLimit(limit, offset)
+      : limit;
+    const queryOffset = shouldApplyPersonalization ? 0 : offset;
+
+    const rawRows = await this.timeQuery('search', () =>
       this.prisma.$queryRawUnsafe<unknown[]>(
         `SELECT * FROM search ${whereSql} ${orderSql} LIMIT ? OFFSET ?`,
         ...params,
-        limit,
-        offset,
+        queryLimit,
+        queryOffset,
       ),
     );
+    const rows = shouldApplyPersonalization
+      ? this.composePersonalizedRows(
+          rawRows,
+          personalizationTerms,
+          limit,
+          offset,
+          'search',
+        )
+      : rawRows;
+
+    const recordSignalPromise =
+      this.personalizationService?.recordSearchSignal(filter);
+    void recordSignalPromise?.catch((error) =>
+        this.logger.warn('personalization.search-signal.failed', {
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+
     const merged = this.mergeRowsWithPromoted(rows, promoted);
+    const enrichedRows = await enrichRowsWithPostStats(this.prisma, merged);
     return legacySuccess(
       this.normalizeBigInts(
-        this.annotateRowsWithPromotion(merged, promoted),
+        this.annotateRowsWithPromotion(enrichedRows, promoted),
       ),
     );
   }
@@ -144,7 +219,12 @@ export class LegacySearchService {
     return legacySuccess(this.normalizeBigInts(rows));
   }
 
-  async mostWanted(excludeIds?: string, excludedAccounts?: string) {
+  async mostWanted(
+    excludeIds?: string,
+    excludedAccounts?: string,
+    visitorId?: string,
+    personalizationDisabled?: boolean | string | number,
+  ) {
     const excludeIdValues = this.queryBuilder.parseCsvValues(excludeIds);
     const excludeAccountValues = this.queryBuilder.parseCsvValues(excludedAccounts);
 
@@ -173,16 +253,45 @@ export class LegacySearchService {
       params.push(...excludeAccountValues);
     }
 
+    const shouldApplyPersonalization =
+      this.shouldApplyMostWantedPersonalization(
+        visitorId,
+        personalizationDisabled,
+      );
+    const personalizationTerms = shouldApplyPersonalization
+      ? ((await this.personalizationService?.getTopTerms(visitorId)) ?? [])
+      : [];
+    const orderSql = 'ORDER BY s.mostWantedTo DESC, p.clicks DESC';
+    const limit = shouldApplyPersonalization
+      ? this.getMostWantedPersonalizationCandidates()
+      : 4;
+
     const query = `SELECT s.id, s.make, s.model, s.variant, s.registration, s.mileage, s.price, s.transmission, s.fuelType, s.engineSize, s.drivetrain, s.seats, s.numberOfDoors, s.bodyType, s.customsPaid, s.canExchange, s.options, s.emissionGroup, s.type, s.accountName, s.sidecarMedias, s.contact, s.vendorContact, s.profilePicture, s.vendorId, s.promotionTo, s.highlightedTo, s.renewTo, s.renewInterval, s.renewedTime, s.mostWantedTo
       FROM search s
       INNER JOIN post p ON p.id = s.id
       WHERE ${clauses.join(' AND ')}
-      ORDER BY s.mostWantedTo DESC, p.clicks DESC
-      LIMIT 4`;
-    const rows = await this.timeQuery('most_wanted', () =>
-      this.prisma.$queryRawUnsafe<unknown[]>(query, ...params),
+      ${orderSql}
+      LIMIT ${limit}`;
+    const rawRows = await this.timeQuery('most_wanted', () =>
+      this.prisma.$queryRawUnsafe<unknown[]>(
+        query,
+        ...params,
+      ),
     );
-    return legacySuccess(this.normalizeBigInts(this.withCarDetail(rows)));
+    const rows = shouldApplyPersonalization
+      ? this.composePersonalizedRows(
+          rawRows,
+          personalizationTerms,
+          4,
+          0,
+          'most_wanted',
+        )
+      : rawRows;
+    const enrichedRows = await enrichRowsWithPostStats(
+      this.prisma,
+      this.withCarDetail(rows),
+    );
+    return legacySuccess(this.normalizeBigInts(enrichedRows));
   }
 
   async getCarDetails(id: string) {
@@ -195,7 +304,8 @@ export class LegacySearchService {
     if (rows.length === 0) {
       return legacyError('Car details not found', 404);
     }
-    return legacySuccess(this.normalizeBigInts(rows));
+    const enrichedRows = await enrichRowsWithPostStats(this.prisma, rows);
+    return legacySuccess(this.normalizeBigInts(enrichedRows));
   }
 
   async getCaption(id: string) {
@@ -269,11 +379,9 @@ export class LegacySearchService {
         ...params,
       ),
     );
-    return legacySuccess(
-      this.normalizeBigInts(
-        this.annotateRelatedRows(this.withCarDetail(rows), promoted),
-      ),
-    );
+    const annotatedRows = this.annotateRelatedRows(this.withCarDetail(rows), promoted);
+    const enrichedRows = await enrichRowsWithPostStats(this.prisma, annotatedRows);
+    return legacySuccess(this.normalizeBigInts(enrichedRows));
   }
 
   async relatedByFilter(
@@ -335,11 +443,9 @@ export class LegacySearchService {
         limit,
       ),
     );
-    return legacySuccess(
-      this.normalizeBigInts(
-        this.annotateRelatedRows(this.withCarDetail(rows), promoted),
-      ),
-    );
+    const annotatedRows = this.annotateRelatedRows(this.withCarDetail(rows), promoted);
+    const enrichedRows = await enrichRowsWithPostStats(this.prisma, annotatedRows);
+    return legacySuccess(this.normalizeBigInts(enrichedRows));
   }
 
   private async findPromotedRelatedPost(
@@ -925,6 +1031,641 @@ export class LegacySearchService {
 
   private parseCsvValues(raw: string | undefined): string[] {
     return this.queryBuilder.parseCsvValues(raw);
+  }
+
+  private shouldApplySearchPersonalization(filter: SearchFilter): boolean {
+    if (!this.personalizationService) return false;
+    if (!this.personalizationService.isEnabled()) return false;
+    if (
+      this.personalizationService.isPersonalizationDisabled(
+        filter.personalizationDisabled,
+      )
+    ) {
+      return false;
+    }
+    if (!this.personalizationService.sanitizeVisitorId(filter.visitorId)) {
+      return false;
+    }
+    if (!this.isDefaultRenewedTimeSort(filter)) {
+      return false;
+    }
+    if (this.toStr(filter.keyword ?? '')) {
+      return false;
+    }
+    if (this.toStr(filter.generalSearch ?? '')) {
+      return false;
+    }
+
+    return !this.hasActiveSearchTerms(filter);
+  }
+
+  private shouldApplyMostWantedPersonalization(
+    visitorId?: string,
+    personalizationDisabled?: boolean | string | number,
+  ): boolean {
+    if (!this.personalizationService) return false;
+    if (!this.personalizationService.isEnabled()) return false;
+    if (this.personalizationService.isPersonalizationDisabled(personalizationDisabled)) {
+      return false;
+    }
+    return Boolean(this.personalizationService.sanitizeVisitorId(visitorId));
+  }
+
+  private hasActiveSearchTerms(filter: SearchFilter): boolean {
+    const terms = Array.isArray(filter.searchTerms) ? filter.searchTerms : [];
+    const ignoredKeys = new Set(['type']);
+    for (const term of terms) {
+      if (!term || typeof term.key !== 'string') continue;
+      const normalizedKey = this.toStr(term.key).toLowerCase();
+      if (!normalizedKey || ignoredKeys.has(normalizedKey)) {
+        continue;
+      }
+
+      const value = term.value;
+      if (value == null) continue;
+
+      if (typeof value === 'object' && !Array.isArray(value)) {
+        const range = value as { from?: unknown; to?: unknown };
+        if (this.toStr(range.from ?? '') || this.toStr(range.to ?? '')) {
+          return true;
+        }
+        continue;
+      }
+
+      if (this.toStr(value)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private isDefaultRenewedTimeSort(filter: SearchFilter): boolean {
+    const sort =
+      Array.isArray(filter.sortTerms) && filter.sortTerms.length > 0
+        ? filter.sortTerms[0]
+        : {};
+
+    const key = this.toStr(sort?.key ?? 'renewedTime') || 'renewedTime';
+    const order = (this.toStr(sort?.order ?? 'DESC') || 'DESC').toUpperCase();
+
+    return key === 'renewedTime' && order === 'DESC';
+  }
+
+  private composePersonalizedRows(
+    rows: unknown[],
+    terms: PersonalizationTermScore[],
+    limit: number,
+    offset: number,
+    context: 'search' | 'most_wanted',
+  ): unknown[] {
+    const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 24;
+    const safeOffset = Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0;
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return [];
+    }
+
+    const activeTerms = this.buildActiveRankTerms(terms);
+    const activeTermsByKey = this.buildActiveTermsByKey(activeTerms);
+    if (activeTerms.length === 0) {
+      this.logger.info(`personalization.${context}.compose`, {
+        candidateSize: rows.length,
+        activeTermsByKey,
+        reason: 'no_active_terms',
+      });
+      return rows.slice(safeOffset, safeOffset + safeLimit);
+    }
+
+    const candidates = this.buildPersonalizationCandidates(rows, activeTerms);
+    if (candidates.length === 0) {
+      this.logger.info(`personalization.${context}.compose`, {
+        candidateSize: rows.length,
+        activeTermsByKey,
+        reason: 'no_candidate_rows',
+      });
+      return rows.slice(safeOffset, safeOffset + safeLimit);
+    }
+
+    const pageSize = Math.max(1, safeLimit);
+    const personalizedSlots = Math.max(
+      0,
+      Math.min(
+        pageSize,
+        Math.floor(pageSize * this.getPersonalizationMaxPersonalizedShare()),
+      ),
+    );
+    const modelCap = Math.max(
+      1,
+      Math.ceil(pageSize * this.getPersonalizationModelMaxShare()),
+    );
+    const makeCap = Math.max(
+      1,
+      Math.ceil(pageSize * this.getPersonalizationMakeMaxShare()),
+    );
+
+    const personalizedPool = [...candidates]
+      .filter((candidate) => candidate.interestScore > 0)
+      .sort(
+        (a, b) =>
+          b.finalScore - a.finalScore
+          || b.freshnessScore - a.freshnessScore
+          || b.renewedTime - a.renewedTime
+          || b.id.localeCompare(a.id),
+      );
+    const freshPool = [...candidates].sort(
+      (a, b) =>
+        a.baselineRank - b.baselineRank
+        || b.renewedTime - a.renewedTime
+        || b.id.localeCompare(a.id),
+    );
+
+    const selectedIds = new Set<string>();
+    const ordered: PersonalizedCandidate[] = [];
+    const firstPageCapHits = { model: 0, make: 0 };
+    let firstPagePersonalizedCount = 0;
+
+    while (ordered.length < candidates.length) {
+      const pageRows: PersonalizedCandidate[] = [];
+      const modelCounts = new Map<string, number>();
+      const makeCounts = new Map<string, number>();
+      const capHits = { model: 0, make: 0 };
+
+      const personalizedCount = this.addFromCandidatePool(
+        personalizedPool,
+        pageRows,
+        selectedIds,
+        personalizedSlots,
+        modelCounts,
+        makeCounts,
+        modelCap,
+        makeCap,
+        capHits,
+      );
+
+      this.addFromCandidatePool(
+        freshPool,
+        pageRows,
+        selectedIds,
+        pageSize - pageRows.length,
+        modelCounts,
+        makeCounts,
+        modelCap,
+        makeCap,
+        capHits,
+      );
+
+      if (pageRows.length < pageSize) {
+        this.addFromCandidatePool(
+          personalizedPool,
+          pageRows,
+          selectedIds,
+          pageSize - pageRows.length,
+          modelCounts,
+          makeCounts,
+          modelCap,
+          makeCap,
+          capHits,
+        );
+      }
+
+      if (ordered.length === 0) {
+        firstPageCapHits.model = capHits.model;
+        firstPageCapHits.make = capHits.make;
+        firstPagePersonalizedCount = personalizedCount;
+        if (personalizedCount < personalizedSlots) {
+          this.logger.warn(`personalization.${context}.below-target`, {
+            candidateSize: candidates.length,
+            personalizedSlots,
+            personalizedCount,
+            capHits,
+            activeTermsByKey,
+          });
+        }
+      }
+
+      if (pageRows.length === 0) {
+        this.logger.warn(`personalization.${context}.compose-empty-page`, {
+          candidateSize: candidates.length,
+          selectedCount: ordered.length,
+          pageSize,
+          activeTermsByKey,
+        });
+        break;
+      }
+
+      ordered.push(...pageRows);
+    }
+
+    this.logger.info(`personalization.${context}.compose`, {
+      candidateSize: candidates.length,
+      activeTermsByKey,
+      pageSize,
+      personalizedSlots,
+      modelCap,
+      makeCap,
+      firstPagePersonalizedCount,
+      firstPageCapHits,
+    });
+
+    return ordered
+      .slice(safeOffset, safeOffset + safeLimit)
+      .map((candidate) => candidate.row);
+  }
+
+  private addFromCandidatePool(
+    pool: PersonalizedCandidate[],
+    destination: PersonalizedCandidate[],
+    selectedIds: Set<string>,
+    maxToAdd: number,
+    modelCounts: Map<string, number>,
+    makeCounts: Map<string, number>,
+    modelCap: number,
+    makeCap: number,
+    capHits: { model: number; make: number },
+  ): number {
+    if (maxToAdd <= 0) {
+      return 0;
+    }
+
+    let added = 0;
+    for (const candidate of pool) {
+      if (added >= maxToAdd) {
+        break;
+      }
+      if (selectedIds.has(candidate.id)) {
+        continue;
+      }
+      if (
+        !this.canSelectCandidateWithCaps(
+          candidate,
+          modelCounts,
+          makeCounts,
+          modelCap,
+          makeCap,
+          capHits,
+        )
+      ) {
+        continue;
+      }
+
+      destination.push(candidate);
+      selectedIds.add(candidate.id);
+      added += 1;
+
+      if (candidate.model) {
+        modelCounts.set(candidate.model, (modelCounts.get(candidate.model) ?? 0) + 1);
+      }
+      if (candidate.make) {
+        makeCounts.set(candidate.make, (makeCounts.get(candidate.make) ?? 0) + 1);
+      }
+    }
+
+    return added;
+  }
+
+  private canSelectCandidateWithCaps(
+    candidate: PersonalizedCandidate,
+    modelCounts: Map<string, number>,
+    makeCounts: Map<string, number>,
+    modelCap: number,
+    makeCap: number,
+    capHits: { model: number; make: number },
+  ): boolean {
+    if (candidate.model && (modelCounts.get(candidate.model) ?? 0) >= modelCap) {
+      capHits.model += 1;
+      return false;
+    }
+    if (candidate.make && (makeCounts.get(candidate.make) ?? 0) >= makeCap) {
+      capHits.make += 1;
+      return false;
+    }
+    return true;
+  }
+
+  private buildPersonalizationCandidates(
+    rows: unknown[],
+    activeTerms: ActiveRankTerm[],
+  ): PersonalizedCandidate[] {
+    const objects = rows
+      .map((row, baselineRank) => {
+        if (!row || typeof row !== 'object') {
+          return null;
+        }
+        return {
+          row: row as Record<string, unknown>,
+          baselineRank,
+        };
+      })
+      .filter(
+        (
+          item,
+        ): item is {
+          row: Record<string, unknown>;
+          baselineRank: number;
+        } => Boolean(item),
+      );
+
+    if (objects.length === 0) {
+      return [];
+    }
+
+    const renewedTimes = objects.map((item) =>
+      this.toNullableNumber(item.row.renewedTime),
+    );
+    const minRenewedTime = Math.min(...renewedTimes);
+    const maxRenewedTime = Math.max(...renewedTimes);
+
+    return objects.map((item) => {
+      const id = this.toStr(item.row.id) || `candidate-${item.baselineRank}`;
+      const make = this.normalizeComparableValue(item.row.make);
+      const model = this.normalizeComparableValue(item.row.model);
+      const renewedTime = this.toNullableNumber(item.row.renewedTime);
+      const freshnessScore =
+        maxRenewedTime > minRenewedTime
+          ? (renewedTime - minRenewedTime) / (maxRenewedTime - minRenewedTime)
+          : 0;
+      const interestScore = this.scoreRowInterest(item.row, activeTerms);
+      const finalScore = 0.6 * interestScore + 0.4 * freshnessScore;
+
+      return {
+        id,
+        row: item.row,
+        make,
+        model,
+        renewedTime,
+        baselineRank: item.baselineRank,
+        freshnessScore,
+        interestScore,
+        finalScore,
+      };
+    });
+  }
+
+  private scoreRowInterest(
+    row: Record<string, unknown>,
+    activeTerms: ActiveRankTerm[],
+  ): number {
+    let score = 0;
+
+    for (const [termKey, weight] of Object.entries(PERSONALIZATION_KEY_WEIGHTS)) {
+      const rowValue = this.normalizeComparableValue(this.valueForTermKey(row, termKey));
+      if (!rowValue) {
+        continue;
+      }
+
+      let bestAffinity = 0;
+      for (const term of activeTerms) {
+        if (term.termKey !== termKey) continue;
+        if (term.normalizedValue !== rowValue) continue;
+        if (term.affinity > bestAffinity) {
+          bestAffinity = term.affinity;
+        }
+      }
+      if (bestAffinity > 0) {
+        score += weight * bestAffinity;
+      }
+    }
+
+    return score;
+  }
+
+  private valueForTermKey(row: Record<string, unknown>, termKey: string): unknown {
+    switch (termKey) {
+      case 'make':
+        return row.make;
+      case 'model':
+        return row.model;
+      case 'bodyType':
+        return row.bodyType;
+      case 'fuelType':
+        return row.fuelType;
+      case 'transmission':
+        return row.transmission;
+      case 'type':
+        return row.type;
+      default:
+        return '';
+    }
+  }
+
+  private buildActiveRankTerms(terms: PersonalizationTermScore[]): ActiveRankTerm[] {
+    const rankableTerms = this.pickRankableTerms(terms);
+    if (rankableTerms.length === 0) {
+      return [];
+    }
+
+    const maxScoreByKey = new Map<string, number>();
+    for (const term of rankableTerms) {
+      const current = maxScoreByKey.get(term.termKey) ?? 0;
+      if (term.score > current) {
+        maxScoreByKey.set(term.termKey, term.score);
+      }
+    }
+
+    return rankableTerms
+      .filter((term) => this.isTermActive(term))
+      .map((term) => {
+        const maxScoreWithinKey = maxScoreByKey.get(term.termKey) ?? 0;
+        const keyNormalizedScore =
+          maxScoreWithinKey > 0 ? term.score / maxScoreWithinKey : 0;
+        const eventStrength =
+          (1.0 * term.searchCount)
+          + (2.0 * term.openCount)
+          + (5.0 * term.contactCount)
+          + (0.25 * term.impressionCount);
+        const eventConfidence = Math.min(
+          1,
+          Math.log1p(eventStrength) / Math.log1p(12),
+        );
+        const eventTimeMs = term.lastEventAtMs ?? term.dateUpdatedMs;
+        const ageDays = eventTimeMs
+          ? Math.max(0, (Date.now() - eventTimeMs) / (24 * 60 * 60 * 1000))
+          : 0;
+        const recencyDecay = Math.exp(-ageDays / 21);
+        const affinity = keyNormalizedScore * eventConfidence * recencyDecay;
+
+        return {
+          ...term,
+          affinity,
+        };
+      })
+      .filter((term) => Number.isFinite(term.affinity) && term.affinity > 0)
+      .sort((a, b) => b.affinity - a.affinity)
+      .slice(0, 80);
+  }
+
+  private pickRankableTerms(
+    terms: PersonalizationTermScore[],
+  ): RankablePersonalizationTerm[] {
+    if (!Array.isArray(terms)) return [];
+
+    const allowed = new Set([
+      'make',
+      'model',
+      'bodyType',
+      'fuelType',
+      'transmission',
+      'type',
+    ]);
+
+    return terms
+      .map((term) => ({
+        termKey: this.toStr(term.termKey),
+        termValue: this.toStr(term.termValue),
+        normalizedValue: this.normalizeComparableValue(term.termValue),
+        score: Number(term.score ?? 0),
+        searchCount: this.toNonNegativeInt(term.searchCount),
+        openCount: this.toNonNegativeInt(term.openCount),
+        contactCount: this.toNonNegativeInt(term.contactCount),
+        impressionCount: this.toNonNegativeInt(term.impressionCount),
+        dateUpdatedMs: this.toTimestampMs(term.dateUpdated),
+        lastEventAtMs: this.toTimestampMs(term.lastEventAt),
+      }))
+      .filter(
+        (term) =>
+          allowed.has(term.termKey)
+          && term.termValue.length > 0
+          && Number.isFinite(term.score)
+          && term.score > 0,
+      )
+      .slice(0, 100);
+  }
+
+  private isTermActive(term: RankablePersonalizationTerm): boolean {
+    if (term.contactCount >= this.getPersonalizationContactThreshold()) {
+      return true;
+    }
+    return term.openCount >= this.getOpenThresholdForTermKey(term.termKey);
+  }
+
+  private getOpenThresholdForTermKey(termKey: string): number {
+    switch (termKey) {
+      case 'model':
+        return this.getPersonalizationModelOpenThreshold();
+      case 'make':
+        return this.getPersonalizationMakeOpenThreshold();
+      case 'bodyType':
+        return this.getPersonalizationBodyTypeOpenThreshold();
+      default:
+        return this.getPersonalizationGenericOpenThreshold();
+    }
+  }
+
+  private buildActiveTermsByKey(terms: ActiveRankTerm[]): Record<string, number> {
+    const byKey: Record<string, number> = {};
+    for (const term of terms) {
+      byKey[term.termKey] = (byKey[term.termKey] ?? 0) + 1;
+    }
+    return byKey;
+  }
+
+  private buildPersonalizedSearchCandidateLimit(limit: number, offset: number): number {
+    const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 24;
+    const safeOffset = Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0;
+    const requestedRows = safeOffset + safeLimit;
+    const expanded =
+      requestedRows * this.getPersonalizationSearchCandidateMultiplier();
+    return Math.max(
+      safeLimit,
+      Math.min(this.getPersonalizationSearchCandidateMax(), expanded),
+    );
+  }
+
+  private getMostWantedPersonalizationCandidates(): number {
+    return Math.max(
+      4,
+      this.readPositiveIntEnv('PERSONALIZATION_MOST_WANTED_CANDIDATES', 24),
+    );
+  }
+
+  private getPersonalizationMaxPersonalizedShare(): number {
+    return this.readRatioEnv('PERSONALIZATION_MAX_PERSONALIZED_SHARE', 0.6);
+  }
+
+  private getPersonalizationModelMaxShare(): number {
+    return this.readRatioEnv('PERSONALIZATION_MODEL_MAX_SHARE', 0.25);
+  }
+
+  private getPersonalizationMakeMaxShare(): number {
+    return this.readRatioEnv('PERSONALIZATION_MAKE_MAX_SHARE', 0.4);
+  }
+
+  private getPersonalizationSearchCandidateMultiplier(): number {
+    return this.readPositiveIntEnv('PERSONALIZATION_SEARCH_CANDIDATE_MULTIPLIER', 5);
+  }
+
+  private getPersonalizationSearchCandidateMax(): number {
+    return this.readPositiveIntEnv('PERSONALIZATION_SEARCH_CANDIDATE_MAX', 500);
+  }
+
+  private getPersonalizationModelOpenThreshold(): number {
+    return this.readPositiveIntEnv('PERSONALIZATION_MODEL_OPEN_THRESHOLD', 3);
+  }
+
+  private getPersonalizationMakeOpenThreshold(): number {
+    return this.readPositiveIntEnv('PERSONALIZATION_MAKE_OPEN_THRESHOLD', 2);
+  }
+
+  private getPersonalizationBodyTypeOpenThreshold(): number {
+    return this.readPositiveIntEnv('PERSONALIZATION_BODYTYPE_OPEN_THRESHOLD', 2);
+  }
+
+  private getPersonalizationGenericOpenThreshold(): number {
+    return this.readPositiveIntEnv('PERSONALIZATION_GENERIC_OPEN_THRESHOLD', 3);
+  }
+
+  private getPersonalizationContactThreshold(): number {
+    return this.readPositiveIntEnv('PERSONALIZATION_CONTACT_THRESHOLD', 1);
+  }
+
+  private readPositiveIntEnv(name: string, fallback: number): number {
+    const raw = process.env[name];
+    if (typeof raw !== 'string' || raw.trim().length === 0) {
+      return fallback;
+    }
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) {
+      return fallback;
+    }
+    return Math.max(1, Math.floor(parsed));
+  }
+
+  private readRatioEnv(name: string, fallback: number): number {
+    const raw = process.env[name];
+    if (typeof raw !== 'string' || raw.trim().length === 0) {
+      return fallback;
+    }
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) {
+      return fallback;
+    }
+    return Math.max(0, Math.min(1, parsed));
+  }
+
+  private normalizeComparableValue(value: unknown): string {
+    return this.toStr(value).toLowerCase();
+  }
+
+  private toNonNegativeInt(value: unknown): number {
+    const numericValue = Number(value ?? 0);
+    if (!Number.isFinite(numericValue)) return 0;
+    return Math.max(0, Math.trunc(numericValue));
+  }
+
+  private toTimestampMs(value: unknown): number | null {
+    if (value instanceof Date) {
+      const timestamp = value.getTime();
+      return Number.isNaN(timestamp) ? null : timestamp;
+    }
+    if (typeof value === 'number') {
+      if (!Number.isFinite(value)) return null;
+      return value > 1_000_000_000_000 ? value : value * 1000;
+    }
+    if (typeof value === 'string' && value.trim().length > 0) {
+      const parsed = Date.parse(value);
+      return Number.isNaN(parsed) ? null : parsed;
+    }
+    return null;
   }
 
   private getMostWantedRecencyDays(): number {

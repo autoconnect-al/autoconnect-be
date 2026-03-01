@@ -11,6 +11,8 @@ export type SearchFilter = {
   sortTerms?: Array<{ key?: string; order?: string }>;
   page?: number | string;
   maxResults?: number | string;
+  visitorId?: string;
+  personalizationDisabled?: boolean | string | number;
 };
 
 export class LegacySearchQueryBuilder {
