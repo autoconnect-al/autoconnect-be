@@ -148,14 +148,20 @@ export class LegacySearchService {
     const excludeIdValues = this.queryBuilder.parseCsvValues(excludeIds);
     const excludeAccountValues = this.queryBuilder.parseCsvValues(excludedAccounts);
 
-    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    const recencyDays = this.getMostWantedRecencyDays();
     const clauses: string[] = [
       's.sold = 0',
       "(s.deleted = '0' OR s.deleted = 0)",
       'p.deleted = 0',
-      'p.dateCreated > ?',
     ];
-    const params: unknown[] = [twoDaysAgo];
+    const params: unknown[] = [];
+    if (recencyDays > 0) {
+      const recencyWindow = new Date(
+        Date.now() - recencyDays * 24 * 60 * 60 * 1000,
+      );
+      clauses.push('p.dateCreated > ?');
+      params.push(recencyWindow);
+    }
     if (excludeIdValues.length > 0) {
       clauses.push(`s.id NOT IN (${excludeIdValues.map(() => '?').join(',')})`);
       params.push(...excludeIdValues);
@@ -919,6 +925,12 @@ export class LegacySearchService {
 
   private parseCsvValues(raw: string | undefined): string[] {
     return this.queryBuilder.parseCsvValues(raw);
+  }
+
+  private getMostWantedRecencyDays(): number {
+    const configured = Number(process.env.MOST_WANTED_RECENCY_DAYS ?? '2');
+    if (!Number.isFinite(configured)) return 2;
+    return Math.max(0, Math.floor(configured));
   }
 
   private async timeQuery<T>(name: string, task: () => Promise<T>): Promise<T> {
