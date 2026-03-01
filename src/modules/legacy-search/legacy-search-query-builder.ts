@@ -15,6 +15,11 @@ export type SearchFilter = {
   personalizationDisabled?: boolean | string | number;
 };
 
+export type ResolvedSearchModel = {
+  model: string;
+  isVariant: boolean;
+};
+
 export class LegacySearchQueryBuilder {
   private readonly skipQuickSearchFix = new Set(['benz', 'mercedes']);
 
@@ -74,7 +79,7 @@ export class LegacySearchQueryBuilder {
     };
   }
 
-  buildWhere(filter: SearchFilter) {
+  buildWhere(filter: SearchFilter, resolvedModel?: ResolvedSearchModel | null) {
     const terms = this.termMap(filter.searchTerms ?? []);
     const clauses: string[] = [`sold = 0`, `deleted = '0'`];
     const params: unknown[] = [];
@@ -93,8 +98,17 @@ export class LegacySearchQueryBuilder {
 
     const model = this.toStr(terms.get('model1') ?? '');
     if (model) {
-      clauses.push('model = ?');
-      params.push(model.replace(' (all)', ''));
+      const requestedAllModel = model.toLowerCase().includes('all');
+      const effectiveModel = this.toStr(resolvedModel?.model ?? model);
+      const modelToken = this.stripAllModelSuffix(effectiveModel || model);
+
+      if (requestedAllModel || !resolvedModel?.isVariant) {
+        clauses.push('model = ?');
+        params.push(modelToken);
+      } else {
+        clauses.push('(variant LIKE ? OR variant LIKE ? OR variant LIKE ?)');
+        params.push(`% ${modelToken} %`, `${modelToken}%`, `%${modelToken}`);
+      }
     }
 
     this.addRangeClause(
@@ -381,5 +395,9 @@ export class LegacySearchQueryBuilder {
     if (typeof value === 'string') return value.trim();
     if (typeof value === 'number') return String(value);
     return '';
+  }
+
+  private stripAllModelSuffix(value: string): string {
+    return value.replace(' (all)', '').trim();
   }
 }

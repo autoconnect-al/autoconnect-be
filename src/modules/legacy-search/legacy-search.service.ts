@@ -6,6 +6,7 @@ import { createLogger } from '../../common/logger.util';
 import {
   LegacySearchQueryBuilder,
   type FilterTerm,
+  type ResolvedSearchModel,
   type SearchFilter,
 } from './legacy-search-query-builder';
 import {
@@ -88,7 +89,11 @@ export class LegacySearchService {
       : [];
 
     const promoted = await this.findPromotedSearchPost(filter);
-    const { whereSql, params } = this.queryBuilder.buildWhere(filter);
+    const resolvedModel = await this.resolveSearchModelTerm(filter);
+    const { whereSql, params } = this.queryBuilder.buildWhere(
+      filter,
+      resolvedModel,
+    );
     const { limit, offset } = this.queryBuilder.buildSortAndPagination(filter);
     const orderSql = this.queryBuilder.buildSortAndPagination(filter).orderSql;
     const queryLimit = shouldApplyPersonalization
@@ -136,7 +141,11 @@ export class LegacySearchService {
     if (!filter) {
       return legacyError('An error occurred while counting results', 500);
     }
-    const { whereSql, params } = this.queryBuilder.buildWhere(filter);
+    const resolvedModel = await this.resolveSearchModelTerm(filter);
+    const { whereSql, params } = this.queryBuilder.buildWhere(
+      filter,
+      resolvedModel,
+    );
     const rows = await this.timeQuery('result_count', () =>
       this.prisma.$queryRawUnsafe<Array<{ total: bigint | number }>>(
         `SELECT COUNT(*) as total FROM search ${whereSql}`,
@@ -689,21 +698,50 @@ export class LegacySearchService {
       >('SELECT Model, isVariant FROM car_make_model WHERE Make = ?', make),
     );
 
-    const normalizedInput = this.normalizeModelToken(model);
+    const normalizedInput = this.normalizeModelToken(
+      this.stripAllModelSuffix(model),
+    );
+    let foundModel: { model: string; isVariant: boolean } | null = null;
+    let foundModelScore = -1;
+
     for (const row of rows) {
       const dbModel = this.toStr(row.Model ?? '');
       if (!dbModel) continue;
-      const normalizedDb = this.normalizeModelToken(dbModel);
-      if (
-        normalizedDb.includes(normalizedInput) &&
-        normalizedInput.includes(normalizedDb)
-      ) {
+      const normalizedDb = this.normalizeModelToken(
+        this.stripAllModelSuffix(dbModel),
+      );
+      if (normalizedDb === normalizedInput) {
         return {
           model: dbModel,
           variant: dbModel,
           isVariant: Boolean(row.isVariant),
         };
       }
+
+      const startsWithModel = normalizedDb.startsWith(normalizedInput);
+      const startsWithModelReverse = normalizedInput.startsWith(normalizedDb);
+      if (!startsWithModel && !startsWithModelReverse) {
+        continue;
+      }
+
+      const score = this.modelSimilarityScore(normalizedDb, normalizedInput);
+      if (score <= foundModelScore) {
+        continue;
+      }
+
+      foundModel = {
+        model: dbModel,
+        isVariant: Boolean(row.isVariant),
+      };
+      foundModelScore = score;
+    }
+
+    if (foundModel) {
+      return {
+        model: foundModel.model,
+        variant: foundModel.model,
+        isVariant: foundModel.isVariant,
+      };
     }
 
     const fallback = model.replace(/-/g, ' ');
@@ -712,6 +750,34 @@ export class LegacySearchService {
 
   private normalizeModelToken(value: string): string {
     return value.replace(/\s+/g, '-').toLowerCase();
+  }
+
+  private stripAllModelSuffix(value: string): string {
+    return value.replace(' (all)', '').trim();
+  }
+
+  private modelSimilarityScore(first: string, second: string): number {
+    if (!first || !second) {
+      return 0;
+    }
+
+    const rows = first.length + 1;
+    const cols = second.length + 1;
+    const matrix = Array.from({ length: rows }, () =>
+      Array<number>(cols).fill(0),
+    );
+
+    for (let i = 1; i < rows; i += 1) {
+      for (let j = 1; j < cols; j += 1) {
+        if (first[i - 1] === second[j - 1]) {
+          matrix[i][j] = matrix[i - 1][j - 1] + 1;
+        } else {
+          matrix[i][j] = Math.max(matrix[i - 1][j], matrix[i][j - 1]);
+        }
+      }
+    }
+
+    return matrix[rows - 1][cols - 1];
   }
 
   private normalizeCaption(caption: string): string {
@@ -776,8 +842,25 @@ export class LegacySearchService {
     return this.queryBuilder.buildSortAndPagination(filter);
   }
 
-  private buildWhere(filter: SearchFilter) {
-    return this.queryBuilder.buildWhere(filter);
+  private buildWhere(filter: SearchFilter, resolvedModel?: ResolvedSearchModel | null) {
+    return this.queryBuilder.buildWhere(filter, resolvedModel);
+  }
+
+  private async resolveSearchModelTerm(
+    filter: SearchFilter,
+  ): Promise<ResolvedSearchModel | null> {
+    const terms = this.termMap(filter.searchTerms ?? []);
+    const make = this.toStr(terms.get('make1') ?? '');
+    const model = this.toStr(terms.get('model1') ?? '');
+    if (!make || !model) {
+      return null;
+    }
+
+    const resolved = await this.resolveModel(make, model);
+    return {
+      model: resolved.model,
+      isVariant: resolved.isVariant,
+    };
   }
 
   private applyKeywordClauses(
