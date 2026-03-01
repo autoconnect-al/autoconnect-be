@@ -1,5 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
+import { createHash } from 'crypto';
 import { createTestApp } from './helpers/create-test-app';
 import {
   disconnectDatabase,
@@ -15,6 +16,27 @@ jest.setTimeout(120_000);
 describe('Integration: search matrix', () => {
   let app: INestApplication;
   const prisma = getPrisma();
+  const personalizationEnvKeys = [
+    'PERSONALIZATION_ENABLED',
+    'PERSONALIZATION_MAX_PERSONALIZED_SHARE',
+    'PERSONALIZATION_MODEL_MAX_SHARE',
+    'PERSONALIZATION_MAKE_MAX_SHARE',
+    'PERSONALIZATION_MODEL_OPEN_THRESHOLD',
+    'PERSONALIZATION_MAKE_OPEN_THRESHOLD',
+    'PERSONALIZATION_BODYTYPE_OPEN_THRESHOLD',
+    'PERSONALIZATION_GENERIC_OPEN_THRESHOLD',
+    'PERSONALIZATION_CONTACT_THRESHOLD',
+    'PERSONALIZATION_SEARCH_CANDIDATE_MULTIPLIER',
+    'PERSONALIZATION_SEARCH_CANDIDATE_MAX',
+    'PERSONALIZATION_MOST_WANTED_CANDIDATES',
+  ] as const;
+  const originalPersonalizationEnv = personalizationEnvKeys.reduce(
+    (acc, key) => {
+      acc[key] = process.env[key];
+      return acc;
+    },
+    {} as Record<(typeof personalizationEnvKeys)[number], string | undefined>,
+  );
 
   beforeAll(async () => {
     await waitForDatabaseReady();
@@ -24,9 +46,21 @@ describe('Integration: search matrix', () => {
 
   beforeEach(async () => {
     await resetDatabase();
+    for (const key of personalizationEnvKeys) {
+      delete process.env[key];
+    }
+    process.env.PERSONALIZATION_ENABLED = 'false';
   });
 
   afterAll(async () => {
+    for (const key of personalizationEnvKeys) {
+      const value = originalPersonalizationEnv[key];
+      if (value == null) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
     if (app) {
       await app.close();
     }
@@ -158,6 +192,53 @@ describe('Integration: search matrix', () => {
       };
     });
     await prisma.search.createMany({ data: rows });
+  }
+
+  async function seedVisitorInterestTerms(
+    visitorId: string,
+    terms: Array<{
+      key: string;
+      value: string;
+      score: number;
+      searchCount?: number;
+      openCount?: number;
+      contactCount?: number;
+      impressionCount?: number;
+    }>,
+  ) {
+    const visitorHash = createHash('sha256').update(visitorId).digest('hex');
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO visitor_profile (visitor_hash, dateCreated, dateUpdated, lastSeenAt)
+       VALUES (?, NOW(), NOW(), NOW())
+       ON DUPLICATE KEY UPDATE
+         dateUpdated = NOW(),
+         lastSeenAt = NOW()`,
+      visitorHash,
+    );
+
+    for (const term of terms) {
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO visitor_interest_term
+          (visitor_hash, term_key, term_value, score, search_count, open_count, contact_count, impression_count, last_event_at, dateCreated, dateUpdated)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), NOW())
+         ON DUPLICATE KEY UPDATE
+           score = VALUES(score),
+           search_count = VALUES(search_count),
+           open_count = VALUES(open_count),
+           contact_count = VALUES(contact_count),
+           impression_count = VALUES(impression_count),
+           last_event_at = NOW(),
+           dateUpdated = NOW()`,
+        visitorHash,
+        term.key,
+        term.value,
+        term.score,
+        term.searchCount ?? 0,
+        term.openCount ?? 0,
+        term.contactCount ?? 0,
+        term.impressionCount ?? 0,
+      );
+    }
   }
 
   it('returns 500 envelope when filter JSON is invalid', async () => {
@@ -393,6 +474,166 @@ describe('Integration: search matrix', () => {
     expect(response.body.result).toHaveLength(1);
     expect(response.body.result[0]).toEqual(
       expect.objectContaining({ id: '5603', price: '12000' }),
+    );
+  });
+
+  it('default unfiltered search applies personalization for eligible visitor', async () => {
+    process.env.PERSONALIZATION_ENABLED = 'true';
+    await seedSearchRecord({
+      postId: 5951n,
+      vendorId: 6951n,
+      accountName: 'personalized-audi',
+      make: 'Audi',
+      model: 'Q5',
+      bodyType: 'SUV/Off-Road/Pick-up',
+      price: 19000,
+      renewedTime: 200,
+    });
+    await seedSearchRecord({
+      postId: 5952n,
+      vendorId: 6952n,
+      accountName: 'personalized-bmw',
+      make: 'BMW',
+      model: 'X3',
+      bodyType: 'SUV/Off-Road/Pick-up',
+      price: 18500,
+      renewedTime: 199,
+    });
+    await seedSearchRecord({
+      postId: 5953n,
+      vendorId: 6953n,
+      accountName: 'personalized-vw',
+      make: 'Volkswagen',
+      model: 'Tiguan',
+      bodyType: 'SUV/Off-Road/Pick-up',
+      price: 17000,
+      renewedTime: 198,
+    });
+    await seedSearchRecord({
+      postId: 5954n,
+      vendorId: 6954n,
+      accountName: 'personalized-merc',
+      make: 'Mercedes-benz',
+      model: 'GLC',
+      bodyType: 'SUV/Off-Road/Pick-up',
+      price: 26000,
+      renewedTime: 191,
+    });
+    await seedSearchRecord({
+      postId: 5955n,
+      vendorId: 6955n,
+      accountName: 'personalized-toyota',
+      make: 'Toyota',
+      model: 'RAV4',
+      bodyType: 'SUV/Off-Road/Pick-up',
+      price: 16500,
+      renewedTime: 197,
+    });
+    await seedSearchRecord({
+      postId: 5956n,
+      vendorId: 6956n,
+      accountName: 'personalized-kia',
+      make: 'Kia',
+      model: 'Sportage',
+      bodyType: 'SUV/Off-Road/Pick-up',
+      price: 16000,
+      renewedTime: 196,
+    });
+
+    await seedVisitorInterestTerms('visitor-default-feed', [
+      {
+        key: 'model',
+        value: 'GLC',
+        score: 220,
+        openCount: 4,
+        contactCount: 0,
+      },
+      {
+        key: 'make',
+        value: 'Mercedes-benz',
+        score: 160,
+        openCount: 3,
+        contactCount: 0,
+      },
+    ]);
+
+    const response = await request(app.getHttpServer())
+      .post('/car-details/search')
+      .send({
+        filter: makeFilter({
+          searchTerms: [{ key: 'type', value: 'car' }],
+          sortTerms: [{ key: 'renewedTime', order: 'DESC' }],
+          maxResults: 6,
+          visitorId: 'visitor-default-feed',
+        }),
+      })
+      .expect(200);
+
+    expect(response.body.result).toHaveLength(6);
+    expect(response.body.result[0]).toEqual(
+      expect.objectContaining({
+        id: '5954',
+        model: 'GLC',
+      }),
+    );
+  });
+
+  it('non-default sort remains unpersonalized even when visitor profile exists', async () => {
+    process.env.PERSONALIZATION_ENABLED = 'true';
+    await seedSearchRecord({
+      postId: 5961n,
+      vendorId: 6961n,
+      accountName: 'sort-personalized-glc',
+      make: 'Mercedes-benz',
+      model: 'GLC',
+      price: 32000,
+      renewedTime: 190,
+    });
+    await seedSearchRecord({
+      postId: 5962n,
+      vendorId: 6962n,
+      accountName: 'sort-personalized-cheap',
+      make: 'Audi',
+      model: 'A4',
+      price: 9000,
+      renewedTime: 200,
+    });
+    await seedSearchRecord({
+      postId: 5963n,
+      vendorId: 6963n,
+      accountName: 'sort-personalized-mid',
+      make: 'BMW',
+      model: '320',
+      price: 14000,
+      renewedTime: 199,
+    });
+
+    await seedVisitorInterestTerms('visitor-custom-sort', [
+      {
+        key: 'model',
+        value: 'GLC',
+        score: 300,
+        openCount: 7,
+      },
+    ]);
+
+    const response = await request(app.getHttpServer())
+      .post('/car-details/search')
+      .send({
+        filter: makeFilter({
+          sortTerms: [{ key: 'price', order: 'ASC' }],
+          maxResults: 3,
+          visitorId: 'visitor-custom-sort',
+        }),
+      })
+      .expect(200);
+
+    expect(response.body.result).toHaveLength(3);
+    expect(response.body.result[0]).toEqual(
+      expect.objectContaining({
+        id: '5962',
+        price: '9000',
+      }),
     );
   });
 
@@ -716,6 +957,19 @@ describe('Integration: search matrix', () => {
       model: 'Civic',
       price: 10000,
     });
+    await prisma.post.update({
+      where: { id: 5802n },
+      data: {
+        impressions: 19,
+        reach: 17,
+        clicks: 6,
+        contact: 3,
+        contactCall: 1,
+        contactWhatsapp: 1,
+        contactEmail: 1,
+        contactInstagram: 0,
+      },
+    });
 
     const filter = makeFilter({
       searchTerms: [
@@ -735,6 +989,22 @@ describe('Integration: search matrix', () => {
       result: expect.any(Array),
     });
     expect(response.body.result.length).toBeGreaterThan(0);
+    const enrichedRow = response.body.result.find(
+      (row: { id: string }) => row.id === '5802',
+    );
+    expect(enrichedRow).toEqual(
+      expect.objectContaining({
+        impressions: 19,
+        reach: 17,
+        clicks: 6,
+        contactCount: 3,
+        contactCall: 1,
+        contactWhatsapp: 1,
+        contactEmail: 1,
+        contactInstagram: 0,
+      }),
+    );
+    expect(enrichedRow).not.toHaveProperty('postOpen');
   });
 
   it('related-post-filter returns matching promoted post first when available', async () => {
@@ -973,6 +1243,19 @@ describe('Integration: search matrix', () => {
       bodyType: 'SUV',
       price: 19000,
     });
+    await prisma.post.update({
+      where: { id: 5851n },
+      data: {
+        impressions: 80,
+        reach: 65,
+        clicks: 30,
+        contact: 10,
+        contactCall: 4,
+        contactWhatsapp: 4,
+        contactEmail: 1,
+        contactInstagram: 1,
+      },
+    });
 
     const response = await request(app.getHttpServer())
       .get('/car-details/related-post/5850')
@@ -984,8 +1267,21 @@ describe('Integration: search matrix', () => {
       result: expect.any(Array),
     });
     expect(response.body.result[0]).toEqual(
-      expect.objectContaining({ id: '5851', promoted: true, highlighted: true }),
+      expect.objectContaining({
+        id: '5851',
+        promoted: true,
+        highlighted: true,
+        impressions: 80,
+        reach: 65,
+        clicks: 30,
+        contactCount: 10,
+        contactCall: 4,
+        contactWhatsapp: 4,
+        contactEmail: 1,
+        contactInstagram: 1,
+      }),
     );
+    expect(response.body.result[0]).not.toHaveProperty('postOpen');
     const ids = response.body.result.map((row: { id: string }) => row.id);
     expect(ids).not.toContain('5850');
   });
@@ -1087,6 +1383,19 @@ describe('Integration: search matrix', () => {
       mostWantedTo: now + 3000,
       promotionTo: now + 3000,
     });
+    await prisma.post.update({
+      where: { id: 5881n },
+      data: {
+        impressions: 70,
+        reach: 66,
+        clicks: 22,
+        contact: 7,
+        contactCall: 3,
+        contactWhatsapp: 2,
+        contactEmail: 1,
+        contactInstagram: 1,
+      },
+    });
 
     const response = await request(app.getHttpServer())
       .get('/car-details/most-wanted?excludeIds=5882&excludedAccounts=most-excluded-account')
@@ -1111,6 +1420,123 @@ describe('Integration: search matrix', () => {
     expect(response.body.result[0]).toHaveProperty('renewInterval');
     expect(response.body.result[0]).toHaveProperty('renewedTime');
     expect(response.body.result[0]).toHaveProperty('mostWantedTo');
+    expect(response.body.result[0]).toEqual(
+      expect.objectContaining({
+        impressions: 70,
+        reach: 66,
+        clicks: 22,
+        contactCount: 7,
+        contactCall: 3,
+        contactWhatsapp: 2,
+        contactEmail: 1,
+        contactInstagram: 1,
+      }),
+    );
+    expect(response.body.result[0]).not.toHaveProperty('postOpen');
+  });
+
+  it('most-wanted applies personalization caps while honoring exclusions', async () => {
+    process.env.PERSONALIZATION_ENABLED = 'true';
+    const now = Math.floor(Date.now() / 1000);
+    await seedSearchRecord({
+      postId: 5891n,
+      vendorId: 6891n,
+      accountName: 'most-personalized-1',
+      make: 'Mercedes-benz',
+      model: 'GLC',
+      bodyType: 'SUV/Off-Road/Pick-up',
+      price: 32000,
+      mostWantedTo: now + 6000,
+      renewedTime: now + 6000,
+    });
+    await seedSearchRecord({
+      postId: 5892n,
+      vendorId: 6892n,
+      accountName: 'most-personalized-2',
+      make: 'Mercedes-benz',
+      model: 'GLC',
+      bodyType: 'SUV/Off-Road/Pick-up',
+      price: 31000,
+      mostWantedTo: now + 5900,
+      renewedTime: now + 5900,
+    });
+    await seedSearchRecord({
+      postId: 5893n,
+      vendorId: 6893n,
+      accountName: 'most-personalized-3',
+      make: 'Mercedes-benz',
+      model: 'GLC',
+      bodyType: 'SUV/Off-Road/Pick-up',
+      price: 30000,
+      mostWantedTo: now + 5800,
+      renewedTime: now + 5800,
+    });
+    await seedSearchRecord({
+      postId: 5894n,
+      vendorId: 6894n,
+      accountName: 'most-personalized-4',
+      make: 'Audi',
+      model: 'Q5',
+      bodyType: 'SUV/Off-Road/Pick-up',
+      price: 27000,
+      mostWantedTo: now + 5700,
+      renewedTime: now + 5700,
+    });
+    await seedSearchRecord({
+      postId: 5895n,
+      vendorId: 6895n,
+      accountName: 'most-personalized-5',
+      make: 'BMW',
+      model: 'X3',
+      bodyType: 'SUV/Off-Road/Pick-up',
+      price: 26500,
+      mostWantedTo: now + 5600,
+      renewedTime: now + 5600,
+    });
+    await seedSearchRecord({
+      postId: 5896n,
+      vendorId: 6896n,
+      accountName: 'most-personalized-6',
+      make: 'Volkswagen',
+      model: 'Tiguan',
+      bodyType: 'SUV/Off-Road/Pick-up',
+      price: 25000,
+      mostWantedTo: now + 5500,
+      renewedTime: now + 5500,
+    });
+
+    await seedVisitorInterestTerms('visitor-most-wanted', [
+      {
+        key: 'model',
+        value: 'GLC',
+        score: 210,
+        openCount: 6,
+      },
+      {
+        key: 'make',
+        value: 'Mercedes-benz',
+        score: 180,
+        openCount: 5,
+      },
+      {
+        key: 'bodyType',
+        value: 'SUV/Off-Road/Pick-up',
+        score: 120,
+        openCount: 4,
+      },
+    ]);
+
+    const response = await request(app.getHttpServer())
+      .get('/car-details/most-wanted?visitorId=visitor-most-wanted&excludeIds=5893')
+      .expect(200);
+
+    expect(response.body.result).toHaveLength(4);
+    const ids = response.body.result.map((row: { id: string }) => row.id);
+    expect(ids).not.toContain('5893');
+    const glcRows = response.body.result.filter(
+      (row: { model: string }) => row.model.toLowerCase() === 'glc',
+    );
+    expect(glcRows.length).toBeLessThanOrEqual(1);
   });
 
   it('price-calculate returns rows when required terms are provided', async () => {

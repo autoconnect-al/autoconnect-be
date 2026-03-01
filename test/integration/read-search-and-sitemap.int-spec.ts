@@ -168,6 +168,19 @@ describe('Integration: read/search/sitemap', () => {
   it('POST /car-details/search returns seeded search rows for matching filter', async () => {
     await seedVendor(prisma, FIXTURE_VENDOR_ID, { accountName: 'vendor-read' });
     await seedPostGraph(prisma, { postId: FIXTURE_POST_ID, vendorId: FIXTURE_VENDOR_ID });
+    await prisma.post.update({
+      where: { id: FIXTURE_POST_ID },
+      data: {
+        impressions: 120,
+        reach: 100,
+        clicks: 35,
+        contact: 8,
+        contactCall: 3,
+        contactWhatsapp: 3,
+        contactEmail: 1,
+        contactInstagram: 1,
+      },
+    });
 
     const filter = JSON.stringify({
       type: 'car',
@@ -193,8 +206,17 @@ describe('Integration: read/search/sitemap', () => {
         id: FIXTURE_POST_ID.toString(),
         make: 'BMW',
         model: 'X5',
+        impressions: 120,
+        reach: 100,
+        clicks: 35,
+        contactCount: 8,
+        contactCall: 3,
+        contactWhatsapp: 3,
+        contactEmail: 1,
+        contactInstagram: 1,
       }),
     );
+    expect(response.body.result[0]).not.toHaveProperty('postOpen');
   });
 
   it('POST /car-details/result-count returns deterministic count for matching filter', async () => {
@@ -224,6 +246,19 @@ describe('Integration: read/search/sitemap', () => {
   it('GET /car-details/post/:id returns seeded details and 404 for missing id', async () => {
     await seedVendor(prisma, FIXTURE_VENDOR_ID, { accountName: 'vendor-details' });
     await seedPostGraph(prisma, { postId: FIXTURE_POST_ID, vendorId: FIXTURE_VENDOR_ID });
+    await prisma.post.update({
+      where: { id: FIXTURE_POST_ID },
+      data: {
+        impressions: 44,
+        reach: 41,
+        clicks: 12,
+        contact: 5,
+        contactCall: 2,
+        contactWhatsapp: 2,
+        contactEmail: 1,
+        contactInstagram: 0,
+      },
+    });
 
     const ok = await request(app.getHttpServer())
       .get(`/car-details/post/${FIXTURE_POST_ID.toString()}`)
@@ -239,8 +274,17 @@ describe('Integration: read/search/sitemap', () => {
         id: FIXTURE_POST_ID.toString(),
         make: 'BMW',
         model: 'X5',
+        impressions: 44,
+        reach: 41,
+        clicks: 12,
+        contactCount: 5,
+        contactCall: 2,
+        contactWhatsapp: 2,
+        contactEmail: 1,
+        contactInstagram: 0,
       }),
     );
+    expect(ok.body.result[0]).not.toHaveProperty('postOpen');
 
     const notFound = await request(app.getHttpServer())
       .get('/car-details/post/999999999')

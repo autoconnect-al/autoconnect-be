@@ -2,6 +2,44 @@ import { LegacySearchService } from './legacy-search.service';
 import { LegacySearchQueryBuilder } from './legacy-search-query-builder';
 
 describe('LegacySearchService', () => {
+  const trackedPersonalizationEnv = [
+    'PERSONALIZATION_MAX_PERSONALIZED_SHARE',
+    'PERSONALIZATION_MODEL_MAX_SHARE',
+    'PERSONALIZATION_MAKE_MAX_SHARE',
+    'PERSONALIZATION_MODEL_OPEN_THRESHOLD',
+    'PERSONALIZATION_MAKE_OPEN_THRESHOLD',
+    'PERSONALIZATION_BODYTYPE_OPEN_THRESHOLD',
+    'PERSONALIZATION_GENERIC_OPEN_THRESHOLD',
+    'PERSONALIZATION_CONTACT_THRESHOLD',
+    'PERSONALIZATION_SEARCH_CANDIDATE_MULTIPLIER',
+    'PERSONALIZATION_SEARCH_CANDIDATE_MAX',
+    'PERSONALIZATION_MOST_WANTED_CANDIDATES',
+  ] as const;
+  const originalPersonalizationEnv = trackedPersonalizationEnv.reduce(
+    (acc, key) => {
+      acc[key] = process.env[key];
+      return acc;
+    },
+    {} as Record<(typeof trackedPersonalizationEnv)[number], string | undefined>,
+  );
+
+  beforeEach(() => {
+    for (const key of trackedPersonalizationEnv) {
+      delete process.env[key];
+    }
+  });
+
+  afterAll(() => {
+    for (const key of trackedPersonalizationEnv) {
+      const value = originalPersonalizationEnv[key];
+      if (value == null) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  });
+
   it('buildWhere should apply keyword korea clause', () => {
     const prisma = { $queryRawUnsafe: jest.fn() } as any;
     const service = new LegacySearchService(prisma, new LegacySearchQueryBuilder());
@@ -109,6 +147,30 @@ describe('LegacySearchService', () => {
     );
   });
 
+  it('should treat type-only search term as default for personalization gating', () => {
+    const prisma = { $queryRawUnsafe: jest.fn() } as any;
+    const personalizationService = {
+      isEnabled: jest.fn().mockReturnValue(true),
+      isPersonalizationDisabled: jest.fn().mockReturnValue(false),
+      sanitizeVisitorId: jest.fn().mockReturnValue('visitor-1'),
+    } as any;
+    const service = new LegacySearchService(
+      prisma,
+      new LegacySearchQueryBuilder(),
+      personalizationService,
+    );
+
+    const filter = {
+      type: 'car',
+      searchTerms: [{ key: 'type', value: 'car' }],
+      sortTerms: [{ key: 'renewedTime', order: 'DESC' }],
+      visitorId: 'visitor-1',
+    };
+
+    expect((service as any).hasActiveSearchTerms(filter)).toBe(false);
+    expect((service as any).shouldApplySearchPersonalization(filter)).toBe(true);
+  });
+
   it('search should prepend matched promoted row and annotate promoted/highlighted', async () => {
     const now = Math.floor(Date.now() / 1000);
     const prisma = {
@@ -205,6 +267,305 @@ describe('LegacySearchService', () => {
     );
   });
 
+  it('search should enrich result rows with post stats and exclude postOpen', async () => {
+    const prisma = {
+      $queryRawUnsafe: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          {
+            id: 11,
+            make: 'BMW',
+            model: 'X5',
+          },
+        ]),
+      post: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 11n,
+            impressions: 100,
+            reach: 80,
+            clicks: 25,
+            contact: 9,
+            contactCall: 4,
+            contactWhatsapp: 3,
+            contactEmail: 1,
+            contactInstagram: 1,
+          },
+        ]),
+      },
+    } as any;
+    const service = new LegacySearchService(prisma, new LegacySearchQueryBuilder());
+
+    const response = await service.search(
+      JSON.stringify({
+        type: 'car',
+        searchTerms: [],
+        sortTerms: [{ key: 'renewedTime', order: 'DESC' }],
+        page: 0,
+        maxResults: 10,
+      }),
+    );
+
+    expect(response.success).toBe(true);
+    expect(response.result[0]).toEqual(
+      expect.objectContaining({
+        id: 11,
+        impressions: 100,
+        reach: 80,
+        clicks: 25,
+        contactCount: 9,
+        contactCall: 4,
+        contactWhatsapp: 3,
+        contactEmail: 1,
+        contactInstagram: 1,
+      }),
+    );
+    expect(response.result[0]).not.toHaveProperty('postOpen');
+  });
+
+  it('search should enforce personalized slot caps without overwhelming the page', async () => {
+    const prisma = {
+      $queryRawUnsafe: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          { id: 1, make: 'Audi', model: 'Q5', bodyType: 'SUV/Off-Road/Pick-up', renewedTime: 200 },
+          { id: 2, make: 'BMW', model: 'X3', bodyType: 'SUV/Off-Road/Pick-up', renewedTime: 199 },
+          { id: 3, make: 'Volkswagen', model: 'Tiguan', bodyType: 'SUV/Off-Road/Pick-up', renewedTime: 198 },
+          { id: 4, make: 'Toyota', model: 'RAV4', bodyType: 'SUV/Off-Road/Pick-up', renewedTime: 197 },
+          { id: 5, make: 'Kia', model: 'Sportage', bodyType: 'SUV/Off-Road/Pick-up', renewedTime: 196 },
+          { id: 6, make: 'Peugeot', model: '3008', bodyType: 'SUV/Off-Road/Pick-up', renewedTime: 195 },
+          { id: 7, make: 'Mercedes-benz', model: 'GLC', bodyType: 'SUV/Off-Road/Pick-up', renewedTime: 194 },
+          { id: 8, make: 'Mercedes-benz', model: 'GLC', bodyType: 'SUV/Off-Road/Pick-up', renewedTime: 193 },
+          { id: 9, make: 'Mercedes-benz', model: 'GLC', bodyType: 'SUV/Off-Road/Pick-up', renewedTime: 192 },
+          { id: 10, make: 'Mercedes-benz', model: 'C-Class', bodyType: 'Sedans', renewedTime: 191 },
+          { id: 11, make: 'Ford', model: 'Kuga', bodyType: 'SUV/Off-Road/Pick-up', renewedTime: 190 },
+          { id: 12, make: 'Hyundai', model: 'Tucson', bodyType: 'SUV/Off-Road/Pick-up', renewedTime: 189 },
+        ]),
+    } as any;
+    const personalizationService = {
+      isEnabled: jest.fn().mockReturnValue(true),
+      isPersonalizationDisabled: jest.fn().mockReturnValue(false),
+      sanitizeVisitorId: jest.fn().mockReturnValue('visitor-1'),
+      getTopTerms: jest.fn().mockResolvedValue([
+        {
+          termKey: 'model',
+          termValue: 'GLC',
+          score: 220,
+          openCount: 9,
+          contactCount: 1,
+          searchCount: 2,
+          impressionCount: 3,
+        },
+        {
+          termKey: 'make',
+          termValue: 'Mercedes-benz',
+          score: 160,
+          openCount: 8,
+          contactCount: 1,
+          searchCount: 2,
+          impressionCount: 3,
+        },
+      ]),
+      recordSearchSignal: jest.fn().mockResolvedValue(undefined),
+    } as any;
+    const service = new LegacySearchService(
+      prisma,
+      new LegacySearchQueryBuilder(),
+      personalizationService,
+    );
+
+    const response = await service.search(
+      JSON.stringify({
+        type: 'car',
+        searchTerms: [{ key: 'type', value: 'car' }],
+        sortTerms: [{ key: 'renewedTime', order: 'DESC' }],
+        visitorId: 'visitor-1',
+        page: 0,
+        maxResults: 10,
+      }),
+    );
+
+    expect(response.success).toBe(true);
+    expect(response.result).toHaveLength(10);
+    const glcRows = response.result.filter(
+      (row: { model: string }) => row.model.toLowerCase() === 'glc',
+    );
+    const mercedesRows = response.result.filter(
+      (row: { make: string }) => row.make.toLowerCase() === 'mercedes-benz',
+    );
+    expect(glcRows.length).toBeLessThanOrEqual(3);
+    expect(mercedesRows.length).toBeLessThanOrEqual(4);
+
+    const searchCall = prisma.$queryRawUnsafe.mock.calls[1];
+    expect(searchCall[searchCall.length - 2]).toBe(50);
+    expect(searchCall[searchCall.length - 1]).toBe(0);
+  });
+
+  it('search should ignore low-confidence terms below open threshold', async () => {
+    const prisma = {
+      $queryRawUnsafe: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          { id: 1, make: 'Audi', model: 'Q5', renewedTime: 100 },
+          { id: 2, make: 'BMW', model: 'X3', renewedTime: 99 },
+          { id: 3, make: 'Mercedes-benz', model: 'GLC', renewedTime: 98 },
+          { id: 4, make: 'Mercedes-benz', model: 'GLC', renewedTime: 97 },
+        ]),
+    } as any;
+    const personalizationService = {
+      isEnabled: jest.fn().mockReturnValue(true),
+      isPersonalizationDisabled: jest.fn().mockReturnValue(false),
+      sanitizeVisitorId: jest.fn().mockReturnValue('visitor-2'),
+      getTopTerms: jest.fn().mockResolvedValue([
+        {
+          termKey: 'model',
+          termValue: 'GLC',
+          score: 500,
+          openCount: 1,
+          contactCount: 0,
+          searchCount: 1,
+          impressionCount: 0,
+        },
+      ]),
+      recordSearchSignal: jest.fn().mockResolvedValue(undefined),
+    } as any;
+    const service = new LegacySearchService(
+      prisma,
+      new LegacySearchQueryBuilder(),
+      personalizationService,
+    );
+
+    const response = await service.search(
+      JSON.stringify({
+        type: 'car',
+        searchTerms: [{ key: 'type', value: 'car' }],
+        sortTerms: [{ key: 'renewedTime', order: 'DESC' }],
+        visitorId: 'visitor-2',
+        page: 0,
+        maxResults: 4,
+      }),
+    );
+
+    expect(response.success).toBe(true);
+    expect(response.result.map((row: { id: number }) => row.id)).toEqual([1, 2, 3, 4]);
+  });
+
+  it('search should activate model personalization after open threshold', async () => {
+    const prisma = {
+      $queryRawUnsafe: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          { id: 1, make: 'Audi', model: 'Q5', renewedTime: 100 },
+          { id: 2, make: 'BMW', model: 'X3', renewedTime: 99 },
+          { id: 3, make: 'Mercedes-benz', model: 'GLC', renewedTime: 98 },
+          { id: 4, make: 'Toyota', model: 'RAV4', renewedTime: 97 },
+          { id: 5, make: 'Volkswagen', model: 'Tiguan', renewedTime: 96 },
+          { id: 6, make: 'Kia', model: 'Sportage', renewedTime: 95 },
+        ]),
+    } as any;
+    const personalizationService = {
+      isEnabled: jest.fn().mockReturnValue(true),
+      isPersonalizationDisabled: jest.fn().mockReturnValue(false),
+      sanitizeVisitorId: jest.fn().mockReturnValue('visitor-3'),
+      getTopTerms: jest.fn().mockResolvedValue([
+        {
+          termKey: 'model',
+          termValue: 'GLC',
+          score: 500,
+          openCount: 3,
+          contactCount: 0,
+          searchCount: 1,
+          impressionCount: 0,
+        },
+      ]),
+      recordSearchSignal: jest.fn().mockResolvedValue(undefined),
+    } as any;
+    const service = new LegacySearchService(
+      prisma,
+      new LegacySearchQueryBuilder(),
+      personalizationService,
+    );
+
+    const response = await service.search(
+      JSON.stringify({
+        type: 'car',
+        searchTerms: [{ key: 'type', value: 'car' }],
+        sortTerms: [{ key: 'renewedTime', order: 'DESC' }],
+        visitorId: 'visitor-3',
+        page: 0,
+        maxResults: 6,
+      }),
+    );
+
+    expect(response.success).toBe(true);
+    expect(response.result[0]).toEqual(expect.objectContaining({ model: 'GLC' }));
+  });
+
+  it('search should elevate shared bodyType intent across multiple opened models', async () => {
+    const prisma = {
+      $queryRawUnsafe: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          { id: 1, make: 'Audi', model: 'Q5', bodyType: 'SUV/Off-Road/Pick-up', renewedTime: 100 },
+          { id: 2, make: 'BMW', model: 'X3', bodyType: 'SUV/Off-Road/Pick-up', renewedTime: 99 },
+          { id: 3, make: 'Mercedes-benz', model: 'GLC', bodyType: 'SUV/Off-Road/Pick-up', renewedTime: 98 },
+          { id: 4, make: 'Volkswagen', model: 'Tiguan', bodyType: 'SUV/Off-Road/Pick-up', renewedTime: 97 },
+          { id: 5, make: 'Toyota', model: 'RAV4', bodyType: 'SUV/Off-Road/Pick-up', renewedTime: 96 },
+          { id: 6, make: 'Honda', model: 'CR-V', bodyType: 'SUV/Off-Road/Pick-up', renewedTime: 95 },
+          { id: 7, make: 'Mercedes-benz', model: 'C-Class', bodyType: 'Sedans', renewedTime: 94 },
+          { id: 8, make: 'BMW', model: '3 Series', bodyType: 'Sedans', renewedTime: 93 },
+          { id: 9, make: 'Audi', model: 'A4', bodyType: 'Sedans', renewedTime: 92 },
+          { id: 10, make: 'Skoda', model: 'Octavia', bodyType: 'Sedans', renewedTime: 91 },
+        ]),
+    } as any;
+    const personalizationService = {
+      isEnabled: jest.fn().mockReturnValue(true),
+      isPersonalizationDisabled: jest.fn().mockReturnValue(false),
+      sanitizeVisitorId: jest.fn().mockReturnValue('visitor-4'),
+      getTopTerms: jest.fn().mockResolvedValue([
+        { termKey: 'model', termValue: 'Q5', score: 90, openCount: 4, contactCount: 0 },
+        { termKey: 'model', termValue: 'X3', score: 85, openCount: 4, contactCount: 0 },
+        { termKey: 'model', termValue: 'GLC', score: 80, openCount: 4, contactCount: 0 },
+        {
+          termKey: 'bodyType',
+          termValue: 'SUV/Off-Road/Pick-up',
+          score: 100,
+          openCount: 5,
+          contactCount: 0,
+        },
+      ]),
+      recordSearchSignal: jest.fn().mockResolvedValue(undefined),
+    } as any;
+    const service = new LegacySearchService(
+      prisma,
+      new LegacySearchQueryBuilder(),
+      personalizationService,
+    );
+
+    const response = await service.search(
+      JSON.stringify({
+        type: 'car',
+        searchTerms: [{ key: 'type', value: 'car' }],
+        sortTerms: [{ key: 'renewedTime', order: 'DESC' }],
+        visitorId: 'visitor-4',
+        page: 0,
+        maxResults: 8,
+      }),
+    );
+
+    expect(response.success).toBe(true);
+    const suvCount = response.result.filter(
+      (row: { bodyType: string }) =>
+        row.bodyType.toLowerCase() === 'suv/off-road/pick-up',
+    ).length;
+    expect(suvCount).toBeGreaterThanOrEqual(5);
+  });
+
   it('relatedById should select sidecarMedias for related cards', async () => {
     const prisma = {
       $queryRawUnsafe: jest
@@ -281,6 +642,63 @@ describe('LegacySearchService', () => {
       price: 20000,
       customsPaid: 0,
     });
+  });
+
+  it('mostWanted should apply personalization caps and return mixed results', async () => {
+    const prisma = {
+      $queryRawUnsafe: jest.fn().mockResolvedValue([
+        { id: 1, make: 'Mercedes-benz', model: 'GLC', renewedTime: 100, mostWantedTo: 1000 },
+        { id: 2, make: 'Mercedes-benz', model: 'GLC', renewedTime: 99, mostWantedTo: 999 },
+        { id: 3, make: 'Mercedes-benz', model: 'GLC', renewedTime: 98, mostWantedTo: 998 },
+        { id: 4, make: 'Audi', model: 'Q5', renewedTime: 97, mostWantedTo: 997 },
+        { id: 5, make: 'BMW', model: 'X3', renewedTime: 96, mostWantedTo: 996 },
+        { id: 6, make: 'Volkswagen', model: 'Tiguan', renewedTime: 95, mostWantedTo: 995 },
+      ]),
+    } as any;
+    const personalizationService = {
+      isEnabled: jest.fn().mockReturnValue(true),
+      isPersonalizationDisabled: jest.fn().mockReturnValue(false),
+      sanitizeVisitorId: jest.fn().mockReturnValue('visitor-5'),
+      getTopTerms: jest.fn().mockResolvedValue([
+        {
+          termKey: 'model',
+          termValue: 'GLC',
+          score: 200,
+          openCount: 6,
+          contactCount: 0,
+          searchCount: 1,
+          impressionCount: 0,
+        },
+        {
+          termKey: 'make',
+          termValue: 'Mercedes-benz',
+          score: 170,
+          openCount: 5,
+          contactCount: 0,
+          searchCount: 1,
+          impressionCount: 0,
+        },
+      ]),
+    } as any;
+    const service = new LegacySearchService(
+      prisma,
+      new LegacySearchQueryBuilder(),
+      personalizationService,
+    );
+
+    const response = await service.mostWanted(
+      undefined,
+      undefined,
+      'visitor-5',
+      false,
+    );
+
+    expect(response.success).toBe(true);
+    expect(response.result).toHaveLength(4);
+    const glcRows = response.result.filter(
+      (row: { model: string }) => row.model.toLowerCase() === 'glc',
+    );
+    expect(glcRows.length).toBeLessThanOrEqual(1);
   });
 
   it('mostWanted should select promotion fields from search', async () => {

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { legacyError, legacySuccess } from '../../common/legacy-response';
 import { PrismaService } from '../../database/prisma.service';
+import { enrichRowsWithPostStats } from '../../common/post-stats-enrichment.util';
 
 const MAX_FAVOURITES_IDS = 200;
 const FAVOURITES_CACHE_TTL_MS = 30_000;
@@ -71,7 +72,8 @@ export class LegacyFavouritesService {
     const cacheKey = this.cacheKey('get', ids);
     const cached = this.readCache<unknown[]>(cacheKey);
     if (cached) {
-      return legacySuccess(cached);
+      const enrichedCached = await enrichRowsWithPostStats(this.prisma, cached);
+      return legacySuccess(enrichedCached);
     }
     const rows = await this.prisma.search.findMany({
       where: {
@@ -82,7 +84,11 @@ export class LegacyFavouritesService {
     });
     const result = this.normalizeBigInts(rows);
     this.writeCache(cacheKey, result);
-    return legacySuccess(result);
+    const enrichedResult = await enrichRowsWithPostStats(
+      this.prisma,
+      result as unknown[],
+    );
+    return legacySuccess(enrichedResult);
   }
 
   private cacheKey(scope: 'check' | 'get', ids: string[]): string {

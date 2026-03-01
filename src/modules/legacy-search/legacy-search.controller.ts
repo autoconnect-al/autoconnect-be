@@ -50,10 +50,15 @@ export class LegacySearchController {
   async mostWanted(
     @Query('excludeIds') excludeIds?: string,
     @Query('excludedAccounts') excludedAccounts?: string,
+    @Query('visitorId') visitorId?: string,
+    @Query('personalizationDisabled')
+    personalizationDisabled?: string | boolean,
   ) {
     const response = await this.service.mostWanted(
       excludeIds,
       excludedAccounts,
+      visitorId,
+      personalizationDisabled,
     );
     if (!response.success) this.throwLegacy(response, 500);
     return response;

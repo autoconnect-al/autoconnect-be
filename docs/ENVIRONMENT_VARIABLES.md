@@ -70,6 +70,21 @@ Validated by `src/app.module.ts`:
 | `NEXT_CACHE_API_KEY` | No | Fallback in same key chain. | `legacy-ap/ap-prompt.service.ts` | Medium | Same as above |
 | `CACHE_API_KEY` | No | Fallback in same key chain. | `legacy-ap/ap-prompt.service.ts` | Medium | Same as above |
 
+## Personalization Tuning Variables
+- `PERSONALIZATION_ENABLED`: master enable flag (`true`/`false`).
+- `PERSONALIZATION_RETENTION_DAYS`: inactive profile retention window (default `90`).
+- `PERSONALIZATION_MAX_PERSONALIZED_SHARE`: max personalized share per page (default `0.6`).
+- `PERSONALIZATION_MODEL_MAX_SHARE`: max model share per page (default `0.25`).
+- `PERSONALIZATION_MAKE_MAX_SHARE`: max make share per page (default `0.4`).
+- `PERSONALIZATION_MODEL_OPEN_THRESHOLD`: model activation threshold from opens (default `3`).
+- `PERSONALIZATION_MAKE_OPEN_THRESHOLD`: make activation threshold from opens (default `2`).
+- `PERSONALIZATION_BODYTYPE_OPEN_THRESHOLD`: body type activation threshold from opens (default `2`).
+- `PERSONALIZATION_GENERIC_OPEN_THRESHOLD`: open threshold for `fuelType`, `transmission`, `type` (default `3`).
+- `PERSONALIZATION_CONTACT_THRESHOLD`: contact activation threshold (default `1`).
+- `PERSONALIZATION_SEARCH_CANDIDATE_MULTIPLIER`: default-feed candidate expansion multiplier (default `5`).
+- `PERSONALIZATION_SEARCH_CANDIDATE_MAX`: max default-feed candidates fetched for composition (default `500`).
+- `PERSONALIZATION_MOST_WANTED_CANDIDATES`: most-wanted candidate pool size before composition (default `24`).
+
 ## Present in `.env` but not used directly by `src/` runtime code
 These may exist for local tooling or historical reasons:
 - `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`

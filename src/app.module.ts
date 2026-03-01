@@ -12,6 +12,7 @@ import { LegacyDocsModule } from './modules/legacy-docs/legacy-docs.module';
 import { LegacyPaymentsModule } from './modules/legacy-payments/legacy-payments.module';
 import { LegacyApModule } from './modules/legacy-ap/legacy-ap.module';
 import { IngestModule } from './modules/imports/apify-import.module';
+import { PersonalizationModule } from './modules/personalization/personalization.module';
 
 function validateEnvironment(config: Record<string, unknown>) {
   const env = config as Record<string, string | undefined>;
@@ -68,6 +69,7 @@ function validateEnvironment(config: Record<string, unknown>) {
     LegacyPaymentsModule,
     LegacyApModule,
     IngestModule,
+    PersonalizationModule,
   ],
 })
 export class AppModule {}
