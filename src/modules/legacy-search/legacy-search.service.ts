@@ -1016,8 +1016,13 @@ export class LegacySearchService {
 
   private hasActiveSearchTerms(filter: SearchFilter): boolean {
     const terms = Array.isArray(filter.searchTerms) ? filter.searchTerms : [];
+    const ignoredKeys = new Set(['type']);
     for (const term of terms) {
       if (!term || typeof term.key !== 'string') continue;
+      const normalizedKey = this.toStr(term.key).toLowerCase();
+      if (!normalizedKey || ignoredKeys.has(normalizedKey)) {
+        continue;
+      }
 
       const value = term.value;
       if (value == null) continue;

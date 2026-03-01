@@ -109,6 +109,30 @@ describe('LegacySearchService', () => {
     );
   });
 
+  it('should treat type-only search term as default for personalization gating', () => {
+    const prisma = { $queryRawUnsafe: jest.fn() } as any;
+    const personalizationService = {
+      isEnabled: jest.fn().mockReturnValue(true),
+      isPersonalizationDisabled: jest.fn().mockReturnValue(false),
+      sanitizeVisitorId: jest.fn().mockReturnValue('visitor-1'),
+    } as any;
+    const service = new LegacySearchService(
+      prisma,
+      new LegacySearchQueryBuilder(),
+      personalizationService,
+    );
+
+    const filter = {
+      type: 'car',
+      searchTerms: [{ key: 'type', value: 'car' }],
+      sortTerms: [{ key: 'renewedTime', order: 'DESC' }],
+      visitorId: 'visitor-1',
+    };
+
+    expect((service as any).hasActiveSearchTerms(filter)).toBe(false);
+    expect((service as any).shouldApplySearchPersonalization(filter)).toBe(true);
+  });
+
   it('search should prepend matched promoted row and annotate promoted/highlighted', async () => {
     const now = Math.floor(Date.now() / 1000);
     const prisma = {
