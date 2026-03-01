@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from '../../../database/prisma.service';
 import { Prisma } from '@prisma/client';
 import {
@@ -15,6 +15,7 @@ import * as path from 'path';
 import { createHash } from 'crypto';
 import { sanitizePostUpdateDataForSource } from '../../../common/promotion-field-guard.util';
 import { createLogger } from '../../../common/logger.util';
+import { PersonalizationService } from '../../personalization/personalization.service';
 
 export interface ImportPostData {
   id: number | string;
@@ -105,6 +106,9 @@ export class PostImportService {
     private readonly prisma: PrismaService,
     private readonly openaiService: OpenAIService,
     private readonly imageDownloadService: ImageDownloadService,
+    @Optional()
+    @Inject(PersonalizationService)
+    private readonly personalizationService?: PersonalizationService,
   ) {}
 
   async getPostState(postId: bigint): Promise<{ exists: boolean; deleted: boolean }> {
@@ -1076,12 +1080,18 @@ export class PostImportService {
       const sanitizedVisitorId = this.sanitizeVisitorId(options.visitorId);
       if (sanitizedVisitorId) {
         await this.incrementUniqueReach(postId, sanitizedVisitorId);
+        await this.recordPersonalizationSignal(
+          postId,
+          sanitizedVisitorId,
+          'impression',
+        );
       }
       return;
     }
 
     if (metric === 'clicks') {
       await this.incrementSimpleMetric(postId, 'clicks');
+      await this.recordPersonalizationSignal(postId, options.visitorId, 'open');
       return;
     }
 
@@ -1093,6 +1103,7 @@ export class PostImportService {
           clicks: { increment: 1 },
         } as Prisma.postUpdateInput,
       });
+      await this.recordPersonalizationSignal(postId, options.visitorId, 'open');
       return;
     }
 
@@ -1122,6 +1133,7 @@ export class PostImportService {
         where: { id: postId },
         data: updateData as Prisma.postUpdateInput,
       });
+      await this.recordPersonalizationSignal(postId, options.visitorId, 'contact');
       return;
     }
 
@@ -1159,6 +1171,30 @@ export class PostImportService {
 
     if (Number(insertedRows) > 0) {
       await this.incrementSimpleMetric(postId, 'reach');
+    }
+  }
+
+  private async recordPersonalizationSignal(
+    postId: bigint,
+    visitorId: string | undefined,
+    event: 'open' | 'contact' | 'impression',
+  ): Promise<void> {
+    if (!this.personalizationService) return;
+    const sanitizedVisitorId = this.sanitizeVisitorId(visitorId);
+    if (!sanitizedVisitorId) return;
+
+    try {
+      await this.personalizationService.recordPostSignalByPostId(
+        postId,
+        sanitizedVisitorId,
+        event,
+      );
+    } catch (error) {
+      this.logger.warn('personalization.post-signal.failed', {
+        postId: postId.toString(),
+        event,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 

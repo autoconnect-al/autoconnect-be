@@ -8,6 +8,10 @@ import {
   type FilterTerm,
   type SearchFilter,
 } from './legacy-search-query-builder';
+import {
+  PersonalizationService,
+  type PersonalizationTermScore,
+} from '../personalization/personalization.service';
 
 @Injectable()
 export class LegacySearchService {
@@ -29,6 +33,7 @@ export class LegacySearchService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly queryBuilder: LegacySearchQueryBuilder,
+    private readonly personalizationService?: PersonalizationService,
   ) {}
 
   async search(filterRaw: string | undefined) {
@@ -36,18 +41,38 @@ export class LegacySearchService {
     if (!filter) {
       return legacyError('An error occurred while searching for cars', 500);
     }
+    const shouldApplyPersonalization =
+      this.shouldApplySearchPersonalization(filter);
+    const personalizationTerms = shouldApplyPersonalization
+      ? ((await this.personalizationService?.getTopTerms(filter.visitorId)) ??
+        [])
+      : [];
+
     const promoted = await this.findPromotedSearchPost(filter);
     const { whereSql, params } = this.queryBuilder.buildWhere(filter);
-    const { orderSql, limit, offset } =
-      this.queryBuilder.buildSortAndPagination(filter);
+    const { limit, offset } = this.queryBuilder.buildSortAndPagination(filter);
+    const personalizedSort = this.buildPersonalizedSearchOrder(personalizationTerms);
+    const orderSql = personalizedSort.orderSql
+      ?? this.queryBuilder.buildSortAndPagination(filter).orderSql;
+
     const rows = await this.timeQuery('search', () =>
       this.prisma.$queryRawUnsafe<unknown[]>(
         `SELECT * FROM search ${whereSql} ${orderSql} LIMIT ? OFFSET ?`,
         ...params,
+        ...personalizedSort.orderParams,
         limit,
         offset,
       ),
     );
+
+    const recordSignalPromise =
+      this.personalizationService?.recordSearchSignal(filter);
+    void recordSignalPromise?.catch((error) =>
+        this.logger.warn('personalization.search-signal.failed', {
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+
     const merged = this.mergeRowsWithPromoted(rows, promoted);
     return legacySuccess(
       this.normalizeBigInts(
@@ -144,7 +169,12 @@ export class LegacySearchService {
     return legacySuccess(this.normalizeBigInts(rows));
   }
 
-  async mostWanted(excludeIds?: string, excludedAccounts?: string) {
+  async mostWanted(
+    excludeIds?: string,
+    excludedAccounts?: string,
+    visitorId?: string,
+    personalizationDisabled?: boolean | string | number,
+  ) {
     const excludeIdValues = this.queryBuilder.parseCsvValues(excludeIds);
     const excludeAccountValues = this.queryBuilder.parseCsvValues(excludedAccounts);
 
@@ -173,14 +203,30 @@ export class LegacySearchService {
       params.push(...excludeAccountValues);
     }
 
+    const shouldApplyPersonalization =
+      this.shouldApplyMostWantedPersonalization(
+        visitorId,
+        personalizationDisabled,
+      );
+    const personalizationTerms = shouldApplyPersonalization
+      ? ((await this.personalizationService?.getTopTerms(visitorId)) ?? [])
+      : [];
+    const personalizedSort = this.buildPersonalizedMostWantedOrder(personalizationTerms);
+    const orderSql =
+      personalizedSort.orderSql ?? 'ORDER BY s.mostWantedTo DESC, p.clicks DESC';
+
     const query = `SELECT s.id, s.make, s.model, s.variant, s.registration, s.mileage, s.price, s.transmission, s.fuelType, s.engineSize, s.drivetrain, s.seats, s.numberOfDoors, s.bodyType, s.customsPaid, s.canExchange, s.options, s.emissionGroup, s.type, s.accountName, s.sidecarMedias, s.contact, s.vendorContact, s.profilePicture, s.vendorId, s.promotionTo, s.highlightedTo, s.renewTo, s.renewInterval, s.renewedTime, s.mostWantedTo
       FROM search s
       INNER JOIN post p ON p.id = s.id
       WHERE ${clauses.join(' AND ')}
-      ORDER BY s.mostWantedTo DESC, p.clicks DESC
+      ${orderSql}
       LIMIT 4`;
     const rows = await this.timeQuery('most_wanted', () =>
-      this.prisma.$queryRawUnsafe<unknown[]>(query, ...params),
+      this.prisma.$queryRawUnsafe<unknown[]>(
+        query,
+        ...params,
+        ...personalizedSort.orderParams,
+      ),
     );
     return legacySuccess(this.normalizeBigInts(this.withCarDetail(rows)));
   }
@@ -925,6 +971,190 @@ export class LegacySearchService {
 
   private parseCsvValues(raw: string | undefined): string[] {
     return this.queryBuilder.parseCsvValues(raw);
+  }
+
+  private shouldApplySearchPersonalization(filter: SearchFilter): boolean {
+    if (!this.personalizationService) return false;
+    if (!this.personalizationService.isEnabled()) return false;
+    if (
+      this.personalizationService.isPersonalizationDisabled(
+        filter.personalizationDisabled,
+      )
+    ) {
+      return false;
+    }
+    if (!this.personalizationService.sanitizeVisitorId(filter.visitorId)) {
+      return false;
+    }
+    if (!this.isDefaultRenewedTimeSort(filter)) {
+      return false;
+    }
+    if (this.toStr(filter.keyword ?? '')) {
+      return false;
+    }
+    if (this.toStr(filter.generalSearch ?? '')) {
+      return false;
+    }
+
+    return !this.hasActiveSearchTerms(filter);
+  }
+
+  private shouldApplyMostWantedPersonalization(
+    visitorId?: string,
+    personalizationDisabled?: boolean | string | number,
+  ): boolean {
+    if (!this.personalizationService) return false;
+    if (!this.personalizationService.isEnabled()) return false;
+    if (this.personalizationService.isPersonalizationDisabled(personalizationDisabled)) {
+      return false;
+    }
+    return Boolean(this.personalizationService.sanitizeVisitorId(visitorId));
+  }
+
+  private hasActiveSearchTerms(filter: SearchFilter): boolean {
+    const terms = Array.isArray(filter.searchTerms) ? filter.searchTerms : [];
+    for (const term of terms) {
+      if (!term || typeof term.key !== 'string') continue;
+
+      const value = term.value;
+      if (value == null) continue;
+
+      if (typeof value === 'object' && !Array.isArray(value)) {
+        const range = value as { from?: unknown; to?: unknown };
+        if (this.toStr(range.from ?? '') || this.toStr(range.to ?? '')) {
+          return true;
+        }
+        continue;
+      }
+
+      if (this.toStr(value)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private isDefaultRenewedTimeSort(filter: SearchFilter): boolean {
+    const sort =
+      Array.isArray(filter.sortTerms) && filter.sortTerms.length > 0
+        ? filter.sortTerms[0]
+        : {};
+
+    const key = this.toStr(sort?.key ?? 'renewedTime') || 'renewedTime';
+    const order = (this.toStr(sort?.order ?? 'DESC') || 'DESC').toUpperCase();
+
+    return key === 'renewedTime' && order === 'DESC';
+  }
+
+  private buildPersonalizedSearchOrder(terms: PersonalizationTermScore[]): {
+    orderSql: string | null;
+    orderParams: unknown[];
+  } {
+    const relevant = this.pickRankableTerms(terms);
+    if (relevant.length === 0) {
+      return { orderSql: null, orderParams: [] };
+    }
+
+    const interestParts: string[] = [];
+    const orderParams: unknown[] = [];
+    for (const term of relevant) {
+      const column = this.rankColumnForKey(term.termKey);
+      if (!column) continue;
+      interestParts.push(`CASE WHEN ${column} = ? THEN ? ELSE 0 END`);
+      orderParams.push(term.termValue, term.score);
+    }
+
+    if (interestParts.length === 0) {
+      return { orderSql: null, orderParams: [] };
+    }
+
+    const interestExpr = interestParts.join(' + ');
+    return {
+      orderSql: `ORDER BY ((0.7 * (${interestExpr})) + (0.3 * (COALESCE(renewedTime, 0) / 2147483647))) DESC, renewedTime DESC, id DESC`,
+      orderParams,
+    };
+  }
+
+  private buildPersonalizedMostWantedOrder(terms: PersonalizationTermScore[]): {
+    orderSql: string | null;
+    orderParams: unknown[];
+  } {
+    const relevant = this.pickRankableTerms(terms);
+    if (relevant.length === 0) {
+      return { orderSql: null, orderParams: [] };
+    }
+
+    const interestParts: string[] = [];
+    const orderParams: unknown[] = [];
+    for (const term of relevant) {
+      const column = this.rankColumnForKey(term.termKey, 's');
+      if (!column) continue;
+      interestParts.push(`CASE WHEN ${column} = ? THEN ? ELSE 0 END`);
+      orderParams.push(term.termValue, term.score);
+    }
+
+    if (interestParts.length === 0) {
+      return { orderSql: null, orderParams: [] };
+    }
+
+    const interestExpr = interestParts.join(' + ');
+    const baseExpr =
+      '(COALESCE(s.mostWantedTo, 0) / 2147483647) + (COALESCE(p.clicks, 0) / 10000)';
+
+    return {
+      orderSql: `ORDER BY ((0.7 * (${interestExpr})) + (0.3 * (${baseExpr}))) DESC, s.mostWantedTo DESC, p.clicks DESC`,
+      orderParams,
+    };
+  }
+
+  private pickRankableTerms(
+    terms: PersonalizationTermScore[],
+  ): PersonalizationTermScore[] {
+    if (!Array.isArray(terms)) return [];
+
+    const allowed = new Set([
+      'make',
+      'model',
+      'bodyType',
+      'fuelType',
+      'transmission',
+      'type',
+    ]);
+
+    return terms
+      .map((term) => ({
+        termKey: this.toStr(term.termKey),
+        termValue: this.toStr(term.termValue),
+        score: Number(term.score ?? 0),
+      }))
+      .filter(
+        (term) =>
+          allowed.has(term.termKey) &&
+          term.termValue.length > 0 &&
+          Number.isFinite(term.score) &&
+          term.score > 0,
+      )
+      .slice(0, 40);
+  }
+
+  private rankColumnForKey(termKey: string, alias?: string): string | null {
+    const prefix = alias ? `${alias}.` : '';
+    switch (termKey) {
+      case 'make':
+        return `${prefix}make`;
+      case 'model':
+        return `${prefix}model`;
+      case 'bodyType':
+        return `${prefix}bodyType`;
+      case 'fuelType':
+        return `${prefix}fuelType`;
+      case 'transmission':
+        return `${prefix}transmission`;
+      case 'type':
+        return `${prefix}type`;
+      default:
+        return null;
+    }
   }
 
   private getMostWantedRecencyDays(): number {
