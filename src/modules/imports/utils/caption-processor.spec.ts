@@ -31,6 +31,9 @@ describe('caption-processor', () => {
       expect(isSold('u shit')).toBe(true);
       expect(isSold('porositur')).toBe(true);
       expect(isSold('rezervuar')).toBe(true);
+      expect(isSold('blere me sukses')).toBe(true);
+      expect(isSold('blerë me sukses')).toBe(true);
+      expect(isSold('blere me suskses')).toBe(true);
     });
 
     it('should not detect sold if contains "per te shitur"', () => {
@@ -61,6 +64,7 @@ describe('caption-processor', () => {
       'deri ne durrës',
       'deri ne port',
       'deri ne portë',
+      'shipping price',
     ];
 
     it('returns true for known paid indicators', () => {
@@ -79,6 +83,7 @@ describe('caption-processor', () => {
       expect(isCustomsPaid('ME DOGANE')).toBe(true);
       expect(isCustomsPaid('Pa Dogane')).toBe(false);
       expect(isCustomsPaid('DERI NE DURRES')).toBe(false);
+      expect(isCustomsPaid('Shipping Price')).toBe(false);
     });
 
     it('returns null when no keywords match', () => {

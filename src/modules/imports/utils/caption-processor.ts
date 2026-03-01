@@ -81,7 +81,7 @@ export function decodeCaption(
 
 /**
  * Checks if a post is sold based on keywords in cleanedCaption
- * Keywords: sold, shitur, u shit, porositur, rezervuar
+ * Keywords: sold, shitur, u shit, porositur, rezervuar, blere me sukses
  * Exclude if contains: per te shitur
  * @param cleanedCaption - Cleaned caption text
  * @returns true if post is sold, false otherwise
@@ -104,6 +104,9 @@ export function isSold(cleanedCaption: string | null | undefined): boolean {
     'porositur',
     'rezervuar',
     's h i t u r',
+    'blere me sukses',
+    'blerë me sukses',
+    'blere me suskses',
   ];
   return soldKeywords.some((keyword) => lowerCaption.includes(keyword));
 }
@@ -152,6 +155,7 @@ export function isCustomsPaid(
     'deri ne port',
     'deri ne porte',
     'deri ne portë',
+    'shipping price',
   ];
 
   // Check for customs paid terms first
