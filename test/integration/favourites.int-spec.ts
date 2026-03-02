@@ -100,16 +100,16 @@ describe('Integration: favourites', () => {
         deleted: '0',
         sold: false,
         impressions: 33,
-        reach: 28,
-        clicks: 12,
-        contactCount: 4,
-        contactCall: 2,
-        contactWhatsapp: 1,
-        contactEmail: 1,
-        contactInstagram: 0,
       }),
     );
     expect(response.body.result[0]).not.toHaveProperty('postOpen');
+    expect(response.body.result[0]).not.toHaveProperty('reach');
+    expect(response.body.result[0]).not.toHaveProperty('clicks');
+    expect(response.body.result[0]).not.toHaveProperty('contactCount');
+    expect(response.body.result[0]).not.toHaveProperty('contactCall');
+    expect(response.body.result[0]).not.toHaveProperty('contactWhatsapp');
+    expect(response.body.result[0]).not.toHaveProperty('contactEmail');
+    expect(response.body.result[0]).not.toHaveProperty('contactInstagram');
   });
 
   it('favourites cache key normalization treats duplicate/reordered ids as the same request', async () => {

@@ -1,6 +1,8 @@
 import type { PrismaService } from '../database/prisma.service';
 
-export type PostStatsProjection = {
+export type PostStatsProjectionMode = 'public' | 'dashboard';
+
+export type DashboardPostStatsProjection = {
   impressions: number;
   reach: number;
   clicks: number;
@@ -11,19 +13,31 @@ export type PostStatsProjection = {
   contactInstagram: number;
 };
 
+export type PublicPostStatsProjection = {
+  impressions: number;
+};
+
+export type PostStatsProjection =
+  | PublicPostStatsProjection
+  | DashboardPostStatsProjection;
+
 type PostStatsRow = {
   id: bigint;
   impressions: number | null;
-  reach: number | null;
-  clicks: number | null;
-  contact: number | null;
-  contactCall: number | null;
-  contactWhatsapp: number | null;
-  contactEmail: number | null;
-  contactInstagram: number | null;
+  reach?: number | null;
+  clicks?: number | null;
+  contact?: number | null;
+  contactCall?: number | null;
+  contactWhatsapp?: number | null;
+  contactEmail?: number | null;
+  contactInstagram?: number | null;
 };
 
-const ZERO_POST_STATS: PostStatsProjection = Object.freeze({
+const ZERO_PUBLIC_POST_STATS: PublicPostStatsProjection = Object.freeze({
+  impressions: 0,
+});
+
+const ZERO_DASHBOARD_POST_STATS: DashboardPostStatsProjection = Object.freeze({
   impressions: 0,
   reach: 0,
   clicks: 0,
@@ -57,9 +71,24 @@ function toNonNegativeInt(value: unknown): number {
   return Math.max(0, Math.trunc(numericValue));
 }
 
-function projectStats(row?: PostStatsRow): PostStatsProjection {
+function getZeroPostStats(mode: PostStatsProjectionMode): PostStatsProjection {
+  if (mode === 'dashboard') {
+    return { ...ZERO_DASHBOARD_POST_STATS };
+  }
+  return { ...ZERO_PUBLIC_POST_STATS };
+}
+
+function projectStats(
+  row: PostStatsRow | undefined,
+  mode: PostStatsProjectionMode,
+): PostStatsProjection {
   if (!row) {
-    return { ...ZERO_POST_STATS };
+    return getZeroPostStats(mode);
+  }
+  if (mode === 'public') {
+    return {
+      impressions: toNonNegativeInt(row.impressions),
+    };
   }
   return {
     impressions: toNonNegativeInt(row.impressions),
@@ -98,6 +127,7 @@ function collectPostIds(rows: unknown[]): bigint[] {
 export async function enrichRowsWithPostStats(
   prisma: Pick<PrismaService, 'post'> | null | undefined,
   rows: unknown[],
+  mode: PostStatsProjectionMode = 'public',
 ): Promise<unknown[]> {
   if (!Array.isArray(rows) || rows.length === 0) {
     return rows;
@@ -108,35 +138,43 @@ export async function enrichRowsWithPostStats(
     prisma.post &&
     typeof prisma.post.findMany === 'function';
   if (!hasPostRepo) {
-    return rows.map((row) => withStats(row, { ...ZERO_POST_STATS }));
+    return rows.map((row) => withStats(row, getZeroPostStats(mode)));
   }
 
   const postIds = collectPostIds(rows);
   if (postIds.length === 0) {
-    return rows.map((row) => withStats(row, { ...ZERO_POST_STATS }));
+    return rows.map((row) => withStats(row, getZeroPostStats(mode)));
   }
+
+  const select =
+    mode === 'dashboard'
+      ? {
+          id: true,
+          impressions: true,
+          reach: true,
+          clicks: true,
+          contactCall: true,
+          contactWhatsapp: true,
+          contactEmail: true,
+          contactInstagram: true,
+          contact: true,
+        }
+      : {
+          id: true,
+          impressions: true,
+        };
 
   const statsRows = await prisma.post.findMany({
     where: {
       id: { in: postIds },
     },
-    select: {
-      id: true,
-      impressions: true,
-      reach: true,
-      clicks: true,
-      contactCall: true,
-      contactWhatsapp: true,
-      contactEmail: true,
-      contactInstagram: true,
-      contact: true,
-    },
+    select,
   });
 
   const statsById = new Map<string, PostStatsProjection>();
   for (const row of statsRows) {
     const mappedRow = row as unknown as PostStatsRow;
-    statsById.set(mappedRow.id.toString(), projectStats(mappedRow));
+    statsById.set(mappedRow.id.toString(), projectStats(mappedRow, mode));
   }
 
   return rows.map((row) => {
@@ -145,6 +183,6 @@ export async function enrichRowsWithPostStats(
     }
     const id = toPostId((row as Record<string, unknown>).id);
     const stats = id ? statsById.get(id) : undefined;
-    return withStats(row, stats ?? { ...ZERO_POST_STATS });
+    return withStats(row, stats ?? getZeroPostStats(mode));
   });
 }

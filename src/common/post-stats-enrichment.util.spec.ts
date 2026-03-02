@@ -1,7 +1,7 @@
 import { enrichRowsWithPostStats } from './post-stats-enrichment.util';
 
 describe('enrichRowsWithPostStats', () => {
-  it('adds stats projection by post id and maps post.contact to contactCount', async () => {
+  it('defaults to public projection and only adds impressions', async () => {
     const prisma = {
       post: {
         findMany: jest.fn().mockResolvedValue([
@@ -34,6 +34,60 @@ describe('enrichRowsWithPostStats', () => {
       select: {
         id: true,
         impressions: true,
+      },
+    });
+
+    expect(enriched[0]).toEqual(
+      expect.objectContaining({
+        id: '1',
+        impressions: 50,
+      }),
+    );
+    expect(enriched[0]).not.toHaveProperty('reach');
+    expect(enriched[0]).not.toHaveProperty('clicks');
+    expect(enriched[0]).not.toHaveProperty('contactCount');
+    expect(enriched[1]).toEqual(
+      expect.objectContaining({
+        id: '2',
+        impressions: 0,
+      }),
+    );
+    expect(enriched[1]).not.toHaveProperty('reach');
+    expect(enriched[1]).not.toHaveProperty('clicks');
+    expect(enriched[1]).not.toHaveProperty('contactCount');
+  });
+
+  it('adds full dashboard projection when mode is dashboard', async () => {
+    const prisma = {
+      post: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 1n,
+            impressions: 50,
+            reach: 42,
+            clicks: 15,
+            contact: 9,
+            contactCall: 4,
+            contactWhatsapp: 3,
+            contactEmail: 1,
+            contactInstagram: 1,
+          },
+        ]),
+      },
+    } as any;
+
+    const rows = [{ id: '1', make: 'BMW' }];
+    const enriched = (await enrichRowsWithPostStats(
+      prisma,
+      rows,
+      'dashboard',
+    )) as Array<Record<string, unknown>>;
+
+    expect(prisma.post.findMany).toHaveBeenCalledWith({
+      where: { id: { in: [1n] } },
+      select: {
+        id: true,
+        impressions: true,
         reach: true,
         clicks: true,
         contactCall: true,
@@ -43,7 +97,6 @@ describe('enrichRowsWithPostStats', () => {
         contact: true,
       },
     });
-
     expect(enriched[0]).toEqual(
       expect.objectContaining({
         id: '1',
@@ -55,19 +108,6 @@ describe('enrichRowsWithPostStats', () => {
         contactWhatsapp: 3,
         contactEmail: 1,
         contactInstagram: 1,
-      }),
-    );
-    expect(enriched[1]).toEqual(
-      expect.objectContaining({
-        id: '2',
-        impressions: 0,
-        reach: 0,
-        clicks: 0,
-        contactCount: 0,
-        contactCall: 0,
-        contactWhatsapp: 0,
-        contactEmail: 0,
-        contactInstagram: 0,
       }),
     );
   });
@@ -83,14 +123,10 @@ describe('enrichRowsWithPostStats', () => {
       expect.objectContaining({
         id: '10',
         impressions: 0,
-        reach: 0,
-        clicks: 0,
-        contactCount: 0,
-        contactCall: 0,
-        contactWhatsapp: 0,
-        contactEmail: 0,
-        contactInstagram: 0,
       }),
     );
+    expect(enriched[0]).not.toHaveProperty('reach');
+    expect(enriched[0]).not.toHaveProperty('clicks');
+    expect(enriched[0]).not.toHaveProperty('contactCount');
   });
 });

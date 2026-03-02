@@ -995,16 +995,16 @@ describe('Integration: search matrix', () => {
     expect(enrichedRow).toEqual(
       expect.objectContaining({
         impressions: 19,
-        reach: 17,
-        clicks: 6,
-        contactCount: 3,
-        contactCall: 1,
-        contactWhatsapp: 1,
-        contactEmail: 1,
-        contactInstagram: 0,
       }),
     );
     expect(enrichedRow).not.toHaveProperty('postOpen');
+    expect(enrichedRow).not.toHaveProperty('reach');
+    expect(enrichedRow).not.toHaveProperty('clicks');
+    expect(enrichedRow).not.toHaveProperty('contactCount');
+    expect(enrichedRow).not.toHaveProperty('contactCall');
+    expect(enrichedRow).not.toHaveProperty('contactWhatsapp');
+    expect(enrichedRow).not.toHaveProperty('contactEmail');
+    expect(enrichedRow).not.toHaveProperty('contactInstagram');
   });
 
   it('related-post-filter returns matching promoted post first when available', async () => {
@@ -1272,16 +1272,16 @@ describe('Integration: search matrix', () => {
         promoted: true,
         highlighted: true,
         impressions: 80,
-        reach: 65,
-        clicks: 30,
-        contactCount: 10,
-        contactCall: 4,
-        contactWhatsapp: 4,
-        contactEmail: 1,
-        contactInstagram: 1,
       }),
     );
     expect(response.body.result[0]).not.toHaveProperty('postOpen');
+    expect(response.body.result[0]).not.toHaveProperty('reach');
+    expect(response.body.result[0]).not.toHaveProperty('clicks');
+    expect(response.body.result[0]).not.toHaveProperty('contactCount');
+    expect(response.body.result[0]).not.toHaveProperty('contactCall');
+    expect(response.body.result[0]).not.toHaveProperty('contactWhatsapp');
+    expect(response.body.result[0]).not.toHaveProperty('contactEmail');
+    expect(response.body.result[0]).not.toHaveProperty('contactInstagram');
     const ids = response.body.result.map((row: { id: string }) => row.id);
     expect(ids).not.toContain('5850');
   });
@@ -1423,16 +1423,16 @@ describe('Integration: search matrix', () => {
     expect(response.body.result[0]).toEqual(
       expect.objectContaining({
         impressions: 70,
-        reach: 66,
-        clicks: 22,
-        contactCount: 7,
-        contactCall: 3,
-        contactWhatsapp: 2,
-        contactEmail: 1,
-        contactInstagram: 1,
       }),
     );
     expect(response.body.result[0]).not.toHaveProperty('postOpen');
+    expect(response.body.result[0]).not.toHaveProperty('reach');
+    expect(response.body.result[0]).not.toHaveProperty('clicks');
+    expect(response.body.result[0]).not.toHaveProperty('contactCount');
+    expect(response.body.result[0]).not.toHaveProperty('contactCall');
+    expect(response.body.result[0]).not.toHaveProperty('contactWhatsapp');
+    expect(response.body.result[0]).not.toHaveProperty('contactEmail');
+    expect(response.body.result[0]).not.toHaveProperty('contactInstagram');
   });
 
   it('most-wanted applies personalization caps while honoring exclusions', async () => {

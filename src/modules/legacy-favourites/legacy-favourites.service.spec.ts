@@ -89,16 +89,16 @@ describe('LegacyFavouritesService', () => {
       expect.objectContaining({
         id: '101',
         impressions: 11,
-        reach: 9,
-        clicks: 4,
-        contactCount: 3,
-        contactCall: 2,
-        contactWhatsapp: 1,
-        contactEmail: 0,
-        contactInstagram: 0,
       }),
     ]);
     expect(response.result[0]).not.toHaveProperty('postOpen');
+    expect(response.result[0]).not.toHaveProperty('reach');
+    expect(response.result[0]).not.toHaveProperty('clicks');
+    expect(response.result[0]).not.toHaveProperty('contactCount');
+    expect(response.result[0]).not.toHaveProperty('contactCall');
+    expect(response.result[0]).not.toHaveProperty('contactWhatsapp');
+    expect(response.result[0]).not.toHaveProperty('contactEmail');
+    expect(response.result[0]).not.toHaveProperty('contactInstagram');
   });
 
   it('getFavourites should keep cached search rows but refresh stats per request', async () => {
@@ -147,17 +147,17 @@ describe('LegacyFavouritesService', () => {
     expect(first.result[0]).toEqual(
       expect.objectContaining({
         impressions: 1,
-        clicks: 1,
-        contactCount: 1,
       }),
     );
     expect(second.result[0]).toEqual(
       expect.objectContaining({
         impressions: 9,
-        clicks: 7,
-        contactCount: 6,
       }),
     );
+    expect(first.result[0]).not.toHaveProperty('clicks');
+    expect(first.result[0]).not.toHaveProperty('contactCount');
+    expect(second.result[0]).not.toHaveProperty('clicks');
+    expect(second.result[0]).not.toHaveProperty('contactCount');
     expect(prisma.search.findMany).toHaveBeenCalledTimes(1);
     expect(prisma.post.findMany).toHaveBeenCalledTimes(2);
   });
