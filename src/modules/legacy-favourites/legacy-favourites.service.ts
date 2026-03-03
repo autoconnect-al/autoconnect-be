@@ -72,7 +72,11 @@ export class LegacyFavouritesService {
     const cacheKey = this.cacheKey('get', ids);
     const cached = this.readCache<unknown[]>(cacheKey);
     if (cached) {
-      const enrichedCached = await enrichRowsWithPostStats(this.prisma, cached);
+      const enrichedCached = await enrichRowsWithPostStats(
+        this.prisma,
+        cached,
+        'public',
+      );
       return legacySuccess(enrichedCached);
     }
     const rows = await this.prisma.search.findMany({
@@ -87,6 +91,7 @@ export class LegacyFavouritesService {
     const enrichedResult = await enrichRowsWithPostStats(
       this.prisma,
       result as unknown[],
+      'public',
     );
     return legacySuccess(enrichedResult);
   }

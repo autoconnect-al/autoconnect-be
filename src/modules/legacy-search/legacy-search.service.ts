@@ -128,7 +128,11 @@ export class LegacySearchService {
       );
 
     const merged = this.mergeRowsWithPromoted(rows, promoted);
-    const enrichedRows = await enrichRowsWithPostStats(this.prisma, merged);
+    const enrichedRows = await enrichRowsWithPostStats(
+      this.prisma,
+      merged,
+      'public',
+    );
     return legacySuccess(
       this.normalizeBigInts(
         this.annotateRowsWithPromotion(enrichedRows, promoted),
@@ -299,6 +303,7 @@ export class LegacySearchService {
     const enrichedRows = await enrichRowsWithPostStats(
       this.prisma,
       this.withCarDetail(rows),
+      'public',
     );
     return legacySuccess(this.normalizeBigInts(enrichedRows));
   }
@@ -313,7 +318,11 @@ export class LegacySearchService {
     if (rows.length === 0) {
       return legacyError('Car details not found', 404);
     }
-    const enrichedRows = await enrichRowsWithPostStats(this.prisma, rows);
+    const enrichedRows = await enrichRowsWithPostStats(
+      this.prisma,
+      rows,
+      'public',
+    );
     return legacySuccess(this.normalizeBigInts(enrichedRows));
   }
 
@@ -389,7 +398,11 @@ export class LegacySearchService {
       ),
     );
     const annotatedRows = this.annotateRelatedRows(this.withCarDetail(rows), promoted);
-    const enrichedRows = await enrichRowsWithPostStats(this.prisma, annotatedRows);
+    const enrichedRows = await enrichRowsWithPostStats(
+      this.prisma,
+      annotatedRows,
+      'public',
+    );
     return legacySuccess(this.normalizeBigInts(enrichedRows));
   }
 
@@ -453,7 +466,11 @@ export class LegacySearchService {
       ),
     );
     const annotatedRows = this.annotateRelatedRows(this.withCarDetail(rows), promoted);
-    const enrichedRows = await enrichRowsWithPostStats(this.prisma, annotatedRows);
+    const enrichedRows = await enrichRowsWithPostStats(
+      this.prisma,
+      annotatedRows,
+      'public',
+    );
     return legacySuccess(this.normalizeBigInts(enrichedRows));
   }
 

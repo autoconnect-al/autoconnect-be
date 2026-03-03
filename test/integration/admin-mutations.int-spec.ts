@@ -104,6 +104,19 @@ describe('Integration: admin mutations', () => {
       where: { id: ADMIN_POST_ID },
       data: { registration: '2026' },
     });
+    await prisma.post.update({
+      where: { id: ADMIN_POST_ID },
+      data: {
+        impressions: 55,
+        reach: 44,
+        clicks: 18,
+        contact: 6,
+        contactCall: 2,
+        contactWhatsapp: 2,
+        contactEmail: 1,
+        contactInstagram: 1,
+      },
+    });
 
     const adminToken = await issueAdminToken();
 
@@ -119,6 +132,14 @@ describe('Integration: admin mutations', () => {
         id: ADMIN_POST_ID.toString(),
         vendorId: ADMIN_VENDOR_ID.toString(),
         registration: '2026',
+        impressions: 55,
+        reach: 44,
+        clicks: 18,
+        contactCount: 6,
+        contactCall: 2,
+        contactWhatsapp: 2,
+        contactEmail: 1,
+        contactInstagram: 1,
       }),
     });
 
