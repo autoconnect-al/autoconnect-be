@@ -130,14 +130,18 @@ export class LocalPostOrderService {
     try {
       const input = (raw ?? {}) as AnyRecord;
       const post = ((input.post ?? {}) as AnyRecord) || {};
-      const email =
-        this.toSafeString(emailFromJwt) || this.toSafeString(post.email);
+      const jwtEmail = this.toSafeString(emailFromJwt);
+      const email = jwtEmail || this.toSafeString(post.email);
       if (!email) {
         return legacyError('User email is required.', 400);
       }
 
       let user = await this.findVendorAuthByEmail(email);
       let jwt = '';
+
+      if (user && !jwtEmail) {
+        return legacyError('ERROR: Not authorised', 401);
+      }
 
       if (!user) {
         const randomPassword = this.generateRandomCode(8, false);

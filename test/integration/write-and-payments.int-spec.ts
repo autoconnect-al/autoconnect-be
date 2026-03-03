@@ -14,6 +14,7 @@ import {
   FIXTURE_POST_ID,
   FIXTURE_PROMOTION_PACKAGE_ID,
   FIXTURE_VENDOR_ID,
+  issueLegacyJwt,
   seedPostGraph,
   seedPromotionPackage,
   seedVendor,
@@ -228,6 +229,116 @@ describe('Integration: write flows and payments', () => {
     expect(post?.vendor_id).toBe(vendor?.id);
     expect(details?.post_id).toBe(postId);
     expect(search).toBeNull();
+  });
+
+  it('POST /data/create-user-post returns unauthorized when vendor exists and request has no JWT', async () => {
+    const existingEmail = 'existing-user@example.com';
+    const postId = 5401n;
+    await seedVendor(prisma, FIXTURE_VENDOR_ID, {
+      email: existingEmail,
+      username: 'existing_user',
+      accountName: 'existing-user',
+    });
+
+    const response = await request(app.getHttpServer())
+      .post('/data/create-user-post')
+      .send({
+        post: {
+          id: postId.toString(),
+          email: existingEmail,
+          caption: 'Should be blocked for unauthenticated existing owner',
+          createdTime: String(Math.floor(Date.now() / 1000)),
+          cardDetails: {
+            make: 'BMW',
+            model: 'X5',
+            type: 'car',
+            transmission: 'automatic',
+            fuelType: 'diesel',
+            price: 21000,
+            sold: false,
+            published: false,
+          },
+        },
+      })
+      .expect(401);
+
+    expect(response.body).toMatchObject({
+      success: false,
+      statusCode: '401',
+      message: 'ERROR: Not authorised',
+    });
+
+    const post = await prisma.post.findUnique({ where: { id: postId } });
+    expect(post).toBeNull();
+    expect(
+      await prisma.vendor.count({
+        where: { email: existingEmail },
+      }),
+    ).toBe(1);
+  });
+
+  it('POST /data/create-user-post allows existing vendor when request is authenticated and JWT email takes precedence', async () => {
+    const existingEmail = 'owner@example.com';
+    const spoofedPayloadEmail = 'spoofed@example.com';
+    const postId = 5402n;
+    await seedVendor(prisma, FIXTURE_VENDOR_ID, {
+      email: existingEmail,
+      username: 'owner_user',
+      accountName: 'owner-user',
+    });
+
+    const jwt = await issueLegacyJwt({
+      userId: FIXTURE_VENDOR_ID.toString(),
+      roles: ['USER'],
+      email: existingEmail,
+      username: 'owner_user',
+      name: 'Owner User',
+    });
+
+    const response = await request(app.getHttpServer())
+      .post('/data/create-user-post')
+      .set('X-Http-Authorization', `Bearer ${jwt}`)
+      .send({
+        post: {
+          id: postId.toString(),
+          email: spoofedPayloadEmail,
+          caption: 'Authenticated owner creates listing',
+          createdTime: String(Math.floor(Date.now() / 1000)),
+          cardDetails: {
+            make: 'BMW',
+            model: 'X5',
+            type: 'car',
+            transmission: 'automatic',
+            fuelType: 'diesel',
+            price: 21000,
+            sold: false,
+            published: false,
+          },
+        },
+      })
+      .expect(200);
+
+    expect(response.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+      message: 'User and post created successfully',
+      result: {
+        postId: postId.toString(),
+      },
+    });
+
+    const post = await prisma.post.findUnique({ where: { id: postId } });
+    expect(post?.vendor_id).toBe(FIXTURE_VENDOR_ID);
+    expect(
+      await prisma.vendor.count({
+        where: { email: existingEmail },
+      }),
+    ).toBe(1);
+    expect(
+      await prisma.vendor.count({
+        where: { email: spoofedPayloadEmail },
+      }),
+    ).toBe(0);
   });
 
   it('POST /data/create-user-post returns legacy 500 envelope for missing user email', async () => {

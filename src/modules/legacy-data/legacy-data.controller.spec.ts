@@ -9,12 +9,14 @@ describe('LegacyDataController jwt email handling', () => {
   let localPostOrderService: {
     createPost: jest.Mock;
     updatePost: jest.Mock;
+    createUserAndPost: jest.Mock;
   };
 
   beforeEach(async () => {
     localPostOrderService = {
       createPost: jest.fn().mockResolvedValue({ success: true }),
       updatePost: jest.fn().mockResolvedValue({ success: true }),
+      createUserAndPost: jest.fn().mockResolvedValue({ success: true }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -73,6 +75,36 @@ describe('LegacyDataController jwt email handling', () => {
         statusCode: '500',
       },
       status: 500,
+    });
+  });
+
+  it('passes jwt email to createUserPost when token is valid', async () => {
+    const body = { post: { caption: 'x' } };
+
+    await controller.createUserPost(body, 'user@example.com');
+
+    expect(localPostOrderService.createUserAndPost).toHaveBeenCalledWith(
+      body,
+      'user@example.com',
+    );
+  });
+
+  it('throws 401 when createUserPost service returns unauthorized status', async () => {
+    localPostOrderService.createUserAndPost.mockResolvedValueOnce({
+      success: false,
+      statusCode: '401',
+      message: 'ERROR: Not authorised',
+    });
+
+    await expect(
+      controller.createUserPost({ post: {} }, undefined),
+    ).rejects.toMatchObject<HttpException>({
+      response: {
+        success: false,
+        message: 'ERROR: Not authorised',
+        statusCode: '401',
+      },
+      status: 401,
     });
   });
 });
