@@ -105,9 +105,25 @@ describe('LocalUserVendorService password migration', () => {
 
     expect(parsed).not.toBeNull();
     expect(parsed.email).toBe('test@example.com');
+    expect(parsed.username).toBe('test@example.com');
     expect(parsed.name).toBe('Test');
     expect(parsed.password).toBe('Test1234!');
     expect(parsed.rewritePassword).toBe('Test1234!');
+  });
+
+  it('extractUser should use email as username when username is missing', () => {
+    const parsed = (service as any).extractUser({
+      user: {
+        name: 'Rei Pano',
+        email: 'test@tralalalalalala.com',
+        password: 'Test12345!',
+        rewritePassword: 'Test12345!',
+      },
+    });
+
+    expect(parsed).not.toBeNull();
+    expect(parsed.username).toBe('test@tralalalalalala.com');
+    expect(parsed.email).toBe('test@tralalalalalala.com');
   });
 
   it('resetPassword should accept legacy urlencoded JSON payload', async () => {

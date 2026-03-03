@@ -132,7 +132,11 @@ export class LocalUserVendorService {
         });
       }
       return legacySuccess(true);
-    } catch {
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unknown create user error';
+      const stack = error instanceof Error ? error.stack : undefined;
+      this.logger.error('createUser.exception', { message, stack });
       return legacyError('ERROR: Something went wrong', 500);
     }
   }
@@ -537,17 +541,27 @@ export class LocalUserVendorService {
 
   private extractUser(raw: unknown): UserPayload | null {
     const root = this.normalizePayload(raw);
-    const userObject = (root.user ?? root) as AnyRecord;
+    const rootUserCandidate = root.user ?? root;
+    const userObject =
+      typeof rootUserCandidate === 'string'
+        ? this.normalizePayload(rootUserCandidate)
+        : rootUserCandidate &&
+            typeof rootUserCandidate === 'object' &&
+            !Array.isArray(rootUserCandidate)
+          ? (rootUserCandidate as AnyRecord)
+          : {};
 
     const email = this.toSafeString(userObject.email);
     if (!this.isValidEmail(email)) {
       return null;
     }
 
+    const username = this.toSafeString(userObject.username) || email;
+
     return {
       id: this.toSafeString(userObject.id),
       name: this.toSafeString(userObject.name),
-      username: this.toSafeString(userObject.username),
+      username,
       email,
       password: this.toSafeString(userObject.password),
       rewritePassword: this.toSafeString(userObject.rewritePassword),
