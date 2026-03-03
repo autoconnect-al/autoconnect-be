@@ -96,4 +96,67 @@ describe('LocalUserVendorService password migration', () => {
     expect(response.success).toBe(false);
     expect(response.statusCode).toBe('401');
   });
+
+  it('resetPassword should accept legacy urlencoded JSON payload', async () => {
+    (service as any).findVendorAuthByEmail = jest.fn().mockResolvedValue({ id: 1n });
+    (service as any).generateRandomCode = jest.fn().mockReturnValue('ABC123');
+    (service as any).jwtService = {
+      signAsync: jest.fn().mockResolvedValue('verification-token'),
+    };
+    (service as any).sendResetPasswordEmail = jest.fn().mockResolvedValue(undefined);
+    prisma.$executeRawUnsafe.mockResolvedValue(1);
+
+    const response = await service.resetPassword({
+      '{"email":"test@example.com"}': '',
+    });
+
+    expect((service as any).findVendorAuthByEmail).toHaveBeenCalledWith(
+      'test@example.com',
+    );
+    expect((service as any).sendResetPasswordEmail).toHaveBeenCalledWith(
+      'test@example.com',
+      'ABC123',
+    );
+    expect(response.success).toBe(true);
+  });
+
+  it('verifyPassword should accept JSON string payload', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    (service as any).findVendorAuthByEmail = jest.fn().mockResolvedValue({
+      id: 1n,
+      verificationCode: 'stored-reset-token',
+    });
+    (service as any).jwtService = {
+      verifyAsync: jest.fn().mockResolvedValue({
+        userId: '1',
+        token: 'ABC123',
+        iss: 'your.domain.name',
+        nbf: now - 60,
+        exp: now + 1800,
+      }),
+    };
+    (service as any).encryptPassword = jest
+      .fn()
+      .mockResolvedValue('$2b$12$newhash');
+    prisma.$executeRawUnsafe.mockResolvedValue(1);
+
+    const response = await service.verifyPassword(
+      JSON.stringify({
+        email: 'test@example.com',
+        verificationCode: 'ABC123',
+        newPassword: 'StrongPass123!',
+      }),
+    );
+
+    expect((service as any).findVendorAuthByEmail).toHaveBeenCalledWith(
+      'test@example.com',
+    );
+    expect(prisma.$executeRawUnsafe).toHaveBeenCalledWith(
+      'UPDATE vendor SET password = ?, verificationCode = NULL, dateUpdated = ? WHERE id = ?',
+      '$2b$12$newhash',
+      expect.any(Date),
+      1n,
+    );
+    expect(response.success).toBe(true);
+  });
 });
