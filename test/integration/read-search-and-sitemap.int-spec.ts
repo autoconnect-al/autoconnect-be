@@ -207,16 +207,16 @@ describe('Integration: read/search/sitemap', () => {
         make: 'BMW',
         model: 'X5',
         impressions: 120,
-        reach: 100,
-        clicks: 35,
-        contactCount: 8,
-        contactCall: 3,
-        contactWhatsapp: 3,
-        contactEmail: 1,
-        contactInstagram: 1,
       }),
     );
     expect(response.body.result[0]).not.toHaveProperty('postOpen');
+    expect(response.body.result[0]).not.toHaveProperty('reach');
+    expect(response.body.result[0]).not.toHaveProperty('clicks');
+    expect(response.body.result[0]).not.toHaveProperty('contactCount');
+    expect(response.body.result[0]).not.toHaveProperty('contactCall');
+    expect(response.body.result[0]).not.toHaveProperty('contactWhatsapp');
+    expect(response.body.result[0]).not.toHaveProperty('contactEmail');
+    expect(response.body.result[0]).not.toHaveProperty('contactInstagram');
   });
 
   it('POST /car-details/result-count returns deterministic count for matching filter', async () => {
@@ -275,16 +275,16 @@ describe('Integration: read/search/sitemap', () => {
         make: 'BMW',
         model: 'X5',
         impressions: 44,
-        reach: 41,
-        clicks: 12,
-        contactCount: 5,
-        contactCall: 2,
-        contactWhatsapp: 2,
-        contactEmail: 1,
-        contactInstagram: 0,
       }),
     );
     expect(ok.body.result[0]).not.toHaveProperty('postOpen');
+    expect(ok.body.result[0]).not.toHaveProperty('reach');
+    expect(ok.body.result[0]).not.toHaveProperty('clicks');
+    expect(ok.body.result[0]).not.toHaveProperty('contactCount');
+    expect(ok.body.result[0]).not.toHaveProperty('contactCall');
+    expect(ok.body.result[0]).not.toHaveProperty('contactWhatsapp');
+    expect(ok.body.result[0]).not.toHaveProperty('contactEmail');
+    expect(ok.body.result[0]).not.toHaveProperty('contactInstagram');
 
     const notFound = await request(app.getHttpServer())
       .get('/car-details/post/999999999')

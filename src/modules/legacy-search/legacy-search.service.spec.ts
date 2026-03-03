@@ -360,16 +360,16 @@ describe('LegacySearchService', () => {
       expect.objectContaining({
         id: 11,
         impressions: 100,
-        reach: 80,
-        clicks: 25,
-        contactCount: 9,
-        contactCall: 4,
-        contactWhatsapp: 3,
-        contactEmail: 1,
-        contactInstagram: 1,
       }),
     );
     expect(response.result[0]).not.toHaveProperty('postOpen');
+    expect(response.result[0]).not.toHaveProperty('reach');
+    expect(response.result[0]).not.toHaveProperty('clicks');
+    expect(response.result[0]).not.toHaveProperty('contactCount');
+    expect(response.result[0]).not.toHaveProperty('contactCall');
+    expect(response.result[0]).not.toHaveProperty('contactWhatsapp');
+    expect(response.result[0]).not.toHaveProperty('contactEmail');
+    expect(response.result[0]).not.toHaveProperty('contactInstagram');
   });
 
   it('search should enforce personalized slot caps without overwhelming the page', async () => {
