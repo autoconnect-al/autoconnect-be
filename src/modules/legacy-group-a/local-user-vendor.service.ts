@@ -324,7 +324,7 @@ export class LocalUserVendorService {
 
   async verifyPassword(raw: unknown): Promise<LegacyResponse> {
     try {
-      const input = raw as AnyRecord;
+      const input = this.normalizePayload(raw);
       const email = this.toSafeString(input.email);
       const verificationCode = this.toSafeString(input.verificationCode);
       const newPassword = this.toSafeString(input.newPassword);
@@ -576,8 +576,57 @@ export class LocalUserVendorService {
   }
 
   private extractEmail(raw: unknown): string {
-    const input = (raw ?? {}) as AnyRecord;
+    const input = this.normalizePayload(raw);
     return this.toSafeString(input.email);
+  }
+
+  private normalizePayload(raw: unknown): AnyRecord {
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      return this.normalizeObjectPayload(raw as AnyRecord);
+    }
+
+    if (typeof raw !== 'string') {
+      return {};
+    }
+
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      return {};
+    }
+
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return this.normalizeObjectPayload(parsed as AnyRecord);
+      }
+    } catch {
+      return {};
+    }
+
+    return {};
+  }
+
+  private normalizeObjectPayload(raw: AnyRecord): AnyRecord {
+    const keys = Object.keys(raw);
+    if (keys.length !== 1) {
+      return raw;
+    }
+
+    const firstKey = keys[0]?.trim();
+    if (!firstKey?.startsWith('{') || !firstKey.endsWith('}')) {
+      return raw;
+    }
+
+    try {
+      const parsed = JSON.parse(firstKey) as unknown;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as AnyRecord;
+      }
+    } catch {
+      return raw;
+    }
+
+    return raw;
   }
 
   private validateCreateOrUpdateRequest(user: {
