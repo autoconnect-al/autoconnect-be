@@ -97,6 +97,19 @@ describe('LocalUserVendorService password migration', () => {
     expect(response.statusCode).toBe('401');
   });
 
+  it('extractUser should parse legacy urlencoded JSON payload', () => {
+    const parsed = (service as any).extractUser({
+      '{"user":{"name":"Test","email":"test@example.com","password":"Test1234!","rewritePassword":"Test1234!"}}':
+        '',
+    });
+
+    expect(parsed).not.toBeNull();
+    expect(parsed.email).toBe('test@example.com');
+    expect(parsed.name).toBe('Test');
+    expect(parsed.password).toBe('Test1234!');
+    expect(parsed.rewritePassword).toBe('Test1234!');
+  });
+
   it('resetPassword should accept legacy urlencoded JSON payload', async () => {
     (service as any).findVendorAuthByEmail = jest.fn().mockResolvedValue({ id: 1n });
     (service as any).generateRandomCode = jest.fn().mockReturnValue('ABC123');

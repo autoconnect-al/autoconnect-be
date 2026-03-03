@@ -536,7 +536,7 @@ export class LocalUserVendorService {
   }
 
   private extractUser(raw: unknown): UserPayload | null {
-    const root = (raw ?? {}) as AnyRecord;
+    const root = this.normalizePayload(raw);
     const userObject = (root.user ?? root) as AnyRecord;
 
     const email = this.toSafeString(userObject.email);
