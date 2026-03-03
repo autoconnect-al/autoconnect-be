@@ -249,6 +249,38 @@ describe('Integration: auth and guards', () => {
     expect(created?.email).toBe(email);
   });
 
+  it('POST /user/create-user creates a new vendor user when username is missing', async () => {
+    const email = `new-user-no-username-${Date.now()}@example.com`;
+    const response = await request(app.getHttpServer())
+      .post('/user/create-user')
+      .send({
+        user: {
+          name: 'Integration User',
+          email,
+          password: 'Password123!',
+          rewritePassword: 'Password123!',
+          phone: '0690000000',
+          whatsapp: '0690000000',
+          location: 'Tirana',
+        },
+      })
+      .expect(200);
+
+    expect(response.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+      result: true,
+    });
+
+    const created = await prisma.vendor.findFirst({
+      where: { email },
+      select: { email: true, username: true },
+    });
+    expect(created).toBeTruthy();
+    expect(created?.email).toBe(email);
+    expect(created?.username).toBe(email);
+  });
+
   it('POST /user/reset-password sets verification code for existing user', async () => {
     await seedVendor(prisma, FIXTURE_VENDOR_ID, {
       username: 'reset_user',
