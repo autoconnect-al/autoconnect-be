@@ -176,6 +176,8 @@ export class LegacyDataController {
       body,
       jwtEmail,
     );
+    if (!response.success && response.statusCode === '401')
+      this.throwLegacy('ERROR: Not authorised', '401', 401);
     if (!response.success)
       this.throwLegacy('ERROR: Something went wrong', '500', 500);
     return response;
