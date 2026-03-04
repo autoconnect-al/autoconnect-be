@@ -147,6 +147,45 @@ describe('LegacySearchService', () => {
     );
   });
 
+  it('search should build inclusive range clauses for registration, price and mileage', async () => {
+    const prisma = {
+      $queryRawUnsafe: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]),
+    } as any;
+    const service = new LegacySearchService(prisma, new LegacySearchQueryBuilder());
+
+    const response = await service.search(
+      JSON.stringify({
+        type: 'car',
+        searchTerms: [
+          { key: 'registration', value: { from: '2018', to: '2018' } },
+          { key: 'price', value: { from: '10000', to: '10000' } },
+          { key: 'mileage', value: { from: '50000', to: '50000' } },
+        ],
+        sortTerms: [{ key: 'renewedTime', order: 'DESC' }],
+        page: 0,
+        maxResults: 10,
+      }),
+    );
+
+    const searchCall = prisma.$queryRawUnsafe.mock.calls.find(
+      (args: unknown[]) =>
+        String(args[0]).includes('SELECT * FROM search') &&
+        String(args[0]).includes('LIMIT ? OFFSET ?'),
+    ) as unknown[] | undefined;
+
+    expect(response.success).toBe(true);
+    expect(searchCall).toBeDefined();
+    expect(String(searchCall?.[0])).toContain('registration >= ?');
+    expect(String(searchCall?.[0])).toContain('registration <= ?');
+    expect(String(searchCall?.[0])).toContain('price >= ?');
+    expect(String(searchCall?.[0])).toContain('price <= ?');
+    expect(String(searchCall?.[0])).toContain('mileage >= ?');
+    expect(String(searchCall?.[0])).toContain('mileage <= ?');
+  });
+
   it('should treat type-only search term as default for personalization gating', () => {
     const prisma = { $queryRawUnsafe: jest.fn() } as any;
     const personalizationService = {

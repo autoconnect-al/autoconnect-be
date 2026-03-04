@@ -354,11 +354,11 @@ export class LegacySearchQueryBuilder {
     const from = this.toStr(value.from ?? '');
     const to = this.toStr(value.to ?? '');
     if (from) {
-      clauses.push(`${key} > ?`);
+      clauses.push(`${key} >= ?`);
       params.push(from);
     }
     if (to) {
-      clauses.push(`${key} < ?`);
+      clauses.push(`${key} <= ?`);
       params.push(to);
     }
   }
