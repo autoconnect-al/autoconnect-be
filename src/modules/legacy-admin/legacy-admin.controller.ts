@@ -10,11 +10,11 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { LegacyAdminService } from './legacy-admin.service';
-import { LegacyJwtAdminGuard } from '../../common/guards/legacy-jwt-admin.guard';
+import { LegacyJwtGuard } from '../../common/guards/legacy-jwt.guard';
 import { LegacyUserId } from '../../common/decorators/legacy-auth.decorators';
 
 @Controller('admin')
-@UseGuards(LegacyJwtAdminGuard)
+@UseGuards(LegacyJwtGuard)
 export class LegacyAdminController {
   constructor(private readonly service: LegacyAdminService) {}
 
