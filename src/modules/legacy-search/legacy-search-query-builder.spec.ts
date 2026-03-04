@@ -102,6 +102,43 @@ describe('LegacySearchQueryBuilder', () => {
     expect(built.params).toEqual(expect.arrayContaining(['X5']));
   });
 
+  it('buildWhere uses inclusive comparisons for ranged registration, price and mileage filters', () => {
+    const built = builder.buildWhere({
+      type: 'car',
+      searchTerms: [
+        {
+          key: 'registration',
+          value: { from: '2018', to: '2018' },
+        },
+        {
+          key: 'price',
+          value: { from: '10000', to: '10000' },
+        },
+        {
+          key: 'mileage',
+          value: { from: '50000', to: '50000' },
+        },
+      ],
+    });
+
+    expect(built.whereSql).toContain('registration >= ?');
+    expect(built.whereSql).toContain('registration <= ?');
+    expect(built.whereSql).toContain('price >= ?');
+    expect(built.whereSql).toContain('price <= ?');
+    expect(built.whereSql).toContain('mileage >= ?');
+    expect(built.whereSql).toContain('mileage <= ?');
+    expect(built.params).toEqual(
+      expect.arrayContaining([
+        '2018',
+        '2018',
+        '10000',
+        '10000',
+        '50000',
+        '50000',
+      ]),
+    );
+  });
+
   it('parseFilter + parseCsvValues + extractRegistrationFrom handle invalid inputs safely', () => {
     expect(builder.parseFilter(undefined)).toBeNull();
     expect(builder.parseFilter('not-json')).toBeNull();
