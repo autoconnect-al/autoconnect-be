@@ -12,9 +12,7 @@ import bcrypt from 'bcrypt';
 import {
   FIXTURE_VENDOR_ID,
   issueLegacyJwt,
-  seedRole,
   seedVendor,
-  seedVendorRole,
 } from './fixtures/domain-fixtures';
 import { JwtService } from '@nestjs/jwt';
 
@@ -116,7 +114,7 @@ describe('Integration: auth and guards', () => {
     });
   });
 
-  it('GET /admin/posts requires admin JWT', async () => {
+  it('GET /admin/posts requires legacy JWT', async () => {
     const response = await request(app.getHttpServer()).get('/admin/posts').expect(401);
 
     expect(response.body).toMatchObject({
@@ -149,27 +147,24 @@ describe('Integration: auth and guards', () => {
     expect(String(response.body.message)).toContain('Argument #1');
   });
 
-  it('GET /admin/user succeeds with a valid ADMIN legacy JWT', async () => {
-    const adminRoleId = 99;
+  it('GET /admin/user succeeds with a valid USER legacy JWT', async () => {
     await seedVendor(prisma, FIXTURE_VENDOR_ID, {
-      username: 'admin_user',
-      email: 'admin_user@example.com',
+      username: 'dashboard_user',
+      email: 'dashboard_user@example.com',
       password: null,
     });
-    await seedRole(prisma, 'ADMIN', adminRoleId);
-    await seedVendorRole(prisma, FIXTURE_VENDOR_ID, adminRoleId);
 
-    const adminToken = await issueLegacyJwt({
+    const userToken = await issueLegacyJwt({
       userId: FIXTURE_VENDOR_ID.toString(),
-      roles: ['ADMIN'],
-      email: 'admin_user@example.com',
-      username: 'admin_user',
-      name: 'Admin User',
+      roles: ['USER'],
+      email: 'dashboard_user@example.com',
+      username: 'dashboard_user',
+      name: 'Dashboard User',
     });
 
     const response = await request(app.getHttpServer())
       .get('/admin/user')
-      .set('authorization', `Bearer ${adminToken}`)
+      .set('authorization', `Bearer ${userToken}`)
       .expect(200);
 
     expect(response.body).toMatchObject({

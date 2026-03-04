@@ -75,7 +75,7 @@ describe('Integration: admin mutations', () => {
     });
   }
 
-  it('admin guard matrix: unauthorized and non-admin are rejected, admin is allowed', async () => {
+  it('admin guard matrix: unauthorized is rejected, authenticated users are owner-scoped', async () => {
     await seedAdminIdentity();
     await seedVendor(prisma, NON_ADMIN_VENDOR_ID, {
       username: 'non_admin',
@@ -85,10 +85,15 @@ describe('Integration: admin mutations', () => {
     await request(app.getHttpServer()).get('/admin/posts/1').expect(401);
 
     const nonAdminToken = await issueNonAdminToken();
-    await request(app.getHttpServer())
+    const nonAdminResponse = await request(app.getHttpServer())
       .get('/admin/posts/1')
       .set('authorization', `Bearer ${nonAdminToken}`)
-      .expect(401);
+      .expect(200);
+    expect(nonAdminResponse.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+      result: null,
+    });
 
     const adminToken = await issueAdminToken();
     await request(app.getHttpServer())
