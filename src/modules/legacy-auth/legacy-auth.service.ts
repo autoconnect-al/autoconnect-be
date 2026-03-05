@@ -250,7 +250,7 @@ export class LegacyAuthService {
       if (socialLoginResult.generatedPassword) {
         try {
           await this.localUserVendorService.sendRegistrationCredentialsEmail(
-            socialLoginResult.user.email ?? '',
+            user.email ?? '',
             socialLoginResult.generatedPassword,
           );
         } catch (error) {
