@@ -772,6 +772,13 @@ export class LocalUserVendorService {
     });
   }
 
+  async sendRegistrationCredentialsEmail(
+    email: string,
+    password: string,
+  ): Promise<void> {
+    await this.sendRegistrationEmail(email, password);
+  }
+
   private async sendResetPasswordEmail(
     email: string,
     code: string,
