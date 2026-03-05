@@ -225,7 +225,7 @@ export class LegacyAuthService {
 
     try {
       const profile = await this.fetchGoogleProfileFromIdToken(idToken);
-      if (!profile?.sub || !profile?.email) {
+      if (!profile?.sub) {
         return legacyError(
           'Could not login user. Please check your credentials.',
           401,
@@ -250,7 +250,7 @@ export class LegacyAuthService {
       if (socialLoginResult.generatedPassword) {
         try {
           await this.localUserVendorService.sendRegistrationCredentialsEmail(
-            profile.email,
+            socialLoginResult.user.email ?? '',
             socialLoginResult.generatedPassword,
           );
         } catch (error) {
@@ -371,6 +371,10 @@ export class LegacyAuthService {
 
     if (linkedRows[0]) {
       return { user: linkedRows[0], generatedPassword: null };
+    }
+
+    if (!profile.email) {
+      return { user: null, generatedPassword: null };
     }
 
     const existingByEmail = await this.prisma.$queryRawUnsafe<
