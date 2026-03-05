@@ -120,4 +120,43 @@ describe('LegacyAuthService', () => {
     expect(response.result).toHaveProperty('jwt');
     global.fetch = originalFetch;
   });
+
+  it('loginGoogle should accept boolean true for email_verified', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { LegacyAuthService } = require('./legacy-auth.service');
+    const originalFetch = global.fetch;
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        aud: process.env.GOOGLE_CLIENT_ID,
+        sub: 'google-sub-bool',
+        email: 'bool@example.com',
+        email_verified: true,
+        name: 'Boolean Verified',
+      }),
+    } as any);
+
+    const localUserVendorService = {} as any;
+    const prisma = {
+      $queryRawUnsafe: jest.fn().mockResolvedValueOnce([
+        {
+          id: BigInt(44),
+          name: 'Boolean Verified',
+          username: 'bool_user',
+          email: 'bool@example.com',
+          blocked: false,
+          deleted: false,
+        },
+      ]),
+    } as any;
+
+    const service = new LegacyAuthService(localUserVendorService, prisma);
+    const response = await service.loginGoogle({
+      idToken: 'google-id-token',
+    });
+
+    expect(response.success).toBe(true);
+    expect(response.result).toHaveProperty('jwt');
+    global.fetch = originalFetch;
+  });
 });

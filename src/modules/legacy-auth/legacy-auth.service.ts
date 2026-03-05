@@ -310,11 +310,16 @@ export class LegacyAuthService {
       return null;
     }
 
+    const emailVerifiedRaw = payload.email_verified;
+    const emailVerified =
+      emailVerifiedRaw === true ||
+      this.toSafeString(emailVerifiedRaw).toLowerCase() === 'true' ||
+      this.toSafeString(emailVerifiedRaw) === '1';
+
     return {
       sub: this.toSafeString(payload.sub),
       email: this.toSafeString(payload.email).toLowerCase(),
-      emailVerified:
-        this.toSafeString(payload.email_verified).toLowerCase() === 'true',
+      emailVerified,
       name: this.toSafeString(payload.name),
       givenName: this.toSafeString(payload.given_name),
       familyName: this.toSafeString(payload.family_name),
