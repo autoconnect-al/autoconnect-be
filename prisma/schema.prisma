@@ -316,9 +316,26 @@ model vendor {
   verified                   Boolean?  @default(true)
   verificationCode           String?   @db.VarChar(255)
   post                       post[]
+  oauthAccounts              vendor_oauth_account[]
 
   @@index([dateUpdated], map: "dateUpdated")
   @@index([deleted, accountName, accountExists], map: "deleted")
+}
+
+model vendor_oauth_account {
+  id             BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  vendor_id      BigInt   @db.UnsignedBigInt
+  provider       String   @db.VarChar(50)
+  provider_user_id String @db.VarChar(255)
+  email          String?  @db.VarChar(255)
+  dateCreated    DateTime @default(now()) @db.DateTime(0)
+  dateUpdated    DateTime? @updatedAt @db.DateTime(0)
+  deleted        Boolean  @default(false)
+  vendor         vendor   @relation(fields: [vendor_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "vendor_oauth_account_vendor_fk")
+
+  @@unique([provider, provider_user_id], map: "vendor_oauth_account_provider_user_uq")
+  @@unique([provider, email], map: "vendor_oauth_account_provider_email_uq")
+  @@index([vendor_id], map: "vendor_oauth_account_vendor_fk_idx")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
