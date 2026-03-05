@@ -6,6 +6,8 @@ import { legacySuccess } from '../../common/legacy-response';
 export class LegacyDataService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private readonly platformHosts = this.resolvePlatformHosts();
+
   async makes(type = 'car') {
     const rows = await this.prisma.$queryRawUnsafe<
       Array<{ Make: string | null }>
@@ -50,6 +52,37 @@ export class LegacyDataService {
       cleanedMake,
     );
     return legacySuccess(rows.map((row) => row.Model).filter(Boolean));
+  }
+
+  async resolveVendor(host?: string, username?: string) {
+    const normalizedHost = this.normalizeHost(host);
+    const normalizedUsername = this.normalizeUsername(username);
+
+    if (normalizedHost) {
+      const customDomainCandidates = this.getCustomDomainCandidates(normalizedHost);
+      const byCustomDomain = await this.resolveByCustomDomain(customDomainCandidates);
+      if (byCustomDomain) {
+        return legacySuccess(this.normalizeBigInts(byCustomDomain));
+      }
+
+      const subdomain = this.extractSubdomain(normalizedHost);
+      if (subdomain) {
+        const bySubdomain = await this.resolveBySubdomain(subdomain);
+        if (bySubdomain) {
+          return legacySuccess(this.normalizeBigInts(bySubdomain));
+        }
+      }
+    }
+
+    if (normalizedUsername) {
+      const usernameCandidates = this.getUsernameCandidates(normalizedUsername);
+      const byUsername = await this.resolveByUsername(usernameCandidates);
+      if (byUsername) {
+        return legacySuccess(this.normalizeBigInts(byUsername));
+      }
+    }
+
+    return legacySuccess(null);
   }
 
   async vendor(name: string) {
@@ -250,5 +283,142 @@ export class LegacyDataService {
       ...row,
       data: this.filterArticleDataByLanguage(data, lang),
     };
+  }
+
+  private resolvePlatformHosts(): string[] {
+    const envValues = [
+      process.env.BASE_URL,
+      process.env.ALLOWED_ORIGIN,
+      process.env.AUTOCONNECT_BASE_URL,
+    ].filter(Boolean) as string[];
+
+    const hosts = new Set<string>(['autoconnect.al', 'www.autoconnect.al']);
+
+    for (const rawValue of envValues) {
+      const normalized = this.normalizeHost(rawValue);
+      if (normalized) {
+        hosts.add(normalized);
+      }
+    }
+
+    return Array.from(hosts);
+  }
+
+  private normalizeHost(host?: string): string | null {
+    const raw = String(host ?? '').trim().toLowerCase();
+    if (!raw) return null;
+
+    const withProtocol =
+      raw.startsWith('http://') || raw.startsWith('https://')
+        ? raw
+        : `http://${raw}`;
+
+    try {
+      return new URL(withProtocol).hostname.replace(/\.$/, '');
+    } catch {
+      return raw
+        .replace(/^https?:\/\//, '')
+        .split('/')[0]
+        .split(':')[0]
+        .replace(/\.$/, '');
+    }
+  }
+
+  private normalizeUsername(username?: string): string | null {
+    const raw = String(username ?? '').trim();
+    if (!raw) return null;
+
+    try {
+      return decodeURIComponent(raw).toLowerCase();
+    } catch {
+      return raw.toLowerCase();
+    }
+  }
+
+  private getCustomDomainCandidates(host: string): string[] {
+    const candidates = [host];
+    if (host.startsWith('www.')) {
+      candidates.push(host.slice(4));
+    }
+
+    return Array.from(new Set(candidates.filter(Boolean)));
+  }
+
+  private getUsernameCandidates(username: string): string[] {
+    const hyphenToDot = username.replace(/-/g, '.');
+    return Array.from(new Set([username, hyphenToDot].filter(Boolean)));
+  }
+
+  private isPlatformSubdomainHost(host: string): boolean {
+    if (host.endsWith('.localhost')) return true;
+
+    return this.platformHosts.some(
+      (platformHost) =>
+        host === platformHost || host.endsWith(`.${platformHost}`),
+    );
+  }
+
+  private extractSubdomain(host: string): string | null {
+    if (!this.isPlatformSubdomainHost(host)) {
+      return null;
+    }
+
+    const parts = host.split('.').filter(Boolean);
+    if (parts.length < 2) return null;
+    if (parts.length === 2 && parts[1] !== 'localhost') return null;
+
+    const candidate = parts[0];
+    if (candidate === 'www') return null;
+    return candidate;
+  }
+
+  private async resolveByCustomDomain(candidates: string[]) {
+    for (const candidate of candidates) {
+      const rows = await this.prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+        'SELECT * FROM vendor WHERE LOWER(customDomain) = ? AND deleted = 0 AND initialised = 1 AND accountExists = 1 LIMIT 1',
+        candidate,
+      );
+      if (rows[0]) return rows[0];
+    }
+    return null;
+  }
+
+  private async resolveBySubdomain(subdomain: string) {
+    const candidates = this.getSubdomainCandidates(subdomain);
+
+    for (const candidate of candidates) {
+      const rows = await this.prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+        'SELECT * FROM vendor WHERE LOWER(subdomain) = ? AND deleted = 0 AND initialised = 1 AND accountExists = 1 LIMIT 1',
+        candidate,
+      );
+      if (rows[0]) return rows[0];
+    }
+
+    return null;
+  }
+
+  private async resolveByUsername(candidates: string[]) {
+    for (const candidate of candidates) {
+      const rows = await this.prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+        'SELECT * FROM vendor WHERE (LOWER(username) = ? OR LOWER(accountName) = ?) AND deleted = 0 AND initialised = 1 AND accountExists = 1 LIMIT 1',
+        candidate,
+        candidate,
+      );
+      if (rows[0]) return rows[0];
+    }
+
+    return null;
+  }
+
+  private getSubdomainCandidates(subdomain: string): string[] {
+    const normalized = subdomain.trim().toLowerCase();
+    const candidates = [normalized];
+
+    // Acceptance/staging convention: <slug>-dev.autoconnect.al
+    if (normalized.endsWith('-dev') && normalized.length > 4) {
+      candidates.push(normalized.slice(0, -4));
+    }
+
+    return Array.from(new Set(candidates.filter(Boolean)));
   }
 }

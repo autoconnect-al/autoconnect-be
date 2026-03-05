@@ -95,6 +95,11 @@ export const legacyRoutes: LegacyRoute[] = [
   },
   {
     method: 'get',
+    path: '/data/vendors/resolve',
+    summary: 'Resolve vendor by host/subdomain/username',
+  },
+  {
+    method: 'get',
     path: '/data/article/{lang}/{id}',
     summary: 'Single article',
   },

@@ -68,6 +68,11 @@ export class LegacyDataController {
     return this.service.models(make, 'motorcycle', full === 'true');
   }
 
+  @Get('vendors/resolve')
+  resolveVendor(@Query('host') host?: string, @Query('username') username?: string) {
+    return this.service.resolveVendor(host, username);
+  }
+
   @Get('vendors/:name')
   getVendor(@Param('name') name: string) {
     return this.service.vendor(name);

@@ -398,6 +398,128 @@ describe('Integration: read/search/sitemap', () => {
     });
   });
 
+  it('GET /data/vendors/resolve applies host precedence and active-vendor constraints', async () => {
+    const customVendorId = 5101n;
+    const subdomainVendorId = 5102n;
+    const subdomainOnlyVendorId = 5103n;
+    const usernameVendorId = 5104n;
+    const inactiveVendorId = 5105n;
+
+    await seedVendor(prisma, customVendorId, {
+      accountName: 'custom.vendor',
+      username: 'custom.vendor',
+    });
+    await seedVendor(prisma, subdomainVendorId, {
+      accountName: 'sub.vendor',
+      username: 'sub.vendor',
+    });
+    await seedVendor(prisma, subdomainOnlyVendorId, {
+      accountName: 'sub.only.vendor',
+      username: 'sub.only.vendor',
+    });
+    await seedVendor(prisma, usernameVendorId, {
+      accountName: 'path.vendor',
+      username: 'path.vendor',
+    });
+    await seedVendor(prisma, inactiveVendorId, {
+      accountName: 'inactive.vendor',
+      username: 'inactive.vendor',
+    });
+
+    await prisma.vendor.update({
+      where: { id: customVendorId },
+      data: {
+        customDomain: 'tenant.autoconnect.al',
+        subdomain: 'tenant-custom',
+        theme: 'classic',
+        primaryColor: '#112233',
+        secondaryColor: '#445566',
+        logo: 'logo.webp',
+        banner: 'banner.webp',
+      },
+    });
+    await prisma.vendor.update({
+      where: { id: subdomainVendorId },
+      data: {
+        subdomain: 'tenant',
+      },
+    });
+    await prisma.vendor.update({
+      where: { id: subdomainOnlyVendorId },
+      data: {
+        subdomain: 'sub-only',
+      },
+    });
+    await prisma.vendor.update({
+      where: { id: inactiveVendorId },
+      data: {
+        customDomain: 'inactive.example.com',
+        subdomain: 'inactive',
+        deleted: true,
+      },
+    });
+
+    const customMatch = await request(app.getHttpServer())
+      .get(
+        '/data/vendors/resolve?host=www.tenant.autoconnect.al:443&username=path-vendor',
+      )
+      .expect(200);
+    expect(customMatch.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+      result: expect.objectContaining({
+        id: customVendorId.toString(),
+        customDomain: 'tenant.autoconnect.al',
+        subdomain: 'tenant-custom',
+      }),
+    });
+
+    const subdomainMatch = await request(app.getHttpServer())
+      .get('/data/vendors/resolve?host=sub-only.autoconnect.al')
+      .expect(200);
+    expect(subdomainMatch.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+      result: expect.objectContaining({
+        id: subdomainOnlyVendorId.toString(),
+        subdomain: 'sub-only',
+      }),
+    });
+
+    const subdomainDevAliasMatch = await request(app.getHttpServer())
+      .get('/data/vendors/resolve?host=sub-only-dev.autoconnect.al')
+      .expect(200);
+    expect(subdomainDevAliasMatch.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+      result: expect.objectContaining({
+        id: subdomainOnlyVendorId.toString(),
+        subdomain: 'sub-only',
+      }),
+    });
+
+    const usernameFallback = await request(app.getHttpServer())
+      .get('/data/vendors/resolve?host=autoconnect.al&username=path-vendor')
+      .expect(200);
+    expect(usernameFallback.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+      result: expect.objectContaining({
+        id: usernameVendorId.toString(),
+        accountName: 'path.vendor',
+      }),
+    });
+
+    const inactiveVendor = await request(app.getHttpServer())
+      .get('/data/vendors/resolve?host=inactive.example.com&username=inactive-vendor')
+      .expect(200);
+    expect(inactiveVendor.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+      result: null,
+    });
+  });
+
   it('GET article endpoints apply language filtering and metadata handles missing id', async () => {
     const now = new Date();
     await prisma.article.createMany({
