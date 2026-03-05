@@ -238,12 +238,31 @@ export class LegacyAuthService {
         );
       }
 
-      const user = await this.findOrCreateGoogleUser(profile);
+      const socialLoginResult = await this.findOrCreateGoogleUser(profile);
+      const user = socialLoginResult.user;
       if (!user || user.deleted || user.blocked) {
         return legacyError(
           'Could not login user. Please check your credentials.',
           401,
         );
+      }
+
+      if (socialLoginResult.generatedPassword) {
+        try {
+          await this.localUserVendorService.sendRegistrationCredentialsEmail(
+            profile.email,
+            socialLoginResult.generatedPassword,
+          );
+        } catch (error) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : 'Unknown registration email error';
+          this.logger.warn('loginGoogle.registration_email_failed', {
+            email: profile.email,
+            message,
+          });
+        }
       }
 
       const jwt = await this.signLegacyJwt(user);
@@ -314,13 +333,16 @@ export class LegacyAuthService {
     picture: string;
     aud: string;
   }): Promise<{
-    id: bigint;
-    name: string | null;
-    username: string | null;
-    email: string | null;
-    blocked: boolean | number | null;
-    deleted: boolean | number | null;
-  } | null> {
+    user: {
+      id: bigint;
+      name: string | null;
+      username: string | null;
+      email: string | null;
+      blocked: boolean | number | null;
+      deleted: boolean | number | null;
+    } | null;
+    generatedPassword: string | null;
+  }> {
     const linkedRows = await this.prisma.$queryRawUnsafe<
       Array<{
         id: bigint;
@@ -343,7 +365,7 @@ export class LegacyAuthService {
     );
 
     if (linkedRows[0]) {
-      return linkedRows[0];
+      return { user: linkedRows[0], generatedPassword: null };
     }
 
     const existingByEmail = await this.prisma.$queryRawUnsafe<
@@ -372,7 +394,7 @@ export class LegacyAuthService {
         providerUserId: profile.sub,
         email: profile.email,
       });
-      return existingByEmail[0];
+      return { user: existingByEmail[0], generatedPassword: null };
     }
 
     const now = new Date();
@@ -380,6 +402,8 @@ export class LegacyAuthService {
     const username = this.generateSocialUsername(profile.email);
     const displayName =
       profile.name || profile.givenName || this.emailPrefix(profile.email);
+    const generatedPassword = this.generateRandomPassword(14);
+    const passwordHash = await this.encryptPassword(generatedPassword);
 
     await this.prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe(
@@ -408,7 +432,7 @@ export class LegacyAuthService {
         null,
         false,
         0,
-        null,
+        passwordHash,
         true,
         null,
         profile.picture || '',
@@ -459,7 +483,7 @@ export class LegacyAuthService {
       `,
       userId,
     );
-    return createdRows[0] ?? null;
+    return { user: createdRows[0] ?? null, generatedPassword };
   }
 
   private async linkOauthAccount(params: {
@@ -536,6 +560,21 @@ export class LegacyAuthService {
       .toString()
       .padStart(5, '0');
     return `${prefix || 'google_user'}_${suffix}`;
+  }
+
+  private generateRandomPassword(length: number): string {
+    const chars =
+      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+';
+    let password = '';
+    for (let i = 0; i < length; i += 1) {
+      password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return password;
+  }
+
+  private async encryptPassword(password: string): Promise<string> {
+    const bcrypt = require('bcrypt') as typeof import('bcrypt');
+    return bcrypt.hash(password, 12);
   }
 
   private emailPrefix(email: string): string {
