@@ -15,6 +15,7 @@ const jwtSecret = requireEnv('JWT_SECRET');
 const instagramClientId = requireEnv('INSTAGRAM_CLIENT_ID');
 const instagramClientSecret = requireEnv('INSTAGRAM_CLIENT_SECRET');
 const instagramRedirectUri = requireEnv('INSTAGRAM_REDIRECT_URI');
+const googleClientId = process.env.GOOGLE_CLIENT_ID;
 
 @Injectable()
 export class LegacyAuthService {
@@ -210,5 +211,338 @@ export class LegacyAuthService {
         500,
       );
     }
+  }
+
+  async loginGoogle(body: unknown) {
+    const payload = (body ?? {}) as Record<string, unknown>;
+    const idToken = this.toSafeString(payload.idToken);
+    if (!idToken) {
+      return legacyError(
+        'Could not login user. Please check your credentials.',
+        400,
+      );
+    }
+
+    try {
+      const profile = await this.fetchGoogleProfileFromIdToken(idToken);
+      if (!profile?.sub || !profile?.email) {
+        return legacyError(
+          'Could not login user. Please check your credentials.',
+          401,
+        );
+      }
+      if (!profile.emailVerified) {
+        return legacyError(
+          'Could not login user. Please verify your Google account email first.',
+          401,
+        );
+      }
+
+      const user = await this.findOrCreateGoogleUser(profile);
+      if (!user || user.deleted || user.blocked) {
+        return legacyError(
+          'Could not login user. Please check your credentials.',
+          401,
+        );
+      }
+
+      const jwt = await this.signLegacyJwt(user);
+      return legacySuccess({
+        jwt,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unknown social login error';
+      this.logger.error('loginGoogle.exception', { message });
+      return legacyError(
+        'Could not login user. Please check your credentials.',
+        401,
+      );
+    }
+  }
+
+  private async fetchGoogleProfileFromIdToken(idToken: string): Promise<{
+    sub: string;
+    email: string;
+    emailVerified: boolean;
+    name: string;
+    givenName: string;
+    familyName: string;
+    picture: string;
+    aud: string;
+  } | null> {
+    const url = new URL('https://oauth2.googleapis.com/tokeninfo');
+    url.searchParams.set('id_token', idToken);
+
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = (await response.json()) as Record<string, unknown>;
+    const audience = this.toSafeString(payload.aud);
+    if (googleClientId && audience !== googleClientId) {
+      return null;
+    }
+
+    return {
+      sub: this.toSafeString(payload.sub),
+      email: this.toSafeString(payload.email).toLowerCase(),
+      emailVerified:
+        this.toSafeString(payload.email_verified).toLowerCase() === 'true',
+      name: this.toSafeString(payload.name),
+      givenName: this.toSafeString(payload.given_name),
+      familyName: this.toSafeString(payload.family_name),
+      picture: this.toSafeString(payload.picture),
+      aud: audience,
+    };
+  }
+
+  private async findOrCreateGoogleUser(profile: {
+    sub: string;
+    email: string;
+    emailVerified: boolean;
+    name: string;
+    givenName: string;
+    familyName: string;
+    picture: string;
+    aud: string;
+  }): Promise<{
+    id: bigint;
+    name: string | null;
+    username: string | null;
+    email: string | null;
+    blocked: boolean | number | null;
+    deleted: boolean | number | null;
+  } | null> {
+    const linkedRows = await this.prisma.$queryRawUnsafe<
+      Array<{
+        id: bigint;
+        name: string | null;
+        username: string | null;
+        email: string | null;
+        blocked: boolean | number | null;
+        deleted: boolean | number | null;
+      }>
+    >(
+      `
+      SELECT v.id, v.name, v.username, v.email, v.blocked, v.deleted
+      FROM vendor_oauth_account voa
+      INNER JOIN vendor v ON v.id = voa.vendor_id
+      WHERE voa.provider = ? AND voa.provider_user_id = ? AND voa.deleted = 0
+      LIMIT 1
+      `,
+      'google',
+      profile.sub,
+    );
+
+    if (linkedRows[0]) {
+      return linkedRows[0];
+    }
+
+    const existingByEmail = await this.prisma.$queryRawUnsafe<
+      Array<{
+        id: bigint;
+        name: string | null;
+        username: string | null;
+        email: string | null;
+        blocked: boolean | number | null;
+        deleted: boolean | number | null;
+      }>
+    >(
+      `
+      SELECT id, name, username, email, blocked, deleted
+      FROM vendor
+      WHERE LOWER(email) = ?
+      LIMIT 1
+      `,
+      profile.email.toLowerCase(),
+    );
+
+    if (existingByEmail[0]) {
+      await this.linkOauthAccount({
+        vendorId: existingByEmail[0].id,
+        provider: 'google',
+        providerUserId: profile.sub,
+        email: profile.email,
+      });
+      return existingByEmail[0];
+    }
+
+    const now = new Date();
+    const userId = await this.generateUniqueNumericUserId();
+    const username = this.generateSocialUsername(profile.email);
+    const displayName =
+      profile.name || profile.givenName || this.emailPrefix(profile.email);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(
+        `
+        INSERT INTO vendor (
+          id, dateCreated, dateUpdated, deleted, contact, accountName, profilePicture, accountExists, initialised, biography,
+          name, username, email, phoneNumber, whatsAppNumber, location, blocked, attemptedLogin, password, verified, verificationCode, profileImage
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        userId,
+        now,
+        now,
+        false,
+        '{"phone_number":"","email":"","whatsapp":""}',
+        displayName,
+        profile.picture || '',
+        true,
+        true,
+        '',
+        displayName,
+        username,
+        profile.email,
+        null,
+        null,
+        null,
+        false,
+        0,
+        null,
+        true,
+        null,
+        profile.picture || '',
+      );
+
+      await tx.$executeRawUnsafe(
+        'INSERT IGNORE INTO vendor_role (vendor_id, role_id) VALUES (?, ?)',
+        userId,
+        1,
+      );
+
+      await tx.$executeRawUnsafe(
+        `
+        INSERT INTO vendor_oauth_account
+        (vendor_id, provider, provider_user_id, email, dateCreated, dateUpdated, deleted)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+          vendor_id = VALUES(vendor_id),
+          email = VALUES(email),
+          deleted = 0,
+          dateUpdated = VALUES(dateUpdated)
+        `,
+        userId,
+        'google',
+        profile.sub,
+        profile.email,
+        now,
+        now,
+        false,
+      );
+    });
+
+    const createdRows = await this.prisma.$queryRawUnsafe<
+      Array<{
+        id: bigint;
+        name: string | null;
+        username: string | null;
+        email: string | null;
+        blocked: boolean | number | null;
+        deleted: boolean | number | null;
+      }>
+    >(
+      `
+      SELECT id, name, username, email, blocked, deleted
+      FROM vendor
+      WHERE id = ?
+      LIMIT 1
+      `,
+      userId,
+    );
+    return createdRows[0] ?? null;
+  }
+
+  private async linkOauthAccount(params: {
+    vendorId: bigint;
+    provider: string;
+    providerUserId: string;
+    email: string;
+  }) {
+    const now = new Date();
+    await this.prisma.$executeRawUnsafe(
+      `
+      INSERT INTO vendor_oauth_account
+      (vendor_id, provider, provider_user_id, email, dateCreated, dateUpdated, deleted)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE
+        vendor_id = VALUES(vendor_id),
+        email = VALUES(email),
+        deleted = 0,
+        dateUpdated = VALUES(dateUpdated)
+      `,
+      params.vendorId,
+      params.provider,
+      params.providerUserId,
+      params.email,
+      now,
+      now,
+      false,
+    );
+  }
+
+  private async signLegacyJwt(user: {
+    id: bigint;
+    name: string | null;
+    username: string | null;
+    email: string | null;
+  }): Promise<string> {
+    return this.jwtService.signAsync({
+      iat: Math.floor(Date.now() / 1000),
+      iss: 'your.domain.name',
+      nbf: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + 86400,
+      userId: String(user.id),
+      roles: await getUserRoleNames(this.prisma, String(user.id)),
+      name: user.name ?? '',
+      email: user.email ?? '',
+      username: user.username ?? '',
+    });
+  }
+
+  private toSafeString(value: unknown): string {
+    return typeof value === 'string' ? value.trim() : '';
+  }
+
+  private async generateUniqueNumericUserId(): Promise<bigint> {
+    for (let i = 0; i < 8; i += 1) {
+      const rows = await this.prisma.$queryRawUnsafe<Array<{ maxId: bigint }>>(
+        'SELECT COALESCE(MAX(id), 0) AS maxId FROM vendor',
+      );
+      const nextId = (rows[0]?.maxId ?? BigInt(0)) + BigInt(1);
+      const exists = await this.prisma.$queryRawUnsafe<Array<{ id: bigint }>>(
+        'SELECT id FROM vendor WHERE id = ? LIMIT 1',
+        nextId,
+      );
+      if (!exists[0]) {
+        return nextId;
+      }
+    }
+    throw new Error('Could not allocate vendor id for social login');
+  }
+
+  private generateSocialUsername(email: string): string {
+    const prefix = this.emailPrefix(email).replace(/[^a-zA-Z0-9._-]/g, '');
+    const suffix = Math.floor(Math.random() * 100000)
+      .toString()
+      .padStart(5, '0');
+    return `${prefix || 'google_user'}_${suffix}`;
+  }
+
+  private emailPrefix(email: string): string {
+    const atIndex = email.indexOf('@');
+    if (atIndex < 1) {
+      return '';
+    }
+    return email.slice(0, atIndex);
   }
 }

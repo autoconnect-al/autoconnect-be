@@ -149,4 +149,16 @@ export class LegacyAuthController {
   instagramToken(@Query('code') code?: string) {
     return this.service.getInstagramAccessToken(code);
   }
+
+  @Post('authentication/login/google')
+  @HttpCode(200)
+  @UseGuards(AuthRateLimitGuard)
+  @Throttle({ default: { limit: 10, ttl: seconds(60) } })
+  async googleLogin(@Body() body: unknown) {
+    const response = await this.service.loginGoogle(body);
+    if (!response.success) {
+      this.throwLegacy(response, Number(response.statusCode) || 500);
+    }
+    return response;
+  }
 }
