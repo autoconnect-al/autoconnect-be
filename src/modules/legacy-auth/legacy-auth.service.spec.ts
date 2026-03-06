@@ -121,6 +121,67 @@ describe('LegacyAuthService', () => {
     global.fetch = originalFetch;
   });
 
+  it('loginGoogle should assign role_id 2 when creating a new social user', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { LegacyAuthService } = require('./legacy-auth.service');
+    const originalFetch = global.fetch;
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        aud: process.env.GOOGLE_CLIENT_ID,
+        sub: 'google-sub-new',
+        email: 'new-social@example.com',
+        email_verified: 'true',
+        name: 'New Social User',
+      }),
+    } as any);
+
+    const txExecuteRawUnsafe = jest.fn().mockResolvedValue(1);
+    const localUserVendorService = {
+      sendRegistrationCredentialsEmail: jest.fn().mockResolvedValue(undefined),
+    } as any;
+    const prisma = {
+      $queryRawUnsafe: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          {
+            id: BigInt(77),
+            name: 'New Social User',
+            username: 'new_social',
+            email: 'new-social@example.com',
+            blocked: false,
+            deleted: false,
+          },
+        ])
+        .mockResolvedValueOnce([]),
+      $transaction: jest.fn().mockImplementation(async (callback: any) =>
+        callback({
+          $executeRawUnsafe: txExecuteRawUnsafe,
+        }),
+      ),
+    } as any;
+
+    const service = new LegacyAuthService(localUserVendorService, prisma);
+    (service as any).generateUniqueNumericUserId = jest
+      .fn()
+      .mockResolvedValue(BigInt(77));
+    (service as any).encryptPassword = jest.fn().mockResolvedValue('$2b$12$hash');
+
+    const response = await service.loginGoogle({
+      idToken: 'google-id-token',
+    });
+
+    expect(response.success).toBe(true);
+    expect(txExecuteRawUnsafe).toHaveBeenCalledWith(
+      'INSERT IGNORE INTO vendor_role (vendor_id, role_id) VALUES (?, ?)',
+      BigInt(77),
+      2,
+    );
+    global.fetch = originalFetch;
+  });
+
   it('loginGoogle should accept boolean true for email_verified', async () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { LegacyAuthService } = require('./legacy-auth.service');

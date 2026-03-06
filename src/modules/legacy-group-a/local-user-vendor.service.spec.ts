@@ -12,6 +12,7 @@ jest.mock(
 
 class MockPrismaService {
   $executeRawUnsafe = jest.fn();
+  $transaction = jest.fn();
 }
 
 describe('LocalUserVendorService password migration', () => {
@@ -95,6 +96,36 @@ describe('LocalUserVendorService password migration', () => {
 
     expect(response.success).toBe(false);
     expect(response.statusCode).toBe('401');
+  });
+
+  it('createUser should insert created vendor role as role_id 2', async () => {
+    const txExecuteRawUnsafe = jest.fn().mockResolvedValue(1);
+    prisma.$transaction.mockImplementation(async (callback: any) =>
+      callback({
+        $executeRawUnsafe: txExecuteRawUnsafe,
+      }),
+    );
+    (service as any).isUserUnique = jest.fn().mockResolvedValue(true);
+    (service as any).generateUniqueNumericUserId = jest.fn().mockResolvedValue(123n);
+    (service as any).encryptPassword = jest.fn().mockResolvedValue('$2b$12$hash');
+    (service as any).sendRegistrationEmail = jest.fn().mockResolvedValue(undefined);
+
+    const response = await service.createUser({
+      user: {
+        name: 'Role Target',
+        username: 'role_target',
+        email: 'role-target@example.com',
+        password: 'Password123!',
+        rewritePassword: 'Password123!',
+      },
+    });
+
+    expect(response.success).toBe(true);
+    expect(txExecuteRawUnsafe).toHaveBeenCalledWith(
+      'INSERT IGNORE INTO vendor_role (vendor_id, role_id) VALUES (?, ?)',
+      123n,
+      2,
+    );
   });
 
   it('extractUser should parse legacy urlencoded JSON payload', () => {
