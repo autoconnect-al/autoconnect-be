@@ -12,6 +12,7 @@ import bcrypt from 'bcrypt';
 import {
   FIXTURE_VENDOR_ID,
   issueLegacyJwt,
+  seedRole,
   seedVendor,
 } from './fixtures/domain-fixtures';
 import { JwtService } from '@nestjs/jwt';
@@ -213,6 +214,7 @@ describe('Integration: auth and guards', () => {
   });
 
   it('POST /user/create-user creates a new vendor user', async () => {
+    await seedRole(prisma, 'USER', 2);
     const email = `new-user-${Date.now()}@example.com`;
     const response = await request(app.getHttpServer())
       .post('/user/create-user')
@@ -242,9 +244,20 @@ describe('Integration: auth and guards', () => {
     });
     expect(created).toBeTruthy();
     expect(created?.email).toBe(email);
+
+    const createdRole = await prisma.vendor_role.findUnique({
+      where: {
+        vendor_id_role_id: {
+          vendor_id: created?.id ?? 0n,
+          role_id: 2,
+        },
+      },
+    });
+    expect(createdRole).toBeTruthy();
   });
 
   it('POST /user/create-user creates a new vendor user when username is missing', async () => {
+    await seedRole(prisma, 'USER', 2);
     const email = `new-user-no-username-${Date.now()}@example.com`;
     const response = await request(app.getHttpServer())
       .post('/user/create-user')
@@ -269,11 +282,19 @@ describe('Integration: auth and guards', () => {
 
     const created = await prisma.vendor.findFirst({
       where: { email },
-      select: { email: true, username: true },
+      select: { id: true, email: true, username: true },
     });
     expect(created).toBeTruthy();
     expect(created?.email).toBe(email);
     expect(created?.username).toBe(email);
+
+    const createdRole = await prisma.vendor_role.findFirst({
+      where: {
+        vendor_id: created?.id ?? 0n,
+        role_id: 2,
+      },
+    });
+    expect(createdRole).toBeTruthy();
   });
 
   it('POST /user/reset-password sets verification code for existing user', async () => {
