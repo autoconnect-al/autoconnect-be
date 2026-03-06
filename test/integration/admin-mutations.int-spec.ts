@@ -411,6 +411,14 @@ describe('Integration: admin mutations', () => {
             '--builder-accent': '#f5351f',
           },
         },
+        navigation: {
+          variant: 'floating',
+          position: 'bottom',
+          mobileMenu: {
+            mode: 'fullscreen',
+            motion: 'left',
+          },
+        },
       },
       pages: {
         home: {
@@ -489,6 +497,16 @@ describe('Integration: admin mutations', () => {
         vendor: expect.objectContaining({
           siteConfig: expect.objectContaining({
             version: 1,
+            theme: expect.objectContaining({
+              navigation: expect.objectContaining({
+                variant: 'floating',
+                position: 'bottom',
+                mobileMenu: expect.objectContaining({
+                  mode: 'fullscreen',
+                  motion: 'left',
+                }),
+              }),
+            }),
           }),
         }),
       }),
@@ -554,6 +572,40 @@ describe('Integration: admin mutations', () => {
           },
         },
         expectedMessage: 'not an allowed token',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          theme: {
+            navigation: {
+              variant: 'compact',
+            },
+          },
+          pages: {
+            home: { sections: [] },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'variant must be one of floating or fullWidth',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          theme: {
+            navigation: {
+              mobileMenu: {
+                mode: 'sheet',
+              },
+            },
+          },
+          pages: {
+            home: { sections: [] },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'mobileMenu.mode must be fullscreen',
       },
       {
         siteConfig: oversizedPayloadString,

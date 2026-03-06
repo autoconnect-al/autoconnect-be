@@ -22,6 +22,10 @@ const THEME_COMPONENT_KEYS = [
   'map',
   'footer',
 ] as const;
+const THEME_NAVIGATION_VARIANTS = new Set(['floating', 'fullWidth']);
+const THEME_NAVIGATION_POSITIONS = new Set(['top', 'bottom']);
+const THEME_NAVIGATION_MOBILE_MENU_MODES = new Set(['fullscreen']);
+const THEME_NAVIGATION_MOBILE_MENU_MOTIONS = new Set(['left']);
 const ALLOWED_STYLE_TOKEN_KEYS = new Set([
   '--builder-bg',
   '--builder-surface',
@@ -130,6 +134,105 @@ function normalizeStyleTokens(
   }
 
   return { ok: true, value: normalized };
+}
+
+function normalizeThemeNavigation(
+  input: unknown,
+  path: string,
+): ParseResult<AnyRecord | undefined> {
+  if (input === undefined || input === null) {
+    return { ok: true, value: undefined };
+  }
+  if (!isRecord(input)) {
+    return { ok: false, error: `${path} must be an object` };
+  }
+
+  const allowedKeys = new Set(['variant', 'position', 'mobileMenu']);
+  for (const key of Object.keys(input)) {
+    if (!allowedKeys.has(key)) {
+      return { ok: false, error: `${path}.${key} is not supported` };
+    }
+  }
+
+  const normalized: AnyRecord = {};
+
+  if (input.variant !== undefined && input.variant !== null) {
+    if (typeof input.variant !== 'string') {
+      return { ok: false, error: `${path}.variant must be a string` };
+    }
+    const variant = input.variant.trim();
+    if (!THEME_NAVIGATION_VARIANTS.has(variant)) {
+      return {
+        ok: false,
+        error: `${path}.variant must be one of floating or fullWidth`,
+      };
+    }
+    normalized.variant = variant;
+  }
+
+  if (input.position !== undefined && input.position !== null) {
+    if (typeof input.position !== 'string') {
+      return { ok: false, error: `${path}.position must be a string` };
+    }
+    const position = input.position.trim();
+    if (!THEME_NAVIGATION_POSITIONS.has(position)) {
+      return {
+        ok: false,
+        error: `${path}.position must be one of top or bottom`,
+      };
+    }
+    normalized.position = position;
+  }
+
+  if (input.mobileMenu !== undefined && input.mobileMenu !== null) {
+    if (!isRecord(input.mobileMenu)) {
+      return { ok: false, error: `${path}.mobileMenu must be an object` };
+    }
+
+    const allowedMobileKeys = new Set(['mode', 'motion']);
+    for (const key of Object.keys(input.mobileMenu)) {
+      if (!allowedMobileKeys.has(key)) {
+        return { ok: false, error: `${path}.mobileMenu.${key} is not supported` };
+      }
+    }
+
+    const mobileMenu: AnyRecord = {};
+    if (input.mobileMenu.mode !== undefined && input.mobileMenu.mode !== null) {
+      if (typeof input.mobileMenu.mode !== 'string') {
+        return { ok: false, error: `${path}.mobileMenu.mode must be a string` };
+      }
+      const mode = input.mobileMenu.mode.trim();
+      if (!THEME_NAVIGATION_MOBILE_MENU_MODES.has(mode)) {
+        return {
+          ok: false,
+          error: `${path}.mobileMenu.mode must be fullscreen`,
+        };
+      }
+      mobileMenu.mode = mode;
+    }
+
+    if (input.mobileMenu.motion !== undefined && input.mobileMenu.motion !== null) {
+      if (typeof input.mobileMenu.motion !== 'string') {
+        return { ok: false, error: `${path}.mobileMenu.motion must be a string` };
+      }
+      const motion = input.mobileMenu.motion.trim();
+      if (!THEME_NAVIGATION_MOBILE_MENU_MOTIONS.has(motion)) {
+        return {
+          ok: false,
+          error: `${path}.mobileMenu.motion must be left`,
+        };
+      }
+      mobileMenu.motion = motion;
+    }
+
+    if (Object.keys(mobileMenu).length > 0) {
+      normalized.mobileMenu = mobileMenu;
+    }
+  }
+
+  return Object.keys(normalized).length > 0
+    ? { ok: true, value: normalized }
+    : { ok: true, value: undefined };
 }
 
 function normalizeUrl(
@@ -713,6 +816,16 @@ export function normalizeVendorSiteConfigInput(
     if (!isRecord(root.value.theme)) {
       return { ok: false, error: 'siteConfig.theme must be an object' };
     }
+
+    const navigation = normalizeThemeNavigation(
+      root.value.theme.navigation,
+      'siteConfig.theme.navigation',
+    );
+    if (!navigation.ok) {
+      return navigation;
+    }
+
+    const themeData: AnyRecord = {};
     const componentsRaw = root.value.theme.components;
     if (componentsRaw !== undefined && componentsRaw !== null) {
       if (!isRecord(componentsRaw)) {
@@ -736,10 +849,14 @@ export function normalizeVendorSiteConfigInput(
         if (!tokens.ok) return tokens;
         components[key] = tokens.value ?? {};
       }
-      theme = { components };
-    } else {
-      theme = {};
+      themeData.components = components;
     }
+
+    if (navigation.value) {
+      themeData.navigation = navigation.value;
+    }
+
+    theme = themeData;
   }
 
   if (!isRecord(root.value.pages)) {
