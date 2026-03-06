@@ -398,6 +398,188 @@ describe('Integration: admin mutations', () => {
     expect(vendor?.contact).toContain('vendor-contact@example.com');
   });
 
+  it('POST /admin/vendor/site-config persists validated config and GET /admin/user returns parsed value', async () => {
+    await seedAdminIdentity();
+    const adminToken = await issueAdminToken();
+
+    const siteConfig = {
+      version: 1,
+      theme: {
+        components: {
+          hero: {
+            '--builder-bg': '#ffffff',
+            '--builder-accent': '#f5351f',
+          },
+        },
+      },
+      pages: {
+        home: {
+          sections: [
+            {
+              id: 'home-hero',
+              type: 'hero',
+              data: {
+                heading: 'Welcome to Auto Connect',
+                subheading: 'Trusted vehicles for every budget',
+                cta: { label: 'Browse vehicles', url: '/sq-al/vehicles' },
+              },
+            },
+          ],
+        },
+        about: {
+          sections: [
+            {
+              id: 'about-rich',
+              type: 'richText',
+              data: {
+                paragraphs: ['We have served customers for over 10 years.'],
+              },
+            },
+          ],
+        },
+        contact: {
+          sections: [
+            {
+              id: 'contact-form',
+              type: 'contactForm',
+              data: {
+                title: 'Contact us',
+                submitLabel: 'Send message',
+              },
+            },
+          ],
+        },
+      },
+    };
+
+    const saveResponse = await request(app.getHttpServer())
+      .post('/admin/vendor/site-config')
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
+        vendor: {
+          siteConfig,
+        },
+      })
+      .expect(200);
+
+    expect(saveResponse.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+      message: 'Vendor updated successfully',
+      result: null,
+    });
+
+    const vendor = await prisma.vendor.findUnique({
+      where: { id: ADMIN_VENDOR_ID },
+      select: { siteConfig: true },
+    });
+
+    expect(vendor?.siteConfig).toBeTruthy();
+    expect(vendor?.siteConfig).toContain('"version":1');
+
+    const getUserResponse = await request(app.getHttpServer())
+      .get('/admin/user')
+      .set('authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(getUserResponse.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+      result: expect.objectContaining({
+        vendor: expect.objectContaining({
+          siteConfig: expect.objectContaining({
+            version: 1,
+          }),
+        }),
+      }),
+    });
+  });
+
+  it('POST /admin/vendor/site-config returns validation errors for invalid payloads', async () => {
+    await seedAdminIdentity();
+    const adminToken = await issueAdminToken();
+
+    const oversizedPayloadString = `{"version":1,"pages":{"home":{"sections":[]},"about":{"sections":[]},"contact":{"sections":[]}},"filler":"${'x'.repeat(
+      95_000,
+    )}"}`;
+    const cases = [
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [{ id: 'one', type: 'unknown', data: {} }],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'type is not supported',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: { sections: [] },
+            about: { sections: [] },
+            contact: {
+              sections: [
+                {
+                  id: 'map-1',
+                  type: 'map',
+                  data: { embedUrl: 'javascript:alert(1)' },
+                },
+              ],
+            },
+          },
+        },
+        expectedMessage: 'protocol is not allowed',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'hero-1',
+                  type: 'hero',
+                  data: { heading: 'Valid heading' },
+                  styleTokens: { '--not-allowed-token': '#fff' },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'not an allowed token',
+      },
+      {
+        siteConfig: oversizedPayloadString,
+        expectedMessage: 'payload is too large',
+      },
+    ];
+
+    for (const testCase of cases) {
+      const response = await request(app.getHttpServer())
+        .post('/admin/vendor/site-config')
+        .set('authorization', `Bearer ${adminToken}`)
+        .send({
+          vendor: {
+            siteConfig: testCase.siteConfig,
+          },
+        })
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        success: false,
+        statusCode: '400',
+      });
+      expect(String(response.body.message)).toContain(testCase.expectedMessage);
+    }
+  });
+
   it('DELETE/PATCH admin post mutations fail for non-owner post and keep state unchanged', async () => {
     await seedAdminIdentity();
     await seedVendor(prisma, 8400n, {
