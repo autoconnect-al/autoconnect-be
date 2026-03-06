@@ -14,6 +14,7 @@ import { createLogger } from '../../common/logger.util';
 type AnyRecord = Record<string, unknown>;
 
 const jwtSecret = requireEnv('JWT_SECRET');
+const DEFAULT_CREATED_VENDOR_ROLE_ID = 2;
 
 type UserPayload = {
   id: string;
@@ -116,7 +117,7 @@ export class LocalUserVendorService {
         await tx.$executeRawUnsafe(
           'INSERT IGNORE INTO vendor_role (vendor_id, role_id) VALUES (?, ?)',
           userId,
-          1,
+          DEFAULT_CREATED_VENDOR_ROLE_ID,
         );
       });
 
