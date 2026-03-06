@@ -16,6 +16,7 @@ const instagramClientId = requireEnv('INSTAGRAM_CLIENT_ID');
 const instagramClientSecret = requireEnv('INSTAGRAM_CLIENT_SECRET');
 const instagramRedirectUri = requireEnv('INSTAGRAM_REDIRECT_URI');
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
+const DEFAULT_CREATED_VENDOR_ROLE_ID = 2;
 
 @Injectable()
 export class LegacyAuthService {
@@ -450,7 +451,7 @@ export class LegacyAuthService {
       await tx.$executeRawUnsafe(
         'INSERT IGNORE INTO vendor_role (vendor_id, role_id) VALUES (?, ?)',
         userId,
-        1,
+        DEFAULT_CREATED_VENDOR_ROLE_ID,
       );
 
       await tx.$executeRawUnsafe(
