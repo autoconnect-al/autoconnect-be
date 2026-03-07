@@ -429,6 +429,16 @@ describe('Integration: admin mutations', () => {
               data: {
                 heading: 'Welcome to Auto Connect',
                 subheading: 'Trusted vehicles for every budget',
+                variant: 'fullWidth',
+                contentAlign: 'center',
+                background: {
+                  mode: 'image',
+                  imageUrl: 'https://cdn.example.invalid/hero-banner.jpg',
+                  overlay: {
+                    color: '#000000',
+                    opacity: 0.4,
+                  },
+                },
                 cta: { label: 'Browse vehicles', url: '/sq-al/vehicles' },
               },
             },
@@ -507,6 +517,22 @@ describe('Integration: admin mutations', () => {
                 }),
               }),
             }),
+            pages: expect.objectContaining({
+              home: expect.objectContaining({
+                sections: expect.arrayContaining([
+                  expect.objectContaining({
+                    type: 'hero',
+                    data: expect.objectContaining({
+                      variant: 'fullWidth',
+                      contentAlign: 'center',
+                      background: expect.objectContaining({
+                        mode: 'image',
+                      }),
+                    }),
+                  }),
+                ]),
+              }),
+            }),
           }),
         }),
       }),
@@ -521,6 +547,83 @@ describe('Integration: admin mutations', () => {
       95_000,
     )}"}`;
     const cases = [
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'hero-bad-variant',
+                  type: 'hero',
+                  data: { heading: 'Valid heading', variant: 'wide' },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'variant must be one of inset or fullWidth',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'hero-bad-overlay',
+                  type: 'hero',
+                  data: {
+                    heading: 'Valid heading',
+                    background: {
+                      mode: 'image',
+                      imageUrl: 'https://cdn.example.invalid/hero.jpg',
+                      overlay: {
+                        color: '#000000',
+                        opacity: 4,
+                      },
+                    },
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'overlay.opacity must be between 0 and 1',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'hero-bad-gradient',
+                  type: 'hero',
+                  data: {
+                    heading: 'Valid heading',
+                    background: {
+                      mode: 'gradient',
+                      gradient: {
+                        from: '#111111',
+                        to: '#222222',
+                        angle: 800,
+                      },
+                    },
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'gradient.angle must be between 0 and 360',
+      },
       {
         siteConfig: {
           version: 1,

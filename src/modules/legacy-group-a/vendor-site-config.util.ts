@@ -26,6 +26,9 @@ const THEME_NAVIGATION_VARIANTS = new Set(['floating', 'fullWidth']);
 const THEME_NAVIGATION_POSITIONS = new Set(['top', 'bottom']);
 const THEME_NAVIGATION_MOBILE_MENU_MODES = new Set(['fullscreen']);
 const THEME_NAVIGATION_MOBILE_MENU_MOTIONS = new Set(['left']);
+const HERO_VARIANTS = new Set(['inset', 'fullWidth']);
+const HERO_CONTENT_ALIGNS = new Set(['left', 'center']);
+const HERO_BACKGROUND_MODES = new Set(['solid', 'gradient', 'image']);
 const ALLOWED_STYLE_TOKEN_KEYS = new Set([
   '--builder-bg',
   '--builder-surface',
@@ -51,6 +54,9 @@ const MAX_SHORT_TEXT_LENGTH = 120;
 const MAX_MEDIUM_TEXT_LENGTH = 500;
 const MAX_LONG_TEXT_LENGTH = 2000;
 const MAX_URL_LENGTH = 2048;
+const DEFAULT_HERO_GRADIENT_ANGLE = 135;
+const LEGACY_HERO_OVERLAY_COLOR = '#000000';
+const LEGACY_HERO_OVERLAY_OPACITY = 0.35;
 
 type ParseResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -99,6 +105,171 @@ function isSafeCssTokenValue(value: string): boolean {
   if (SAFE_COLOR_KEYWORDS.has(value.toLowerCase())) return true;
 
   return false;
+}
+
+function isSafeColorValue(value: string): boolean {
+  return isSafeCssTokenValue(value);
+}
+
+function normalizeNumber(value: unknown, path: string): ParseResult<number> {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return { ok: false, error: `${path} must be a finite number` };
+  }
+  return { ok: true, value };
+}
+
+function normalizeHeroBackground(
+  input: unknown,
+): ParseResult<AnyRecord | undefined> {
+  if (input === undefined || input === null) {
+    return { ok: true, value: undefined };
+  }
+  if (!isRecord(input)) {
+    return { ok: false, error: 'hero.data.background must be an object' };
+  }
+
+  const allowedKeys = new Set(['mode', 'solidColor', 'gradient', 'imageUrl', 'overlay']);
+  for (const key of Object.keys(input)) {
+    if (!allowedKeys.has(key)) {
+      return { ok: false, error: `hero.data.background.${key} is not supported` };
+    }
+  }
+
+  if (typeof input.mode !== 'string') {
+    return { ok: false, error: 'hero.data.background.mode must be a string' };
+  }
+  const mode = input.mode.trim();
+  if (!HERO_BACKGROUND_MODES.has(mode)) {
+    return { ok: false, error: 'hero.data.background.mode must be one of solid, gradient or image' };
+  }
+
+  if (mode === 'solid') {
+    if (typeof input.solidColor !== 'string') {
+      return { ok: false, error: 'hero.data.background.solidColor must be a string' };
+    }
+    const solidColor = input.solidColor.trim();
+    if (!solidColor || !isSafeColorValue(solidColor)) {
+      return { ok: false, error: 'hero.data.background.solidColor is invalid' };
+    }
+    return {
+      ok: true,
+      value: {
+        mode: 'solid',
+        solidColor,
+      },
+    };
+  }
+
+  if (mode === 'gradient') {
+    if (!isRecord(input.gradient)) {
+      return { ok: false, error: 'hero.data.background.gradient must be an object' };
+    }
+    const gradientAllowedKeys = new Set(['from', 'to', 'angle']);
+    for (const key of Object.keys(input.gradient)) {
+      if (!gradientAllowedKeys.has(key)) {
+        return { ok: false, error: `hero.data.background.gradient.${key} is not supported` };
+      }
+    }
+
+    if (typeof input.gradient.from !== 'string') {
+      return { ok: false, error: 'hero.data.background.gradient.from must be a string' };
+    }
+    if (typeof input.gradient.to !== 'string') {
+      return { ok: false, error: 'hero.data.background.gradient.to must be a string' };
+    }
+
+    const from = input.gradient.from.trim();
+    const to = input.gradient.to.trim();
+    if (!from || !isSafeColorValue(from)) {
+      return { ok: false, error: 'hero.data.background.gradient.from is invalid' };
+    }
+    if (!to || !isSafeColorValue(to)) {
+      return { ok: false, error: 'hero.data.background.gradient.to is invalid' };
+    }
+
+    let angle = DEFAULT_HERO_GRADIENT_ANGLE;
+    if (input.gradient.angle !== undefined && input.gradient.angle !== null) {
+      const normalizedAngle = normalizeNumber(
+        input.gradient.angle,
+        'hero.data.background.gradient.angle',
+      );
+      if (!normalizedAngle.ok) return normalizedAngle;
+      if (normalizedAngle.value < 0 || normalizedAngle.value > 360) {
+        return {
+          ok: false,
+          error: 'hero.data.background.gradient.angle must be between 0 and 360',
+        };
+      }
+      angle = normalizedAngle.value;
+    }
+
+    return {
+      ok: true,
+      value: {
+        mode: 'gradient',
+        gradient: {
+          from,
+          to,
+          angle,
+        },
+      },
+    };
+  }
+
+  const imageUrl = normalizeUrl(
+    input.imageUrl,
+    { allowRelative: false, httpsOnly: false },
+    'hero.data.background.imageUrl',
+  );
+  if (!imageUrl.ok) return imageUrl;
+
+  if (input.overlay !== undefined && input.overlay !== null && !isRecord(input.overlay)) {
+    return { ok: false, error: 'hero.data.background.overlay must be an object' };
+  }
+
+  let overlay: AnyRecord | undefined;
+  if (isRecord(input.overlay)) {
+    const overlayAllowedKeys = new Set(['color', 'opacity']);
+    for (const key of Object.keys(input.overlay)) {
+      if (!overlayAllowedKeys.has(key)) {
+        return { ok: false, error: `hero.data.background.overlay.${key} is not supported` };
+      }
+    }
+
+    if (typeof input.overlay.color !== 'string') {
+      return { ok: false, error: 'hero.data.background.overlay.color must be a string' };
+    }
+    const color = input.overlay.color.trim();
+    if (!color || !isSafeColorValue(color)) {
+      return { ok: false, error: 'hero.data.background.overlay.color is invalid' };
+    }
+
+    const opacity = normalizeNumber(
+      input.overlay.opacity,
+      'hero.data.background.overlay.opacity',
+    );
+    if (!opacity.ok) return opacity;
+    if (opacity.value < 0 || opacity.value > 1) {
+      return {
+        ok: false,
+        error: 'hero.data.background.overlay.opacity must be between 0 and 1',
+      };
+    }
+
+    overlay = {
+      color,
+      opacity: opacity.value,
+    };
+  }
+
+  return {
+    ok: true,
+    value: {
+      mode: 'image',
+      imageUrl: imageUrl.value,
+      ...(overlay ? { overlay } : {}),
+    },
+  };
 }
 
 function normalizeStyleTokens(
@@ -303,6 +474,32 @@ function normalizeHeroData(input: unknown): ParseResult<AnyRecord> {
     return { ok: false, error: `hero.data.subheading ${subheading.error}` };
   }
 
+  const variant =
+    input.variant === undefined || input.variant === null
+      ? ({ ok: true, value: 'inset' } as ParseResult<string>)
+      : normalizeString(input.variant, 20);
+  if (!variant.ok) return { ok: false, error: `hero.data.variant ${variant.error}` };
+  if (!HERO_VARIANTS.has(variant.value)) {
+    return {
+      ok: false,
+      error: 'hero.data.variant must be one of inset or fullWidth',
+    };
+  }
+
+  const contentAlign =
+    input.contentAlign === undefined || input.contentAlign === null
+      ? ({ ok: true, value: 'left' } as ParseResult<string>)
+      : normalizeString(input.contentAlign, 20);
+  if (!contentAlign.ok) {
+    return { ok: false, error: `hero.data.contentAlign ${contentAlign.error}` };
+  }
+  if (!HERO_CONTENT_ALIGNS.has(contentAlign.value)) {
+    return {
+      ok: false,
+      error: 'hero.data.contentAlign must be one of left or center',
+    };
+  }
+
   const backgroundImageUrl =
     input.backgroundImageUrl === undefined || input.backgroundImageUrl === null
       ? ({ ok: true, value: undefined } as ParseResult<string | undefined>)
@@ -314,6 +511,21 @@ function normalizeHeroData(input: unknown): ParseResult<AnyRecord> {
   if (!backgroundImageUrl.ok) {
     return { ok: false, error: backgroundImageUrl.error };
   }
+
+  const background = normalizeHeroBackground(input.background);
+  if (!background.ok) return background;
+
+  const normalizedBackground = background.value
+    || (backgroundImageUrl.value
+      ? {
+        mode: 'image',
+        imageUrl: backgroundImageUrl.value,
+        overlay: {
+          color: LEGACY_HERO_OVERLAY_COLOR,
+          opacity: LEGACY_HERO_OVERLAY_OPACITY,
+        },
+      }
+      : undefined);
 
   let cta: AnyRecord | undefined;
   if (input.cta !== undefined && input.cta !== null) {
@@ -335,10 +547,13 @@ function normalizeHeroData(input: unknown): ParseResult<AnyRecord> {
     ok: true,
     value: {
       heading: heading.value,
+      variant: variant.value,
+      contentAlign: contentAlign.value,
       ...(subheading.value ? { subheading: subheading.value } : {}),
       ...(backgroundImageUrl.value
         ? { backgroundImageUrl: backgroundImageUrl.value }
         : {}),
+      ...(normalizedBackground ? { background: normalizedBackground } : {}),
       ...(cta ? { cta } : {}),
     },
   };
