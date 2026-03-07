@@ -435,6 +435,32 @@ describe('Integration: admin mutations', () => {
             '--builder-testimonials-meta-weight': '500',
             '--builder-testimonials-meta-decoration': 'none',
           },
+          footer: {
+            '--builder-footer-brand-color': '#f8fafc',
+            '--builder-footer-brand-size': '22px',
+            '--builder-footer-brand-weight': '700',
+            '--builder-footer-brand-decoration': 'none',
+            '--builder-footer-description-color': '#94a3b8',
+            '--builder-footer-description-size': '14px',
+            '--builder-footer-description-weight': '400',
+            '--builder-footer-description-decoration': 'none',
+            '--builder-footer-group-title-color': '#e2e8f0',
+            '--builder-footer-group-title-size': '16px',
+            '--builder-footer-group-title-weight': '600',
+            '--builder-footer-group-title-decoration': 'none',
+            '--builder-footer-link-color': '#e2e8f0',
+            '--builder-footer-link-size': '15px',
+            '--builder-footer-link-weight': '500',
+            '--builder-footer-link-decoration': 'none',
+            '--builder-footer-social-color': '#ffffff',
+            '--builder-footer-social-size': '14px',
+            '--builder-footer-social-weight': '500',
+            '--builder-footer-social-decoration': 'none',
+            '--builder-footer-copyright-color': '#94a3b8',
+            '--builder-footer-copyright-size': '13px',
+            '--builder-footer-copyright-weight': '400',
+            '--builder-footer-copyright-decoration': 'none',
+          },
         },
         navigation: {
           variant: 'floating',
@@ -632,6 +658,13 @@ describe('Integration: admin mutations', () => {
                 mobileMenu: expect.objectContaining({
                   mode: 'fullscreen',
                   motion: 'left',
+                }),
+              }),
+              components: expect.objectContaining({
+                footer: expect.objectContaining({
+                  '--builder-footer-brand-size': '22px',
+                  '--builder-footer-link-weight': '500',
+                  '--builder-footer-copyright-color': '#94a3b8',
                 }),
               }),
             }),
@@ -1380,6 +1413,54 @@ describe('Integration: admin mutations', () => {
                   },
                   styleTokens: {
                     '--builder-testimonials-meta-decoration': 'blink',
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'must be one of none, underline, line-through or overline',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'footer-token-size-bad',
+                  type: 'footer',
+                  data: {
+                    brandTitle: 'Valid footer',
+                  },
+                  styleTokens: {
+                    '--builder-footer-brand-size': '9px',
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'must be between 12px and 48px',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'footer-token-decoration-bad',
+                  type: 'footer',
+                  data: {
+                    brandTitle: 'Valid footer',
+                  },
+                  styleTokens: {
+                    '--builder-footer-link-decoration': 'blink',
                   },
                 },
               ],

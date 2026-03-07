@@ -64,6 +64,30 @@ const ALLOWED_STYLE_TOKEN_KEYS = new Set([
   '--builder-testimonials-meta-size',
   '--builder-testimonials-meta-weight',
   '--builder-testimonials-meta-decoration',
+  '--builder-footer-brand-color',
+  '--builder-footer-brand-size',
+  '--builder-footer-brand-weight',
+  '--builder-footer-brand-decoration',
+  '--builder-footer-description-color',
+  '--builder-footer-description-size',
+  '--builder-footer-description-weight',
+  '--builder-footer-description-decoration',
+  '--builder-footer-group-title-color',
+  '--builder-footer-group-title-size',
+  '--builder-footer-group-title-weight',
+  '--builder-footer-group-title-decoration',
+  '--builder-footer-link-color',
+  '--builder-footer-link-size',
+  '--builder-footer-link-weight',
+  '--builder-footer-link-decoration',
+  '--builder-footer-social-color',
+  '--builder-footer-social-size',
+  '--builder-footer-social-weight',
+  '--builder-footer-social-decoration',
+  '--builder-footer-copyright-color',
+  '--builder-footer-copyright-size',
+  '--builder-footer-copyright-weight',
+  '--builder-footer-copyright-decoration',
 ]);
 const SAFE_COLOR_KEYWORDS = new Set([
   'transparent',
@@ -114,6 +138,32 @@ const TESTIMONIALS_META_COLOR_TOKEN = '--builder-testimonials-meta-color';
 const TESTIMONIALS_META_SIZE_TOKEN = '--builder-testimonials-meta-size';
 const TESTIMONIALS_META_WEIGHT_TOKEN = '--builder-testimonials-meta-weight';
 const TESTIMONIALS_META_DECORATION_TOKEN = '--builder-testimonials-meta-decoration';
+const FOOTER_TEXT_SIZE_MIN = 12;
+const FOOTER_TEXT_SIZE_MAX = 48;
+const FOOTER_BRAND_COLOR_TOKEN = '--builder-footer-brand-color';
+const FOOTER_BRAND_SIZE_TOKEN = '--builder-footer-brand-size';
+const FOOTER_BRAND_WEIGHT_TOKEN = '--builder-footer-brand-weight';
+const FOOTER_BRAND_DECORATION_TOKEN = '--builder-footer-brand-decoration';
+const FOOTER_DESCRIPTION_COLOR_TOKEN = '--builder-footer-description-color';
+const FOOTER_DESCRIPTION_SIZE_TOKEN = '--builder-footer-description-size';
+const FOOTER_DESCRIPTION_WEIGHT_TOKEN = '--builder-footer-description-weight';
+const FOOTER_DESCRIPTION_DECORATION_TOKEN = '--builder-footer-description-decoration';
+const FOOTER_GROUP_TITLE_COLOR_TOKEN = '--builder-footer-group-title-color';
+const FOOTER_GROUP_TITLE_SIZE_TOKEN = '--builder-footer-group-title-size';
+const FOOTER_GROUP_TITLE_WEIGHT_TOKEN = '--builder-footer-group-title-weight';
+const FOOTER_GROUP_TITLE_DECORATION_TOKEN = '--builder-footer-group-title-decoration';
+const FOOTER_LINK_COLOR_TOKEN = '--builder-footer-link-color';
+const FOOTER_LINK_SIZE_TOKEN = '--builder-footer-link-size';
+const FOOTER_LINK_WEIGHT_TOKEN = '--builder-footer-link-weight';
+const FOOTER_LINK_DECORATION_TOKEN = '--builder-footer-link-decoration';
+const FOOTER_SOCIAL_COLOR_TOKEN = '--builder-footer-social-color';
+const FOOTER_SOCIAL_SIZE_TOKEN = '--builder-footer-social-size';
+const FOOTER_SOCIAL_WEIGHT_TOKEN = '--builder-footer-social-weight';
+const FOOTER_SOCIAL_DECORATION_TOKEN = '--builder-footer-social-decoration';
+const FOOTER_COPYRIGHT_COLOR_TOKEN = '--builder-footer-copyright-color';
+const FOOTER_COPYRIGHT_SIZE_TOKEN = '--builder-footer-copyright-size';
+const FOOTER_COPYRIGHT_WEIGHT_TOKEN = '--builder-footer-copyright-weight';
+const FOOTER_COPYRIGHT_DECORATION_TOKEN = '--builder-footer-copyright-decoration';
 const IMAGE_CAROUSEL_VARIANTS = new Set(['plain', 'overlay', 'split']);
 const IMAGE_CAROUSEL_SPLIT_IMAGE_POSITIONS = new Set(['left', 'right']);
 const IMAGE_CAROUSEL_MAX_ITEMS = 20;
@@ -654,6 +704,71 @@ function normalizeStyleTokens(
     if (
       key === TESTIMONIALS_QUOTE_DECORATION_TOKEN
       || key === TESTIMONIALS_META_DECORATION_TOKEN
+    ) {
+      const value = normalizeRichTextDecorationToken(rawValue, `${path}.${key}`);
+      if (!value.ok) return value;
+      normalized[key] = value.value;
+      continue;
+    }
+    if (
+      key === FOOTER_BRAND_COLOR_TOKEN
+      || key === FOOTER_DESCRIPTION_COLOR_TOKEN
+      || key === FOOTER_GROUP_TITLE_COLOR_TOKEN
+      || key === FOOTER_LINK_COLOR_TOKEN
+      || key === FOOTER_SOCIAL_COLOR_TOKEN
+      || key === FOOTER_COPYRIGHT_COLOR_TOKEN
+    ) {
+      if (typeof rawValue !== 'string') {
+        return { ok: false, error: `${path}.${key} must be a string` };
+      }
+      const value = rawValue.trim();
+      if (!value) {
+        return { ok: false, error: `${path}.${key} must not be empty` };
+      }
+      if (!isSafeCssTokenValue(value)) {
+        return { ok: false, error: `${path}.${key} has an invalid token value` };
+      }
+      normalized[key] = value;
+      continue;
+    }
+    if (
+      key === FOOTER_BRAND_SIZE_TOKEN
+      || key === FOOTER_DESCRIPTION_SIZE_TOKEN
+      || key === FOOTER_GROUP_TITLE_SIZE_TOKEN
+      || key === FOOTER_LINK_SIZE_TOKEN
+      || key === FOOTER_SOCIAL_SIZE_TOKEN
+      || key === FOOTER_COPYRIGHT_SIZE_TOKEN
+    ) {
+      const value = normalizePixelLengthToken(
+        rawValue,
+        `${path}.${key}`,
+        FOOTER_TEXT_SIZE_MIN,
+        FOOTER_TEXT_SIZE_MAX,
+      );
+      if (!value.ok) return value;
+      normalized[key] = value.value;
+      continue;
+    }
+    if (
+      key === FOOTER_BRAND_WEIGHT_TOKEN
+      || key === FOOTER_DESCRIPTION_WEIGHT_TOKEN
+      || key === FOOTER_GROUP_TITLE_WEIGHT_TOKEN
+      || key === FOOTER_LINK_WEIGHT_TOKEN
+      || key === FOOTER_SOCIAL_WEIGHT_TOKEN
+      || key === FOOTER_COPYRIGHT_WEIGHT_TOKEN
+    ) {
+      const value = normalizeRichTextWeightToken(rawValue, `${path}.${key}`);
+      if (!value.ok) return value;
+      normalized[key] = value.value;
+      continue;
+    }
+    if (
+      key === FOOTER_BRAND_DECORATION_TOKEN
+      || key === FOOTER_DESCRIPTION_DECORATION_TOKEN
+      || key === FOOTER_GROUP_TITLE_DECORATION_TOKEN
+      || key === FOOTER_LINK_DECORATION_TOKEN
+      || key === FOOTER_SOCIAL_DECORATION_TOKEN
+      || key === FOOTER_COPYRIGHT_DECORATION_TOKEN
     ) {
       const value = normalizeRichTextDecorationToken(rawValue, `${path}.${key}`);
       if (!value.ok) return value;
