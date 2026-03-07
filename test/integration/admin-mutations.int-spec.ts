@@ -425,6 +425,16 @@ describe('Integration: admin mutations', () => {
             '--builder-richtext-padding': '24px 20px',
             '--builder-richtext-margin': '0 0 28px',
           },
+          testimonials: {
+            '--builder-testimonials-quote-color': '#0f172a',
+            '--builder-testimonials-quote-size': '20px',
+            '--builder-testimonials-quote-weight': '700',
+            '--builder-testimonials-quote-decoration': 'none',
+            '--builder-testimonials-meta-color': '#64748b',
+            '--builder-testimonials-meta-size': '14px',
+            '--builder-testimonials-meta-weight': '500',
+            '--builder-testimonials-meta-decoration': 'none',
+          },
         },
         navigation: {
           variant: 'floating',
@@ -471,6 +481,23 @@ describe('Integration: admin mutations', () => {
               styleTokens: {
                 '--builder-media-image-height-desktop': '420px',
                 '--builder-media-text-align-desktop': 'center',
+              },
+            },
+            {
+              id: 'home-testimonials',
+              type: 'testimonials',
+              data: {
+                variant: 'grid',
+                itemsPerViewDesktop: 3,
+                items: Array.from({ length: 11 }, (_, index) => ({
+                  quote: `Quote ${index + 1}`,
+                  author: `Author ${index + 1}`,
+                  role: 'Buyer',
+                })),
+              },
+              styleTokens: {
+                '--builder-testimonials-quote-decoration': 'underline',
+                '--builder-testimonials-meta-weight': '700',
               },
             },
           ],
@@ -577,6 +604,18 @@ describe('Integration: admin mutations', () => {
                       '--builder-media-text-align-desktop': 'center',
                     }),
                   }),
+                  expect.objectContaining({
+                    type: 'testimonials',
+                    data: expect.objectContaining({
+                      variant: 'grid',
+                      itemsPerViewDesktop: 3,
+                      items: expect.any(Array),
+                    }),
+                    styleTokens: expect.objectContaining({
+                      '--builder-testimonials-quote-decoration': 'underline',
+                      '--builder-testimonials-meta-weight': '700',
+                    }),
+                  }),
                 ]),
               }),
               about: expect.objectContaining({
@@ -594,6 +633,20 @@ describe('Integration: admin mutations', () => {
           }),
         }),
       }),
+    });
+
+    const persistedHomeSections = getUserResponse.body?.result?.vendor?.siteConfig?.pages?.home?.sections ?? [];
+    const persistedTestimonials = persistedHomeSections.find(
+      (section: unknown) => (section as { type?: string })?.type === 'testimonials',
+    ) as { data?: { items?: Array<{ quote?: string; author?: string }> } } | undefined;
+    expect(persistedTestimonials?.data?.items).toHaveLength(9);
+    expect(persistedTestimonials?.data?.items?.[0]).toMatchObject({
+      quote: 'Quote 1',
+      author: 'Author 1',
+    });
+    expect(persistedTestimonials?.data?.items?.[8]).toMatchObject({
+      quote: 'Quote 9',
+      author: 'Author 9',
     });
   });
 
@@ -733,6 +786,61 @@ describe('Integration: admin mutations', () => {
           version: 1,
           pages: {
             home: {
+              sections: [
+                {
+                  id: 'testimonials-bad-variant',
+                  type: 'testimonials',
+                  data: {
+                    variant: 'masonry',
+                    items: [
+                      {
+                        quote: 'Valid quote',
+                        author: 'Valid author',
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'variant must be one of grid or carousel',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'testimonials-bad-items-per-view',
+                  type: 'testimonials',
+                  data: {
+                    variant: 'carousel',
+                    itemsPerViewDesktop: 4,
+                    items: [
+                      {
+                        quote: 'Valid quote',
+                        author: 'Valid author',
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'itemsPerViewDesktop must be an integer between 1 and 3',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
               sections: [{ id: 'one', type: 'unknown', data: {} }],
             },
             about: { sections: [] },
@@ -829,6 +937,64 @@ describe('Integration: admin mutations', () => {
           },
         },
         expectedMessage: 'must be one of left or center',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'testimonials-token-size-bad',
+                  type: 'testimonials',
+                  data: {
+                    items: [
+                      {
+                        quote: 'Valid quote',
+                        author: 'Valid author',
+                      },
+                    ],
+                  },
+                  styleTokens: {
+                    '--builder-testimonials-quote-size': '10px',
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'must be between 12px and 48px',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'testimonials-token-decoration-bad',
+                  type: 'testimonials',
+                  data: {
+                    items: [
+                      {
+                        quote: 'Valid quote',
+                        author: 'Valid author',
+                      },
+                    ],
+                  },
+                  styleTokens: {
+                    '--builder-testimonials-meta-decoration': 'blink',
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'must be one of none, underline, line-through or overline',
       },
       {
         siteConfig: {

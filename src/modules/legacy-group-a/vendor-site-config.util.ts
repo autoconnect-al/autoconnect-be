@@ -30,6 +30,7 @@ const HERO_VARIANTS = new Set(['inset', 'fullWidth']);
 const HERO_CONTENT_ALIGNS = new Set(['left', 'center']);
 const HERO_BACKGROUND_MODES = new Set(['solid', 'gradient', 'image']);
 const MEDIA_TEXT_ALIGNS = new Set(['left', 'center']);
+const TESTIMONIALS_VARIANTS = new Set(['grid', 'carousel']);
 const RICH_TEXT_TEXT_DECORATIONS = new Set([
   'none',
   'underline',
@@ -55,6 +56,14 @@ const ALLOWED_STYLE_TOKEN_KEYS = new Set([
   '--builder-richtext-border-width',
   '--builder-richtext-padding',
   '--builder-richtext-margin',
+  '--builder-testimonials-quote-color',
+  '--builder-testimonials-quote-size',
+  '--builder-testimonials-quote-weight',
+  '--builder-testimonials-quote-decoration',
+  '--builder-testimonials-meta-color',
+  '--builder-testimonials-meta-size',
+  '--builder-testimonials-meta-weight',
+  '--builder-testimonials-meta-decoration',
 ]);
 const SAFE_COLOR_KEYWORDS = new Set([
   'transparent',
@@ -94,6 +103,17 @@ const RICH_TEXT_BORDER_COLOR_TOKEN = '--builder-richtext-border-color';
 const RICH_TEXT_BORDER_WIDTH_TOKEN = '--builder-richtext-border-width';
 const RICH_TEXT_PADDING_TOKEN = '--builder-richtext-padding';
 const RICH_TEXT_MARGIN_TOKEN = '--builder-richtext-margin';
+const TESTIMONIALS_TEXT_SIZE_MIN = 12;
+const TESTIMONIALS_TEXT_SIZE_MAX = 48;
+const TESTIMONIALS_GRID_MAX_ITEMS = 9;
+const TESTIMONIALS_QUOTE_COLOR_TOKEN = '--builder-testimonials-quote-color';
+const TESTIMONIALS_QUOTE_SIZE_TOKEN = '--builder-testimonials-quote-size';
+const TESTIMONIALS_QUOTE_WEIGHT_TOKEN = '--builder-testimonials-quote-weight';
+const TESTIMONIALS_QUOTE_DECORATION_TOKEN = '--builder-testimonials-quote-decoration';
+const TESTIMONIALS_META_COLOR_TOKEN = '--builder-testimonials-meta-color';
+const TESTIMONIALS_META_SIZE_TOKEN = '--builder-testimonials-meta-size';
+const TESTIMONIALS_META_WEIGHT_TOKEN = '--builder-testimonials-meta-weight';
+const TESTIMONIALS_META_DECORATION_TOKEN = '--builder-testimonials-meta-decoration';
 
 type ParseResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -522,6 +542,49 @@ function normalizeStyleTokens(
       normalized[key] = value.value;
       continue;
     }
+    if (
+      key === TESTIMONIALS_QUOTE_COLOR_TOKEN
+      || key === TESTIMONIALS_META_COLOR_TOKEN
+    ) {
+      if (typeof rawValue !== 'string') {
+        return { ok: false, error: `${path}.${key} must be a string` };
+      }
+      const value = rawValue.trim();
+      if (!value) {
+        return { ok: false, error: `${path}.${key} must not be empty` };
+      }
+      if (!isSafeCssTokenValue(value)) {
+        return { ok: false, error: `${path}.${key} has an invalid token value` };
+      }
+      normalized[key] = value;
+      continue;
+    }
+    if (key === TESTIMONIALS_QUOTE_SIZE_TOKEN || key === TESTIMONIALS_META_SIZE_TOKEN) {
+      const value = normalizePixelLengthToken(
+        rawValue,
+        `${path}.${key}`,
+        TESTIMONIALS_TEXT_SIZE_MIN,
+        TESTIMONIALS_TEXT_SIZE_MAX,
+      );
+      if (!value.ok) return value;
+      normalized[key] = value.value;
+      continue;
+    }
+    if (key === TESTIMONIALS_QUOTE_WEIGHT_TOKEN || key === TESTIMONIALS_META_WEIGHT_TOKEN) {
+      const value = normalizeRichTextWeightToken(rawValue, `${path}.${key}`);
+      if (!value.ok) return value;
+      normalized[key] = value.value;
+      continue;
+    }
+    if (
+      key === TESTIMONIALS_QUOTE_DECORATION_TOKEN
+      || key === TESTIMONIALS_META_DECORATION_TOKEN
+    ) {
+      const value = normalizeRichTextDecorationToken(rawValue, `${path}.${key}`);
+      if (!value.ok) return value;
+      normalized[key] = value.value;
+      continue;
+    }
 
     if (typeof rawValue !== 'string') {
       return { ok: false, error: `${path}.${key} must be a string` };
@@ -889,6 +952,41 @@ function normalizeTestimonialsData(input: unknown): ParseResult<AnyRecord> {
   if (!isRecord(input)) {
     return { ok: false, error: 'testimonials.data must be an object' };
   }
+
+  let variant: 'grid' | 'carousel' = 'grid';
+  if (input.variant !== undefined && input.variant !== null) {
+    if (typeof input.variant !== 'string') {
+      return { ok: false, error: 'testimonials.data.variant must be a string' };
+    }
+    const normalizedVariant = input.variant.trim().toLowerCase();
+    if (!TESTIMONIALS_VARIANTS.has(normalizedVariant)) {
+      return { ok: false, error: 'testimonials.data.variant must be one of grid or carousel' };
+    }
+    variant = normalizedVariant as 'grid' | 'carousel';
+  }
+
+  let itemsPerViewDesktop: 1 | 2 | 3 = 1;
+  if (input.itemsPerViewDesktop !== undefined && input.itemsPerViewDesktop !== null) {
+    const normalizedItemsPerViewDesktop = normalizeNumber(
+      input.itemsPerViewDesktop,
+      'testimonials.data.itemsPerViewDesktop',
+    );
+    if (!normalizedItemsPerViewDesktop.ok) {
+      return normalizedItemsPerViewDesktop;
+    }
+    if (
+      !Number.isInteger(normalizedItemsPerViewDesktop.value)
+      || normalizedItemsPerViewDesktop.value < 1
+      || normalizedItemsPerViewDesktop.value > 3
+    ) {
+      return {
+        ok: false,
+        error: 'testimonials.data.itemsPerViewDesktop must be an integer between 1 and 3',
+      };
+    }
+    itemsPerViewDesktop = normalizedItemsPerViewDesktop.value as 1 | 2 | 3;
+  }
+
   if (!Array.isArray(input.items) || input.items.length === 0) {
     return { ok: false, error: 'testimonials.data.items must be a non-empty array' };
   }
@@ -921,7 +1019,18 @@ function normalizeTestimonialsData(input: unknown): ParseResult<AnyRecord> {
     });
   }
 
-  return { ok: true, value: { items } };
+  const normalizedItems = variant === 'grid'
+    ? items.slice(0, TESTIMONIALS_GRID_MAX_ITEMS)
+    : items;
+
+  return {
+    ok: true,
+    value: {
+      variant,
+      itemsPerViewDesktop,
+      items: normalizedItems,
+    },
+  };
 }
 
 function normalizeImageCarouselData(input: unknown): ParseResult<AnyRecord> {
