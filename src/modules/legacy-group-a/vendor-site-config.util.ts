@@ -114,6 +114,11 @@ const TESTIMONIALS_META_COLOR_TOKEN = '--builder-testimonials-meta-color';
 const TESTIMONIALS_META_SIZE_TOKEN = '--builder-testimonials-meta-size';
 const TESTIMONIALS_META_WEIGHT_TOKEN = '--builder-testimonials-meta-weight';
 const TESTIMONIALS_META_DECORATION_TOKEN = '--builder-testimonials-meta-decoration';
+const IMAGE_CAROUSEL_VARIANTS = new Set(['plain', 'overlay', 'split']);
+const IMAGE_CAROUSEL_SPLIT_IMAGE_POSITIONS = new Set(['left', 'right']);
+const IMAGE_CAROUSEL_MAX_ITEMS = 20;
+const IMAGE_CAROUSEL_OVERLAY_DEFAULT_COLOR = '#000000';
+const IMAGE_CAROUSEL_OVERLAY_DEFAULT_OPACITY = 0.35;
 
 type ParseResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -187,6 +192,37 @@ function normalizeMediaTextAlign(
     return { ok: false, error: `${path} must be one of left or center` };
   }
   return { ok: true, value: normalized as 'left' | 'center' };
+}
+
+function normalizeImageCarouselVariant(
+  value: unknown,
+  path: string,
+): ParseResult<'plain' | 'overlay' | 'split'> {
+  if (typeof value !== 'string') {
+    return { ok: false, error: `${path} must be a string` };
+  }
+  const normalized = value.trim().toLowerCase();
+  if (!IMAGE_CAROUSEL_VARIANTS.has(normalized)) {
+    return {
+      ok: false,
+      error: `${path} must be one of plain, overlay or split`,
+    };
+  }
+  return { ok: true, value: normalized as 'plain' | 'overlay' | 'split' };
+}
+
+function normalizeImageCarouselSplitImagePosition(
+  value: unknown,
+  path: string,
+): ParseResult<'left' | 'right'> {
+  if (typeof value !== 'string') {
+    return { ok: false, error: `${path} must be a string` };
+  }
+  const normalized = value.trim().toLowerCase();
+  if (!IMAGE_CAROUSEL_SPLIT_IMAGE_POSITIONS.has(normalized)) {
+    return { ok: false, error: `${path} must be one of left or right` };
+  }
+  return { ok: true, value: normalized as 'left' | 'right' };
 }
 
 function normalizeDesktopImageHeightToken(
@@ -1033,20 +1069,240 @@ function normalizeTestimonialsData(input: unknown): ParseResult<AnyRecord> {
   };
 }
 
-function normalizeImageCarouselData(input: unknown): ParseResult<AnyRecord> {
-  if (!isRecord(input)) {
-    return { ok: false, error: 'imageCarousel.data must be an object' };
+function normalizeImageCarouselCta(
+  input: unknown,
+  path: string,
+): ParseResult<AnyRecord | undefined> {
+  if (input === undefined || input === null) {
+    return { ok: true, value: undefined };
   }
-  if (!Array.isArray(input.images) || input.images.length === 0) {
+  if (!isRecord(input)) {
+    return { ok: false, error: `${path} must be an object` };
+  }
+
+  const allowedKeys = new Set(['label', 'url']);
+  for (const key of Object.keys(input)) {
+    if (!allowedKeys.has(key)) {
+      return { ok: false, error: `${path}.${key} is not supported` };
+    }
+  }
+
+  const label = normalizeString(input.label, MAX_SHORT_TEXT_LENGTH);
+  if (!label.ok) {
+    return { ok: false, error: `${path}.label ${label.error}` };
+  }
+
+  const url = normalizeUrl(
+    input.url,
+    { allowRelative: true, httpsOnly: false },
+    `${path}.url`,
+  );
+  if (!url.ok) {
+    return { ok: false, error: url.error };
+  }
+
+  return {
+    ok: true,
+    value: {
+      label: label.value,
+      url: url.value,
+    },
+  };
+}
+
+function normalizeImageCarouselOverlay(
+  input: unknown,
+  path: string,
+  opts?: { applyDefaultWhenMissing?: boolean },
+): ParseResult<AnyRecord | undefined> {
+  if (input === undefined || input === null) {
+    if (opts?.applyDefaultWhenMissing) {
+      return {
+        ok: true,
+        value: {
+          color: IMAGE_CAROUSEL_OVERLAY_DEFAULT_COLOR,
+          opacity: IMAGE_CAROUSEL_OVERLAY_DEFAULT_OPACITY,
+        },
+      };
+    }
+    return { ok: true, value: undefined };
+  }
+  if (!isRecord(input)) {
+    return { ok: false, error: `${path} must be an object` };
+  }
+
+  const allowedKeys = new Set(['color', 'opacity']);
+  for (const key of Object.keys(input)) {
+    if (!allowedKeys.has(key)) {
+      return { ok: false, error: `${path}.${key} is not supported` };
+    }
+  }
+
+  if (typeof input.color !== 'string') {
+    return { ok: false, error: `${path}.color must be a string` };
+  }
+  const color = input.color.trim();
+  if (!color || !isSafeColorValue(color)) {
+    return { ok: false, error: `${path}.color is invalid` };
+  }
+
+  const opacity = normalizeNumber(input.opacity, `${path}.opacity`);
+  if (!opacity.ok) return opacity;
+  if (opacity.value < 0 || opacity.value > 1) {
+    return {
+      ok: false,
+      error: `${path}.opacity must be between 0 and 1`,
+    };
+  }
+
+  return {
+    ok: true,
+    value: {
+      color,
+      opacity: opacity.value,
+    },
+  };
+}
+
+function normalizeImageCarouselSlide(
+  input: unknown,
+  index: number,
+): ParseResult<AnyRecord> {
+  if (!isRecord(input)) {
+    return {
+      ok: false,
+      error: `imageCarousel.data.slides[${index}] must be an object`,
+    };
+  }
+
+  const variant = normalizeImageCarouselVariant(
+    input.variant,
+    `imageCarousel.data.slides[${index}].variant`,
+  );
+  if (!variant.ok) return variant;
+
+  const imageUrl = normalizeUrl(
+    input.imageUrl,
+    { allowRelative: false, httpsOnly: false },
+    `imageCarousel.data.slides[${index}].imageUrl`,
+  );
+  if (!imageUrl.ok) return imageUrl;
+
+  const imageAlt = normalizeOptionalString(
+    input.imageAlt,
+    MAX_SHORT_TEXT_LENGTH,
+  );
+  if (!imageAlt.ok) {
+    return {
+      ok: false,
+      error: `imageCarousel.data.slides[${index}].imageAlt ${imageAlt.error}`,
+    };
+  }
+
+  const normalized: AnyRecord = {
+    variant: variant.value,
+    imageUrl: imageUrl.value,
+    ...(imageAlt.value ? { imageAlt: imageAlt.value } : {}),
+  };
+
+  if (variant.value === 'plain') {
+    return { ok: true, value: normalized };
+  }
+
+  const title = normalizeString(input.title, MAX_SHORT_TEXT_LENGTH);
+  if (!title.ok) {
+    return {
+      ok: false,
+      error: `imageCarousel.data.slides[${index}].title ${title.error}`,
+    };
+  }
+  const description = normalizeString(input.description, MAX_MEDIUM_TEXT_LENGTH);
+  if (!description.ok) {
+    return {
+      ok: false,
+      error: `imageCarousel.data.slides[${index}].description ${description.error}`,
+    };
+  }
+  normalized.title = title.value;
+  normalized.description = description.value;
+
+  const cta = normalizeImageCarouselCta(
+    input.cta,
+    `imageCarousel.data.slides[${index}].cta`,
+  );
+  if (!cta.ok) return cta;
+  if (cta.value) {
+    normalized.cta = cta.value;
+  }
+
+  if (variant.value === 'overlay') {
+    const overlay = normalizeImageCarouselOverlay(
+      input.overlay,
+      `imageCarousel.data.slides[${index}].overlay`,
+      { applyDefaultWhenMissing: true },
+    );
+    if (!overlay.ok) return overlay;
+    if (overlay.value) {
+      normalized.overlay = overlay.value;
+    }
+    return { ok: true, value: normalized };
+  }
+
+  const imagePosition = normalizeImageCarouselSplitImagePosition(
+    input.imagePosition,
+    `imageCarousel.data.slides[${index}].imagePosition`,
+  );
+  if (!imagePosition.ok) return imagePosition;
+  normalized.imagePosition = imagePosition.value;
+
+  return { ok: true, value: normalized };
+}
+
+function normalizeImageCarouselSlides(
+  input: unknown,
+): ParseResult<AnyRecord[] | undefined> {
+  if (input === undefined || input === null) {
+    return { ok: true, value: undefined };
+  }
+  if (!Array.isArray(input)) {
+    return { ok: false, error: 'imageCarousel.data.slides must be an array' };
+  }
+  if (input.length === 0) {
+    return { ok: false, error: 'imageCarousel.data.slides must be a non-empty array' };
+  }
+  if (input.length > IMAGE_CAROUSEL_MAX_ITEMS) {
+    return { ok: false, error: 'imageCarousel.data.slides exceeds max allowed size' };
+  }
+
+  const slides: AnyRecord[] = [];
+  for (let i = 0; i < input.length; i += 1) {
+    const slide = normalizeImageCarouselSlide(input[i], i);
+    if (!slide.ok) return slide;
+    slides.push(slide.value);
+  }
+
+  return { ok: true, value: slides };
+}
+
+function normalizeImageCarouselLegacyImages(
+  input: unknown,
+): ParseResult<AnyRecord[] | undefined> {
+  if (input === undefined || input === null) {
+    return { ok: true, value: undefined };
+  }
+  if (!Array.isArray(input)) {
+    return { ok: false, error: 'imageCarousel.data.images must be an array' };
+  }
+  if (input.length === 0) {
     return { ok: false, error: 'imageCarousel.data.images must be a non-empty array' };
   }
-  if (input.images.length > 20) {
+  if (input.length > IMAGE_CAROUSEL_MAX_ITEMS) {
     return { ok: false, error: 'imageCarousel.data.images exceeds max allowed size' };
   }
 
   const images: AnyRecord[] = [];
-  for (let i = 0; i < input.images.length; i += 1) {
-    const image = input.images[i];
+  for (let i = 0; i < input.length; i += 1) {
+    const image = input[i];
     if (!isRecord(image)) {
       return { ok: false, error: `imageCarousel.data.images[${i}] must be an object` };
     }
@@ -1071,7 +1327,31 @@ function normalizeImageCarouselData(input: unknown): ParseResult<AnyRecord> {
     });
   }
 
-  return { ok: true, value: { images } };
+  return { ok: true, value: images };
+}
+
+function normalizeImageCarouselData(input: unknown): ParseResult<AnyRecord> {
+  if (!isRecord(input)) {
+    return { ok: false, error: 'imageCarousel.data must be an object' };
+  }
+
+  const slides = normalizeImageCarouselSlides(input.slides);
+  if (!slides.ok) return slides;
+
+  const images = normalizeImageCarouselLegacyImages(input.images);
+  if (!images.ok) return images;
+
+  if (!slides.value && !images.value) {
+    return { ok: false, error: 'imageCarousel.data must include slides or images' };
+  }
+
+  return {
+    ok: true,
+    value: {
+      ...(slides.value ? { slides: slides.value } : {}),
+      ...(images.value ? { images: images.value } : {}),
+    },
+  };
 }
 
 function normalizeContactFormData(input: unknown): ParseResult<AnyRecord> {

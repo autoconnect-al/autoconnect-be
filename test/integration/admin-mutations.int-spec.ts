@@ -500,6 +500,40 @@ describe('Integration: admin mutations', () => {
                 '--builder-testimonials-meta-weight': '700',
               },
             },
+            {
+              id: 'home-carousel',
+              type: 'imageCarousel',
+              data: {
+                slides: [
+                  {
+                    variant: 'plain',
+                    imageUrl: 'https://cdn.example.invalid/slide-plain.jpg',
+                    imageAlt: 'Plain slide',
+                  },
+                  {
+                    variant: 'overlay',
+                    imageUrl: 'https://cdn.example.invalid/slide-overlay.jpg',
+                    title: 'Overlay headline',
+                    description: 'Overlay description',
+                    cta: {
+                      label: 'Browse vehicles',
+                      url: '/sq-al/vehicles',
+                    },
+                  },
+                  {
+                    variant: 'split',
+                    imageUrl: 'https://cdn.example.invalid/slide-split.jpg',
+                    title: 'Split headline',
+                    description: 'Split description',
+                    imagePosition: 'right',
+                    cta: {
+                      label: 'About vendor',
+                      url: '/sq-al/about',
+                    },
+                  },
+                ],
+              },
+            },
           ],
         },
         about: {
@@ -616,6 +650,27 @@ describe('Integration: admin mutations', () => {
                       '--builder-testimonials-meta-weight': '700',
                     }),
                   }),
+                  expect.objectContaining({
+                    type: 'imageCarousel',
+                    data: expect.objectContaining({
+                      slides: expect.arrayContaining([
+                        expect.objectContaining({
+                          variant: 'plain',
+                          imageUrl: 'https://cdn.example.invalid/slide-plain.jpg',
+                        }),
+                        expect.objectContaining({
+                          variant: 'overlay',
+                          imageUrl: 'https://cdn.example.invalid/slide-overlay.jpg',
+                          title: 'Overlay headline',
+                        }),
+                        expect.objectContaining({
+                          variant: 'split',
+                          imageUrl: 'https://cdn.example.invalid/slide-split.jpg',
+                          imagePosition: 'right',
+                        }),
+                      ]),
+                    }),
+                  }),
                 ]),
               }),
               about: expect.objectContaining({
@@ -648,6 +703,92 @@ describe('Integration: admin mutations', () => {
       quote: 'Quote 9',
       author: 'Author 9',
     });
+
+    const persistedCarousel = persistedHomeSections.find(
+      (section: unknown) => (section as { type?: string })?.type === 'imageCarousel',
+    ) as {
+      data?: {
+        slides?: Array<{
+          variant?: string;
+          overlay?: { color?: string; opacity?: number };
+          imagePosition?: string;
+        }>;
+      };
+    } | undefined;
+    expect(persistedCarousel?.data?.slides).toHaveLength(3);
+    expect(persistedCarousel?.data?.slides?.[1]).toMatchObject({
+      variant: 'overlay',
+      overlay: {
+        color: '#000000',
+        opacity: 0.35,
+      },
+    });
+    expect(persistedCarousel?.data?.slides?.[2]).toMatchObject({
+      variant: 'split',
+      imagePosition: 'right',
+    });
+  });
+
+  it('POST /admin/vendor/site-config accepts legacy imageCarousel.images payload', async () => {
+    await seedAdminIdentity();
+    const adminToken = await issueAdminToken();
+
+    const siteConfig = {
+      version: 1,
+      pages: {
+        home: {
+          sections: [
+            {
+              id: 'home-carousel-legacy',
+              type: 'imageCarousel',
+              data: {
+                images: [
+                  {
+                    url: 'https://cdn.example.invalid/legacy-1.jpg',
+                    alt: 'Legacy one',
+                  },
+                  {
+                    url: 'https://cdn.example.invalid/legacy-2.jpg',
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        about: { sections: [] },
+        contact: { sections: [] },
+      },
+    };
+
+    await request(app.getHttpServer())
+      .post('/admin/vendor/site-config')
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
+        vendor: {
+          siteConfig,
+        },
+      })
+      .expect(200);
+
+    const getUserResponse = await request(app.getHttpServer())
+      .get('/admin/user')
+      .set('authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    const persistedHomeSections = getUserResponse.body?.result?.vendor?.siteConfig?.pages?.home?.sections ?? [];
+    const persistedCarousel = persistedHomeSections.find(
+      (section: unknown) => (section as { type?: string })?.type === 'imageCarousel',
+    ) as { data?: { images?: Array<{ url?: string; alt?: string }> } } | undefined;
+
+    expect(persistedCarousel?.data?.images).toEqual([
+      {
+        url: 'https://cdn.example.invalid/legacy-1.jpg',
+        alt: 'Legacy one',
+      },
+      {
+        url: 'https://cdn.example.invalid/legacy-2.jpg',
+      },
+    ]);
   });
 
   it('POST /admin/vendor/site-config returns validation errors for invalid payloads', async () => {
@@ -835,6 +976,119 @@ describe('Integration: admin mutations', () => {
           },
         },
         expectedMessage: 'itemsPerViewDesktop must be an integer between 1 and 3',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'carousel-bad-variant',
+                  type: 'imageCarousel',
+                  data: {
+                    slides: [
+                      {
+                        variant: 'video',
+                        imageUrl: 'https://cdn.example.invalid/slide.jpg',
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'variant must be one of plain, overlay or split',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'carousel-bad-image-position',
+                  type: 'imageCarousel',
+                  data: {
+                    slides: [
+                      {
+                        variant: 'split',
+                        imageUrl: 'https://cdn.example.invalid/slide.jpg',
+                        title: 'Valid title',
+                        description: 'Valid description',
+                        imagePosition: 'top',
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'imagePosition must be one of left or right',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'carousel-bad-overlay-opacity',
+                  type: 'imageCarousel',
+                  data: {
+                    slides: [
+                      {
+                        variant: 'overlay',
+                        imageUrl: 'https://cdn.example.invalid/slide.jpg',
+                        title: 'Valid title',
+                        description: 'Valid description',
+                        overlay: {
+                          color: '#000000',
+                          opacity: 2,
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'overlay.opacity must be between 0 and 1',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'carousel-bad-url',
+                  type: 'imageCarousel',
+                  data: {
+                    slides: [
+                      {
+                        variant: 'plain',
+                        imageUrl: 'javascript:alert(1)',
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'protocol is not allowed',
       },
       {
         siteConfig: {
