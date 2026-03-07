@@ -410,6 +410,10 @@ describe('Integration: admin mutations', () => {
             '--builder-bg': '#ffffff',
             '--builder-accent': '#f5351f',
           },
+          mediaText: {
+            '--builder-media-image-height-desktop': '340px',
+            '--builder-media-text-align-desktop': 'center',
+          },
         },
         navigation: {
           variant: 'floating',
@@ -440,6 +444,22 @@ describe('Integration: admin mutations', () => {
                   },
                 },
                 cta: { label: 'Browse vehicles', url: '/sq-al/vehicles' },
+              },
+            },
+            {
+              id: 'home-media',
+              type: 'mediaText',
+              data: {
+                title: 'Trusted inventory',
+                body: 'Preview media styling controls for desktop layout.',
+                mediaPosition: 'right',
+                imageHeightPx: 460,
+                textAlign: 'left',
+                mediaUrl: 'https://cdn.example.invalid/media.jpg',
+              },
+              styleTokens: {
+                '--builder-media-image-height-desktop': '420px',
+                '--builder-media-text-align-desktop': 'center',
               },
             },
           ],
@@ -528,6 +548,18 @@ describe('Integration: admin mutations', () => {
                       background: expect.objectContaining({
                         mode: 'image',
                       }),
+                    }),
+                  }),
+                  expect.objectContaining({
+                    type: 'mediaText',
+                    data: expect.objectContaining({
+                      mediaPosition: 'right',
+                      imageHeightPx: 460,
+                      textAlign: 'left',
+                    }),
+                    styleTokens: expect.objectContaining({
+                      '--builder-media-image-height-desktop': '420px',
+                      '--builder-media-text-align-desktop': 'center',
                     }),
                   }),
                 ]),
@@ -629,6 +661,52 @@ describe('Integration: admin mutations', () => {
           version: 1,
           pages: {
             home: {
+              sections: [
+                {
+                  id: 'media-bad-height',
+                  type: 'mediaText',
+                  data: {
+                    title: 'Valid title',
+                    body: 'Valid body',
+                    imageHeightPx: 1200,
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'imageHeightPx must be an integer between 180 and 900',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'media-bad-align',
+                  type: 'mediaText',
+                  data: {
+                    title: 'Valid title',
+                    body: 'Valid body',
+                    textAlign: 'right',
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'textAlign must be one of left or center',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
               sections: [{ id: 'one', type: 'unknown', data: {} }],
             },
             about: { sections: [] },
@@ -675,6 +753,56 @@ describe('Integration: admin mutations', () => {
           },
         },
         expectedMessage: 'not an allowed token',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'media-token-height-bad',
+                  type: 'mediaText',
+                  data: {
+                    title: 'Valid title',
+                    body: 'Valid body',
+                  },
+                  styleTokens: {
+                    '--builder-media-image-height-desktop': '90px',
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'must be between 180px and 900px',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'media-token-align-bad',
+                  type: 'mediaText',
+                  data: {
+                    title: 'Valid title',
+                    body: 'Valid body',
+                  },
+                  styleTokens: {
+                    '--builder-media-text-align-desktop': 'right',
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'must be one of left or center',
       },
       {
         siteConfig: {

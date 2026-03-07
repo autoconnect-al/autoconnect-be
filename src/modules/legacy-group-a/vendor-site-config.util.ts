@@ -29,6 +29,7 @@ const THEME_NAVIGATION_MOBILE_MENU_MOTIONS = new Set(['left']);
 const HERO_VARIANTS = new Set(['inset', 'fullWidth']);
 const HERO_CONTENT_ALIGNS = new Set(['left', 'center']);
 const HERO_BACKGROUND_MODES = new Set(['solid', 'gradient', 'image']);
+const MEDIA_TEXT_ALIGNS = new Set(['left', 'center']);
 const ALLOWED_STYLE_TOKEN_KEYS = new Set([
   '--builder-bg',
   '--builder-surface',
@@ -37,6 +38,8 @@ const ALLOWED_STYLE_TOKEN_KEYS = new Set([
   '--builder-border',
   '--builder-accent',
   '--builder-accent-contrast',
+  '--builder-media-image-height-desktop',
+  '--builder-media-text-align-desktop',
 ]);
 const SAFE_COLOR_KEYWORDS = new Set([
   'transparent',
@@ -57,6 +60,10 @@ const MAX_URL_LENGTH = 2048;
 const DEFAULT_HERO_GRADIENT_ANGLE = 135;
 const LEGACY_HERO_OVERLAY_COLOR = '#000000';
 const LEGACY_HERO_OVERLAY_OPACITY = 0.35;
+const MEDIA_TEXT_IMAGE_HEIGHT_MIN = 180;
+const MEDIA_TEXT_IMAGE_HEIGHT_MAX = 900;
+const MEDIA_TEXT_DESKTOP_IMAGE_HEIGHT_TOKEN = '--builder-media-image-height-desktop';
+const MEDIA_TEXT_DESKTOP_TEXT_ALIGN_TOKEN = '--builder-media-text-align-desktop';
 
 type ParseResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -116,6 +123,46 @@ function normalizeNumber(value: unknown, path: string): ParseResult<number> {
     return { ok: false, error: `${path} must be a finite number` };
   }
   return { ok: true, value };
+}
+
+function normalizeMediaTextAlign(
+  value: unknown,
+  path: string,
+): ParseResult<'left' | 'center'> {
+  if (typeof value !== 'string') {
+    return { ok: false, error: `${path} must be a string` };
+  }
+  const normalized = value.trim().toLowerCase();
+  if (!MEDIA_TEXT_ALIGNS.has(normalized)) {
+    return { ok: false, error: `${path} must be one of left or center` };
+  }
+  return { ok: true, value: normalized as 'left' | 'center' };
+}
+
+function normalizeDesktopImageHeightToken(
+  value: unknown,
+  path: string,
+): ParseResult<string> {
+  if (typeof value !== 'string') {
+    return { ok: false, error: `${path} must be a string` };
+  }
+  const trimmed = value.trim();
+  const match = trimmed.match(/^(\d{1,4})px$/);
+  if (!match) {
+    return { ok: false, error: `${path} must be in Npx format` };
+  }
+  const parsed = Number.parseInt(match[1], 10);
+  if (
+    !Number.isInteger(parsed)
+    || parsed < MEDIA_TEXT_IMAGE_HEIGHT_MIN
+    || parsed > MEDIA_TEXT_IMAGE_HEIGHT_MAX
+  ) {
+    return {
+      ok: false,
+      error: `${path} must be between ${MEDIA_TEXT_IMAGE_HEIGHT_MIN}px and ${MEDIA_TEXT_IMAGE_HEIGHT_MAX}px`,
+    };
+  }
+  return { ok: true, value: `${parsed}px` };
 }
 
 function normalizeHeroBackground(
@@ -288,6 +335,19 @@ function normalizeStyleTokens(
     if (!ALLOWED_STYLE_TOKEN_KEYS.has(key)) {
       return { ok: false, error: `${path}.${key} is not an allowed token` };
     }
+    if (key === MEDIA_TEXT_DESKTOP_IMAGE_HEIGHT_TOKEN) {
+      const value = normalizeDesktopImageHeightToken(rawValue, `${path}.${key}`);
+      if (!value.ok) return value;
+      normalized[key] = value.value;
+      continue;
+    }
+    if (key === MEDIA_TEXT_DESKTOP_TEXT_ALIGN_TOKEN) {
+      const value = normalizeMediaTextAlign(rawValue, `${path}.${key}`);
+      if (!value.ok) return value;
+      normalized[key] = value.value;
+      continue;
+    }
+
     if (typeof rawValue !== 'string') {
       return { ok: false, error: `${path}.${key} must be a string` };
     }
@@ -590,6 +650,29 @@ function normalizeMediaTextData(input: unknown): ParseResult<AnyRecord> {
   const mediaAlt = normalizeOptionalString(input.mediaAlt, MAX_SHORT_TEXT_LENGTH);
   if (!mediaAlt.ok) return { ok: false, error: `mediaText.data.mediaAlt ${mediaAlt.error}` };
 
+  const imageHeightPx =
+    input.imageHeightPx === undefined || input.imageHeightPx === null
+      ? ({ ok: true, value: undefined } as ParseResult<number | undefined>)
+      : normalizeNumber(input.imageHeightPx, 'mediaText.data.imageHeightPx');
+  if (!imageHeightPx.ok) return imageHeightPx;
+  if (
+    imageHeightPx.value !== undefined
+    && (!Number.isInteger(imageHeightPx.value)
+      || imageHeightPx.value < MEDIA_TEXT_IMAGE_HEIGHT_MIN
+      || imageHeightPx.value > MEDIA_TEXT_IMAGE_HEIGHT_MAX)
+  ) {
+    return {
+      ok: false,
+      error: `mediaText.data.imageHeightPx must be an integer between ${MEDIA_TEXT_IMAGE_HEIGHT_MIN} and ${MEDIA_TEXT_IMAGE_HEIGHT_MAX}`,
+    };
+  }
+
+  const textAlign =
+    input.textAlign === undefined || input.textAlign === null
+      ? ({ ok: true, value: undefined } as ParseResult<'left' | 'center' | undefined>)
+      : normalizeMediaTextAlign(input.textAlign, 'mediaText.data.textAlign');
+  if (!textAlign.ok) return textAlign;
+
   return {
     ok: true,
     value: {
@@ -598,6 +681,8 @@ function normalizeMediaTextData(input: unknown): ParseResult<AnyRecord> {
       mediaPosition: mediaPositionValue,
       ...(mediaUrl.value ? { mediaUrl: mediaUrl.value } : {}),
       ...(mediaAlt.value ? { mediaAlt: mediaAlt.value } : {}),
+      ...(imageHeightPx.value !== undefined ? { imageHeightPx: imageHeightPx.value } : {}),
+      ...(textAlign.value ? { textAlign: textAlign.value } : {}),
     },
   };
 }
