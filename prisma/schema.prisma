@@ -315,6 +315,7 @@ model vendor {
   secondaryColor             String?   @db.VarChar(7)
   logo                       String?   @db.VarChar(255)
   banner                     String?   @db.VarChar(255)
+  siteConfig                 String?   @db.LongText
   blocked                    Boolean?  @default(false)
   attemptedLogin             Int?      @default(0)
   password                   String?   @db.Text

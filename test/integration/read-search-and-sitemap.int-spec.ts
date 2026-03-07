@@ -369,6 +369,10 @@ describe('Integration: read/search/sitemap', () => {
         biography: 'Hello , world !  :  bio',
         initialised: true,
         accountExists: true,
+        siteConfig: JSON.stringify({
+          version: 1,
+          pages: { home: { sections: [] }, about: { sections: [] }, contact: { sections: [] } },
+        }),
       },
     });
 
@@ -382,6 +386,7 @@ describe('Integration: read/search/sitemap', () => {
       result: expect.objectContaining({
         id: FIXTURE_VENDOR_ID.toString(),
         accountName: 'vendor.edge',
+        siteConfig: expect.stringContaining('"version":1'),
       }),
     });
 
@@ -436,6 +441,10 @@ describe('Integration: read/search/sitemap', () => {
         secondaryColor: '#445566',
         logo: 'logo.webp',
         banner: 'banner.webp',
+        siteConfig: JSON.stringify({
+          version: 1,
+          pages: { home: { sections: [] }, about: { sections: [] }, contact: { sections: [] } },
+        }),
       },
     });
     await prisma.vendor.update({
@@ -471,6 +480,7 @@ describe('Integration: read/search/sitemap', () => {
         id: customVendorId.toString(),
         customDomain: 'tenant.autoconnect.al',
         subdomain: 'tenant-custom',
+        siteConfig: expect.stringContaining('"version":1'),
       }),
     });
 

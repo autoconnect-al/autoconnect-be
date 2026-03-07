@@ -80,4 +80,13 @@ export class LegacyAdminController {
   ) {
     return this.service.updateVendorProfilePicture(userId, vendor);
   }
+
+  @Post('vendor/site-config')
+  @HttpCode(200)
+  vendorSiteConfig(
+    @LegacyUserId() userId: string,
+    @Body('vendor') vendor: unknown,
+  ) {
+    return this.service.updateVendorSiteConfig(userId, vendor);
+  }
 }

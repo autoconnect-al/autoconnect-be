@@ -202,6 +202,12 @@ export const legacyRoutes: LegacyRoute[] = [
     summary: 'Update vendor profile picture (deferred proxy)',
     security: true,
   },
+  {
+    method: 'post',
+    path: '/admin/vendor/site-config',
+    summary: 'Update vendor site configuration',
+    security: true,
+  },
   { method: 'post', path: '/api/v1/orders', summary: 'Create payment order' },
   {
     method: 'post',
