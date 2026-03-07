@@ -119,6 +119,9 @@ const IMAGE_CAROUSEL_SPLIT_IMAGE_POSITIONS = new Set(['left', 'right']);
 const IMAGE_CAROUSEL_MAX_ITEMS = 20;
 const IMAGE_CAROUSEL_OVERLAY_DEFAULT_COLOR = '#000000';
 const IMAGE_CAROUSEL_OVERLAY_DEFAULT_OPACITY = 0.35;
+const SECTION_LAYOUT_WRAPPERS = new Set(['section', 'sectionContent', 'none']);
+const SECTION_LAYOUT_HEIGHT_MIN = 120;
+const SECTION_LAYOUT_HEIGHT_MAX = 1600;
 
 type ParseResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -223,6 +226,42 @@ function normalizeImageCarouselSplitImagePosition(
     return { ok: false, error: `${path} must be one of left or right` };
   }
   return { ok: true, value: normalized as 'left' | 'right' };
+}
+
+function normalizeSectionLayoutWrapper(
+  value: unknown,
+  path: string,
+): ParseResult<'section' | 'sectionContent' | 'none'> {
+  if (typeof value !== 'string') {
+    return { ok: false, error: `${path} must be a string` };
+  }
+  const normalized = value.trim();
+  if (!SECTION_LAYOUT_WRAPPERS.has(normalized)) {
+    return {
+      ok: false,
+      error: `${path} must be one of section, sectionContent or none`,
+    };
+  }
+  return { ok: true, value: normalized as 'section' | 'sectionContent' | 'none' };
+}
+
+function normalizeSectionLayoutHeight(
+  value: unknown,
+  path: string,
+): ParseResult<number> {
+  const normalized = normalizeNumber(value, path);
+  if (!normalized.ok) return normalized;
+  if (
+    !Number.isInteger(normalized.value)
+    || normalized.value < SECTION_LAYOUT_HEIGHT_MIN
+    || normalized.value > SECTION_LAYOUT_HEIGHT_MAX
+  ) {
+    return {
+      ok: false,
+      error: `${path} must be an integer between ${SECTION_LAYOUT_HEIGHT_MIN} and ${SECTION_LAYOUT_HEIGHT_MAX}`,
+    };
+  }
+  return { ok: true, value: normalized.value };
 }
 
 function normalizeDesktopImageHeightToken(
@@ -1535,6 +1574,72 @@ function normalizeFooterData(input: unknown): ParseResult<AnyRecord> {
   };
 }
 
+function normalizeSectionLayout(
+  input: unknown,
+  path: string,
+): ParseResult<AnyRecord | undefined> {
+  if (input === undefined || input === null) {
+    return { ok: true, value: undefined };
+  }
+  if (!isRecord(input)) {
+    return { ok: false, error: `${path} must be an object` };
+  }
+
+  const allowedKeys = new Set(['wrapper', 'minHeightPx', 'heightPx']);
+  for (const key of Object.keys(input)) {
+    if (!allowedKeys.has(key)) {
+      return { ok: false, error: `${path}.${key} is not supported` };
+    }
+  }
+
+  let wrapper: 'section' | 'sectionContent' | 'none' | undefined;
+  if (input.wrapper !== undefined && input.wrapper !== null) {
+    const normalizedWrapper = normalizeSectionLayoutWrapper(
+      input.wrapper,
+      `${path}.wrapper`,
+    );
+    if (!normalizedWrapper.ok) return normalizedWrapper;
+    wrapper = normalizedWrapper.value;
+  }
+
+  let minHeightPx: number | undefined;
+  if (input.minHeightPx !== undefined && input.minHeightPx !== null) {
+    const normalizedMinHeight = normalizeSectionLayoutHeight(
+      input.minHeightPx,
+      `${path}.minHeightPx`,
+    );
+    if (!normalizedMinHeight.ok) return normalizedMinHeight;
+    minHeightPx = normalizedMinHeight.value;
+  }
+
+  let heightPx: number | undefined;
+  if (input.heightPx !== undefined && input.heightPx !== null) {
+    const normalizedHeight = normalizeSectionLayoutHeight(
+      input.heightPx,
+      `${path}.heightPx`,
+    );
+    if (!normalizedHeight.ok) return normalizedHeight;
+    heightPx = normalizedHeight.value;
+  }
+
+  if (minHeightPx !== undefined && heightPx !== undefined && heightPx < minHeightPx) {
+    return {
+      ok: false,
+      error: `${path}.heightPx must be greater than or equal to ${path}.minHeightPx`,
+    };
+  }
+
+  const layout: AnyRecord = {
+    ...(wrapper ? { wrapper } : {}),
+    ...(minHeightPx !== undefined ? { minHeightPx } : {}),
+    ...(heightPx !== undefined ? { heightPx } : {}),
+  };
+
+  return Object.keys(layout).length > 0
+    ? { ok: true, value: layout }
+    : { ok: true, value: undefined };
+}
+
 function normalizeSection(section: unknown, index: number): ParseResult<AnyRecord> {
   if (!isRecord(section)) {
     return { ok: false, error: `sections[${index}] must be an object` };
@@ -1557,6 +1662,11 @@ function normalizeSection(section: unknown, index: number): ParseResult<AnyRecor
     `sections[${index}].styleTokens`,
   );
   if (!styleTokens.ok) return styleTokens;
+  const layout = normalizeSectionLayout(
+    section.layout,
+    `sections[${index}].layout`,
+  );
+  if (!layout.ok) return layout;
 
   let data: ParseResult<AnyRecord>;
   switch (sectionType) {
@@ -1600,6 +1710,7 @@ function normalizeSection(section: unknown, index: number): ParseResult<AnyRecor
       type: sectionType,
       data: data.value,
       ...(styleTokens.value ? { styleTokens: styleTokens.value } : {}),
+      ...(layout.value ? { layout: layout.value } : {}),
     },
   };
 }

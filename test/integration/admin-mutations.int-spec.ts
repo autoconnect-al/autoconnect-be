@@ -451,6 +451,10 @@ describe('Integration: admin mutations', () => {
             {
               id: 'home-hero',
               type: 'hero',
+              layout: {
+                wrapper: 'sectionContent',
+                minHeightPx: 320,
+              },
               data: {
                 heading: 'Welcome to Auto Connect',
                 subheading: 'Trusted vehicles for every budget',
@@ -470,6 +474,11 @@ describe('Integration: admin mutations', () => {
             {
               id: 'home-media',
               type: 'mediaText',
+              layout: {
+                wrapper: 'none',
+                minHeightPx: 260,
+                heightPx: 500,
+              },
               data: {
                 title: 'Trusted inventory',
                 body: 'Preview media styling controls for desktop layout.',
@@ -503,6 +512,11 @@ describe('Integration: admin mutations', () => {
             {
               id: 'home-carousel',
               type: 'imageCarousel',
+              layout: {
+                wrapper: 'none',
+                minHeightPx: 280,
+                heightPx: 420,
+              },
               data: {
                 slides: [
                   {
@@ -541,6 +555,10 @@ describe('Integration: admin mutations', () => {
             {
               id: 'about-rich',
               type: 'richText',
+              layout: {
+                wrapper: 'section',
+                minHeightPx: 300,
+              },
               data: {
                 paragraphs: ['We have served customers for over 10 years.'],
               },
@@ -556,6 +574,10 @@ describe('Integration: admin mutations', () => {
             {
               id: 'contact-form',
               type: 'contactForm',
+              layout: {
+                wrapper: 'section',
+                minHeightPx: 340,
+              },
               data: {
                 title: 'Contact us',
                 submitLabel: 'Send message',
@@ -618,6 +640,10 @@ describe('Integration: admin mutations', () => {
                 sections: expect.arrayContaining([
                   expect.objectContaining({
                     type: 'hero',
+                    layout: expect.objectContaining({
+                      wrapper: 'sectionContent',
+                      minHeightPx: 320,
+                    }),
                     data: expect.objectContaining({
                       variant: 'fullWidth',
                       contentAlign: 'center',
@@ -628,6 +654,11 @@ describe('Integration: admin mutations', () => {
                   }),
                   expect.objectContaining({
                     type: 'mediaText',
+                    layout: expect.objectContaining({
+                      wrapper: 'none',
+                      minHeightPx: 260,
+                      heightPx: 500,
+                    }),
                     data: expect.objectContaining({
                       mediaPosition: 'right',
                       imageHeightPx: 460,
@@ -652,6 +683,11 @@ describe('Integration: admin mutations', () => {
                   }),
                   expect.objectContaining({
                     type: 'imageCarousel',
+                    layout: expect.objectContaining({
+                      wrapper: 'none',
+                      minHeightPx: 280,
+                      heightPx: 420,
+                    }),
                     data: expect.objectContaining({
                       slides: expect.arrayContaining([
                         expect.objectContaining({
@@ -677,6 +713,10 @@ describe('Integration: admin mutations', () => {
                 sections: expect.arrayContaining([
                   expect.objectContaining({
                     type: 'richText',
+                    layout: expect.objectContaining({
+                      wrapper: 'section',
+                      minHeightPx: 300,
+                    }),
                     styleTokens: expect.objectContaining({
                       '--builder-richtext-text-weight': '700',
                       '--builder-richtext-padding': '28px 24px',
@@ -976,6 +1016,106 @@ describe('Integration: admin mutations', () => {
           },
         },
         expectedMessage: 'itemsPerViewDesktop must be an integer between 1 and 3',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'layout-bad-wrapper',
+                  type: 'hero',
+                  data: {
+                    heading: 'Valid heading',
+                  },
+                  layout: {
+                    wrapper: 'fluid',
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'layout.wrapper must be one of section, sectionContent or none',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'layout-bad-min-height',
+                  type: 'hero',
+                  data: {
+                    heading: 'Valid heading',
+                  },
+                  layout: {
+                    wrapper: 'section',
+                    minHeightPx: 90,
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'layout.minHeightPx must be an integer between 120 and 1600',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'layout-bad-height',
+                  type: 'hero',
+                  data: {
+                    heading: 'Valid heading',
+                  },
+                  layout: {
+                    wrapper: 'section',
+                    heightPx: 1700,
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'layout.heightPx must be an integer between 120 and 1600',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'layout-height-lt-min',
+                  type: 'hero',
+                  data: {
+                    heading: 'Valid heading',
+                  },
+                  layout: {
+                    wrapper: 'sectionContent',
+                    minHeightPx: 500,
+                    heightPx: 320,
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'layout.heightPx must be greater than or equal to',
       },
       {
         siteConfig: {
