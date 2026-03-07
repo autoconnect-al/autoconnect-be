@@ -30,6 +30,12 @@ const HERO_VARIANTS = new Set(['inset', 'fullWidth']);
 const HERO_CONTENT_ALIGNS = new Set(['left', 'center']);
 const HERO_BACKGROUND_MODES = new Set(['solid', 'gradient', 'image']);
 const MEDIA_TEXT_ALIGNS = new Set(['left', 'center']);
+const RICH_TEXT_TEXT_DECORATIONS = new Set([
+  'none',
+  'underline',
+  'line-through',
+  'overline',
+]);
 const ALLOWED_STYLE_TOKEN_KEYS = new Set([
   '--builder-bg',
   '--builder-surface',
@@ -40,6 +46,15 @@ const ALLOWED_STYLE_TOKEN_KEYS = new Set([
   '--builder-accent-contrast',
   '--builder-media-image-height-desktop',
   '--builder-media-text-align-desktop',
+  '--builder-richtext-text-color',
+  '--builder-richtext-text-size',
+  '--builder-richtext-text-weight',
+  '--builder-richtext-text-decoration',
+  '--builder-richtext-surface',
+  '--builder-richtext-border-color',
+  '--builder-richtext-border-width',
+  '--builder-richtext-padding',
+  '--builder-richtext-margin',
 ]);
 const SAFE_COLOR_KEYWORDS = new Set([
   'transparent',
@@ -64,6 +79,21 @@ const MEDIA_TEXT_IMAGE_HEIGHT_MIN = 180;
 const MEDIA_TEXT_IMAGE_HEIGHT_MAX = 900;
 const MEDIA_TEXT_DESKTOP_IMAGE_HEIGHT_TOKEN = '--builder-media-image-height-desktop';
 const MEDIA_TEXT_DESKTOP_TEXT_ALIGN_TOKEN = '--builder-media-text-align-desktop';
+const RICH_TEXT_TEXT_SIZE_MIN = 12;
+const RICH_TEXT_TEXT_SIZE_MAX = 48;
+const RICH_TEXT_BORDER_WIDTH_MIN = 0;
+const RICH_TEXT_BORDER_WIDTH_MAX = 8;
+const RICH_TEXT_SPACING_MIN = 0;
+const RICH_TEXT_SPACING_MAX = 120;
+const RICH_TEXT_TEXT_COLOR_TOKEN = '--builder-richtext-text-color';
+const RICH_TEXT_TEXT_SIZE_TOKEN = '--builder-richtext-text-size';
+const RICH_TEXT_TEXT_WEIGHT_TOKEN = '--builder-richtext-text-weight';
+const RICH_TEXT_TEXT_DECORATION_TOKEN = '--builder-richtext-text-decoration';
+const RICH_TEXT_SURFACE_TOKEN = '--builder-richtext-surface';
+const RICH_TEXT_BORDER_COLOR_TOKEN = '--builder-richtext-border-color';
+const RICH_TEXT_BORDER_WIDTH_TOKEN = '--builder-richtext-border-width';
+const RICH_TEXT_PADDING_TOKEN = '--builder-richtext-padding';
+const RICH_TEXT_MARGIN_TOKEN = '--builder-richtext-margin';
 
 type ParseResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -163,6 +193,93 @@ function normalizeDesktopImageHeightToken(
     };
   }
   return { ok: true, value: `${parsed}px` };
+}
+
+function normalizePixelLengthToken(
+  value: unknown,
+  path: string,
+  min: number,
+  max: number,
+): ParseResult<string> {
+  if (typeof value !== 'string') {
+    return { ok: false, error: `${path} must be a string` };
+  }
+  const trimmed = value.trim();
+  const match = trimmed.match(/^(\d{1,4})px$/);
+  if (!match) {
+    return { ok: false, error: `${path} must be in Npx format` };
+  }
+  const parsed = Number.parseInt(match[1], 10);
+  if (!Number.isInteger(parsed) || parsed < min || parsed > max) {
+    return { ok: false, error: `${path} must be between ${min}px and ${max}px` };
+  }
+  return { ok: true, value: `${parsed}px` };
+}
+
+function normalizeRichTextWeightToken(
+  value: unknown,
+  path: string,
+): ParseResult<string> {
+  if (typeof value !== 'string') {
+    return { ok: false, error: `${path} must be a string` };
+  }
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'normal' || normalized === 'bold') {
+    return { ok: true, value: normalized };
+  }
+  if (!/^[1-9]00$/.test(normalized)) {
+    return { ok: false, error: `${path} must be normal, bold, or 100..900` };
+  }
+  return { ok: true, value: normalized };
+}
+
+function normalizeRichTextDecorationToken(
+  value: unknown,
+  path: string,
+): ParseResult<string> {
+  if (typeof value !== 'string') {
+    return { ok: false, error: `${path} must be a string` };
+  }
+  const normalized = value.trim().toLowerCase();
+  if (!RICH_TEXT_TEXT_DECORATIONS.has(normalized)) {
+    return { ok: false, error: `${path} must be one of none, underline, line-through or overline` };
+  }
+  return { ok: true, value: normalized };
+}
+
+function normalizeSpacingShorthandToken(
+  value: unknown,
+  path: string,
+): ParseResult<string> {
+  if (typeof value !== 'string') {
+    return { ok: false, error: `${path} must be a string` };
+  }
+  const normalized = value.trim().replace(/\s+/g, ' ');
+  if (!normalized) {
+    return { ok: false, error: `${path} must not be empty` };
+  }
+
+  const parts = normalized.split(' ');
+  if (parts.length < 1 || parts.length > 4) {
+    return { ok: false, error: `${path} must have 1 to 4 spacing values` };
+  }
+
+  const normalizedParts: string[] = [];
+  for (const part of parts) {
+    if (part === '0') {
+      normalizedParts.push('0px');
+      continue;
+    }
+    const px = normalizePixelLengthToken(
+      part,
+      path,
+      RICH_TEXT_SPACING_MIN,
+      RICH_TEXT_SPACING_MAX,
+    );
+    if (!px.ok) return px;
+    normalizedParts.push(px.value);
+  }
+  return { ok: true, value: normalizedParts.join(' ') };
 }
 
 function normalizeHeroBackground(
@@ -343,6 +460,64 @@ function normalizeStyleTokens(
     }
     if (key === MEDIA_TEXT_DESKTOP_TEXT_ALIGN_TOKEN) {
       const value = normalizeMediaTextAlign(rawValue, `${path}.${key}`);
+      if (!value.ok) return value;
+      normalized[key] = value.value;
+      continue;
+    }
+    if (
+      key === RICH_TEXT_TEXT_COLOR_TOKEN
+      || key === RICH_TEXT_SURFACE_TOKEN
+      || key === RICH_TEXT_BORDER_COLOR_TOKEN
+    ) {
+      if (typeof rawValue !== 'string') {
+        return { ok: false, error: `${path}.${key} must be a string` };
+      }
+      const value = rawValue.trim();
+      if (!value) {
+        return { ok: false, error: `${path}.${key} must not be empty` };
+      }
+      if (!isSafeCssTokenValue(value)) {
+        return { ok: false, error: `${path}.${key} has an invalid token value` };
+      }
+      normalized[key] = value;
+      continue;
+    }
+    if (key === RICH_TEXT_TEXT_SIZE_TOKEN) {
+      const value = normalizePixelLengthToken(
+        rawValue,
+        `${path}.${key}`,
+        RICH_TEXT_TEXT_SIZE_MIN,
+        RICH_TEXT_TEXT_SIZE_MAX,
+      );
+      if (!value.ok) return value;
+      normalized[key] = value.value;
+      continue;
+    }
+    if (key === RICH_TEXT_BORDER_WIDTH_TOKEN) {
+      const value = normalizePixelLengthToken(
+        rawValue,
+        `${path}.${key}`,
+        RICH_TEXT_BORDER_WIDTH_MIN,
+        RICH_TEXT_BORDER_WIDTH_MAX,
+      );
+      if (!value.ok) return value;
+      normalized[key] = value.value;
+      continue;
+    }
+    if (key === RICH_TEXT_TEXT_WEIGHT_TOKEN) {
+      const value = normalizeRichTextWeightToken(rawValue, `${path}.${key}`);
+      if (!value.ok) return value;
+      normalized[key] = value.value;
+      continue;
+    }
+    if (key === RICH_TEXT_TEXT_DECORATION_TOKEN) {
+      const value = normalizeRichTextDecorationToken(rawValue, `${path}.${key}`);
+      if (!value.ok) return value;
+      normalized[key] = value.value;
+      continue;
+    }
+    if (key === RICH_TEXT_PADDING_TOKEN || key === RICH_TEXT_MARGIN_TOKEN) {
+      const value = normalizeSpacingShorthandToken(rawValue, `${path}.${key}`);
       if (!value.ok) return value;
       normalized[key] = value.value;
       continue;

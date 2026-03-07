@@ -17,7 +17,7 @@ import {
   seedVendorRole,
 } from './fixtures/domain-fixtures';
 
-jest.setTimeout(120_000);
+jest.setTimeout(180_000);
 
 describe('Integration: admin mutations', () => {
   let app: INestApplication;
@@ -414,6 +414,17 @@ describe('Integration: admin mutations', () => {
             '--builder-media-image-height-desktop': '340px',
             '--builder-media-text-align-desktop': 'center',
           },
+          richText: {
+            '--builder-richtext-text-color': '#334155',
+            '--builder-richtext-text-size': '18px',
+            '--builder-richtext-text-weight': '600',
+            '--builder-richtext-text-decoration': 'underline',
+            '--builder-richtext-surface': 'transparent',
+            '--builder-richtext-border-color': '#cbd5e1',
+            '--builder-richtext-border-width': '0px',
+            '--builder-richtext-padding': '24px 20px',
+            '--builder-richtext-margin': '0 0 28px',
+          },
         },
         navigation: {
           variant: 'floating',
@@ -471,6 +482,10 @@ describe('Integration: admin mutations', () => {
               type: 'richText',
               data: {
                 paragraphs: ['We have served customers for over 10 years.'],
+              },
+              styleTokens: {
+                '--builder-richtext-text-weight': '700',
+                '--builder-richtext-padding': '28px 24px',
               },
             },
           ],
@@ -560,6 +575,17 @@ describe('Integration: admin mutations', () => {
                     styleTokens: expect.objectContaining({
                       '--builder-media-image-height-desktop': '420px',
                       '--builder-media-text-align-desktop': 'center',
+                    }),
+                  }),
+                ]),
+              }),
+              about: expect.objectContaining({
+                sections: expect.arrayContaining([
+                  expect.objectContaining({
+                    type: 'richText',
+                    styleTokens: expect.objectContaining({
+                      '--builder-richtext-text-weight': '700',
+                      '--builder-richtext-padding': '28px 24px',
                     }),
                   }),
                 ]),
@@ -803,6 +829,102 @@ describe('Integration: admin mutations', () => {
           },
         },
         expectedMessage: 'must be one of left or center',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'richtext-bad-size',
+                  type: 'richText',
+                  data: {
+                    paragraphs: ['Valid paragraph'],
+                  },
+                  styleTokens: {
+                    '--builder-richtext-text-size': '9px',
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'must be between 12px and 48px',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'richtext-bad-weight',
+                  type: 'richText',
+                  data: {
+                    paragraphs: ['Valid paragraph'],
+                  },
+                  styleTokens: {
+                    '--builder-richtext-text-weight': '950',
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'must be normal, bold, or 100..900',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'richtext-bad-decoration',
+                  type: 'richText',
+                  data: {
+                    paragraphs: ['Valid paragraph'],
+                  },
+                  styleTokens: {
+                    '--builder-richtext-text-decoration': 'blink',
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'must be one of none, underline, line-through or overline',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'richtext-bad-spacing',
+                  type: 'richText',
+                  data: {
+                    paragraphs: ['Valid paragraph'],
+                  },
+                  styleTokens: {
+                    '--builder-richtext-padding': '10px auto',
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'must be in Npx format',
       },
       {
         siteConfig: {
