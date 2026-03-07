@@ -4,6 +4,8 @@ const DEFAULT_INT_DATABASE_URL =
 process.env.NODE_ENV = 'test';
 process.env.DATABASE_URL =
   process.env.DATABASE_URL?.trim() || DEFAULT_INT_DATABASE_URL;
+process.env.AP_DEV_DATABASE_URL =
+  process.env.AP_DEV_DATABASE_URL?.trim() || process.env.DATABASE_URL;
 process.env.JWT_SECRET =
   process.env.JWT_SECRET?.trim() || 'integration-test-secret';
 process.env.INSTAGRAM_CLIENT_ID =

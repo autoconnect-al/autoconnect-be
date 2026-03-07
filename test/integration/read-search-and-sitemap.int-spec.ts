@@ -434,6 +434,7 @@ describe('Integration: read/search/sitemap', () => {
     await prisma.vendor.update({
       where: { id: customVendorId },
       data: {
+        siteEnabled: true,
         customDomain: 'tenant.autoconnect.al',
         subdomain: 'tenant-custom',
         theme: 'classic',
@@ -450,12 +451,14 @@ describe('Integration: read/search/sitemap', () => {
     await prisma.vendor.update({
       where: { id: subdomainVendorId },
       data: {
+        siteEnabled: true,
         subdomain: 'tenant',
       },
     });
     await prisma.vendor.update({
       where: { id: subdomainOnlyVendorId },
       data: {
+        siteEnabled: true,
         subdomain: 'sub-only',
       },
     });
@@ -478,6 +481,7 @@ describe('Integration: read/search/sitemap', () => {
       statusCode: '200',
       result: expect.objectContaining({
         id: customVendorId.toString(),
+        siteEnabled: 1,
         customDomain: 'tenant.autoconnect.al',
         subdomain: 'tenant-custom',
         siteConfig: expect.stringContaining('"version":1'),
@@ -492,6 +496,7 @@ describe('Integration: read/search/sitemap', () => {
       statusCode: '200',
       result: expect.objectContaining({
         id: subdomainOnlyVendorId.toString(),
+        siteEnabled: 1,
         subdomain: 'sub-only',
       }),
     });
@@ -504,6 +509,7 @@ describe('Integration: read/search/sitemap', () => {
       statusCode: '200',
       result: expect.objectContaining({
         id: subdomainOnlyVendorId.toString(),
+        siteEnabled: 1,
         subdomain: 'sub-only',
       }),
     });
@@ -517,6 +523,7 @@ describe('Integration: read/search/sitemap', () => {
       result: expect.objectContaining({
         id: usernameVendorId.toString(),
         accountName: 'path.vendor',
+        siteEnabled: 0,
       }),
     });
 

@@ -389,6 +389,21 @@ export const legacyRoutes: LegacyRoute[] = [
   },
   {
     method: 'get',
+    path: '/vendor-management/site-settings/{id}',
+    summary: 'Get vendor site settings (AP)',
+  },
+  {
+    method: 'post',
+    path: '/vendor-management/site-settings/{id}',
+    summary: 'Update vendor site settings (AP)',
+  },
+  {
+    method: 'post',
+    path: '/vendor-management/site-settings/{id}/publish',
+    summary: 'Publish vendor site settings dev -> prod (AP)',
+  },
+  {
+    method: 'get',
     path: '/car-details/generate-prompt',
     summary: 'Generate detail prompt',
   },

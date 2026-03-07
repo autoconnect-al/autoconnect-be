@@ -306,6 +306,32 @@ export class VendorManagementController {
     return this.handleLegacy(this.service.toggleVendorDeleted(id));
   }
 
+  @Get('site-settings/:id')
+  getSiteSettings(
+    @Param('id') id: string,
+    @Query('target') target?: string,
+  ) {
+    return this.handleLegacy(this.service.getVendorSiteSettings(id, target));
+  }
+
+  @Post('site-settings/:id')
+  @HttpCode(200)
+  updateSiteSettings(
+    @Param('id') id: string,
+    @Query('target') target: string | undefined,
+    @Body() body: unknown,
+  ) {
+    return this.handleLegacy(
+      this.service.updateVendorSiteSettings(id, target, body),
+    );
+  }
+
+  @Post('site-settings/:id/publish')
+  @HttpCode(200)
+  publishSiteSettings(@Param('id') id: string) {
+    return this.handleLegacy(this.service.publishVendorSiteSettings(id));
+  }
+
   private async handleLegacy(
     promise: Promise<{ success: boolean; message: string; statusCode: string }>,
   ) {

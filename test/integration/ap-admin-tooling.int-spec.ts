@@ -450,6 +450,92 @@ describe('Integration: legacy-ap admin/tooling surfaces', () => {
     expect(restoredVendor?.deleted).toBe(false);
   });
 
+  it('vendor-management site-settings endpoints save, load, and publish site settings', async () => {
+    const adminToken = await seedAdminIdentity();
+    await seedVendor(prisma, 9610n, {
+      accountName: 'site-settings-vendor',
+      username: 'site.settings.vendor',
+      email: 'site-settings-vendor@example.com',
+    });
+
+    const siteSettingsPayload = {
+      siteEnabled: true,
+      subdomain: 'site-settings-vendor',
+      customDomain: 'site-settings.example.com',
+      theme: 'clean',
+      primaryColor: '#123456',
+      secondaryColor: '#654321',
+      logo: 'https://img.example/logo.webp',
+      banner: 'https://img.example/banner.webp',
+      siteConfig: {
+        version: 1,
+        pages: {
+          home: { sections: [] },
+          about: { sections: [] },
+          contact: { sections: [] },
+        },
+      },
+    };
+
+    const saveDev = await request(app.getHttpServer())
+      .post('/vendor-management/site-settings/9610?target=dev')
+      .set('authorization', `Bearer ${adminToken}`)
+      .send(siteSettingsPayload)
+      .expect(200);
+
+    expect(saveDev.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+    });
+
+    const readDev = await request(app.getHttpServer())
+      .get('/vendor-management/site-settings/9610?target=dev')
+      .set('authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(readDev.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+      result: expect.objectContaining({
+        id: '9610',
+        target: 'dev',
+        siteEnabled: true,
+        subdomain: 'site-settings-vendor',
+        customDomain: 'site-settings.example.com',
+        siteConfig: expect.objectContaining({
+          version: 1,
+        }),
+      }),
+    });
+
+    const publish = await request(app.getHttpServer())
+      .post('/vendor-management/site-settings/9610/publish')
+      .set('authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(publish.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+    });
+
+    const readProd = await request(app.getHttpServer())
+      .get('/vendor-management/site-settings/9610?target=prod')
+      .set('authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(readProd.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+      result: expect.objectContaining({
+        id: '9610',
+        target: 'prod',
+        siteEnabled: true,
+        subdomain: 'site-settings-vendor',
+        customDomain: 'site-settings.example.com',
+      }),
+    });
+  });
+
   it('AP post tooling operational endpoints work with AP code', async () => {
     await seedVendor(prisma, 9701n, { accountName: 'tooling-vendor' });
     await seedPostGraph(prisma, { postId: 9971n, vendorId: 9701n });
