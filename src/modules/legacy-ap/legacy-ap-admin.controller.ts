@@ -9,11 +9,12 @@ import {
   Post,
   Query,
   Req,
+  UploadedFile,
   UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { AnyFilesInterceptor } from '@nestjs/platform-express';
+import { AnyFilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import type { Request } from 'express';
 import { LegacyJwtAdminGuard } from '../../common/guards/legacy-jwt-admin.guard';
 import { LegacyJwtGuard } from '../../common/guards/legacy-jwt.guard';
@@ -330,6 +331,25 @@ export class VendorManagementController {
   @HttpCode(200)
   publishSiteSettings(@Param('id') id: string) {
     return this.handleLegacy(this.service.publishVendorSiteSettings(id));
+  }
+
+  @Post('site-settings/:id/upload-media')
+  @HttpCode(200)
+  @UseInterceptors(FileInterceptor('file'))
+  uploadSiteMedia(
+    @Param('id') id: string,
+    @Query('target') target: string | undefined,
+    @Body() body: unknown,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    return this.handleLegacy(
+      this.service.uploadVendorSiteMedia(
+        id,
+        target,
+        file,
+        (body as AnyRecord)?.field,
+      ),
+    );
   }
 
   private async handleLegacy(

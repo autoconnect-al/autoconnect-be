@@ -37,6 +37,7 @@ const RICH_TEXT_TEXT_DECORATIONS = new Set([
   'line-through',
   'overline',
 ]);
+const TEXT_STYLE_VALUES = new Set(['normal', 'italic', 'oblique']);
 const ALLOWED_STYLE_TOKEN_KEYS = new Set([
   '--builder-bg',
   '--builder-surface',
@@ -88,6 +89,30 @@ const ALLOWED_STYLE_TOKEN_KEYS = new Set([
   '--builder-footer-copyright-size',
   '--builder-footer-copyright-weight',
   '--builder-footer-copyright-decoration',
+  '--builder-nav-bg',
+  '--builder-nav-text-color',
+  '--builder-nav-text-size',
+  '--builder-nav-text-weight',
+  '--builder-nav-text-style',
+  '--builder-nav-text-decoration',
+  '--builder-nav-brand-color',
+  '--builder-nav-brand-size',
+  '--builder-nav-brand-weight',
+  '--builder-nav-brand-style',
+  '--builder-nav-brand-decoration',
+]);
+const NAVIGATION_STYLE_TOKEN_KEYS = new Set([
+  '--builder-nav-bg',
+  '--builder-nav-text-color',
+  '--builder-nav-text-size',
+  '--builder-nav-text-weight',
+  '--builder-nav-text-style',
+  '--builder-nav-text-decoration',
+  '--builder-nav-brand-color',
+  '--builder-nav-brand-size',
+  '--builder-nav-brand-weight',
+  '--builder-nav-brand-style',
+  '--builder-nav-brand-decoration',
 ]);
 const SAFE_COLOR_KEYWORDS = new Set([
   'transparent',
@@ -164,6 +189,19 @@ const FOOTER_COPYRIGHT_COLOR_TOKEN = '--builder-footer-copyright-color';
 const FOOTER_COPYRIGHT_SIZE_TOKEN = '--builder-footer-copyright-size';
 const FOOTER_COPYRIGHT_WEIGHT_TOKEN = '--builder-footer-copyright-weight';
 const FOOTER_COPYRIGHT_DECORATION_TOKEN = '--builder-footer-copyright-decoration';
+const NAV_TEXT_SIZE_MIN = 12;
+const NAV_TEXT_SIZE_MAX = 40;
+const NAV_BG_TOKEN = '--builder-nav-bg';
+const NAV_TEXT_COLOR_TOKEN = '--builder-nav-text-color';
+const NAV_TEXT_SIZE_TOKEN = '--builder-nav-text-size';
+const NAV_TEXT_WEIGHT_TOKEN = '--builder-nav-text-weight';
+const NAV_TEXT_STYLE_TOKEN = '--builder-nav-text-style';
+const NAV_TEXT_DECORATION_TOKEN = '--builder-nav-text-decoration';
+const NAV_BRAND_COLOR_TOKEN = '--builder-nav-brand-color';
+const NAV_BRAND_SIZE_TOKEN = '--builder-nav-brand-size';
+const NAV_BRAND_WEIGHT_TOKEN = '--builder-nav-brand-weight';
+const NAV_BRAND_STYLE_TOKEN = '--builder-nav-brand-style';
+const NAV_BRAND_DECORATION_TOKEN = '--builder-nav-brand-decoration';
 const IMAGE_CAROUSEL_VARIANTS = new Set(['plain', 'overlay', 'split']);
 const IMAGE_CAROUSEL_SPLIT_IMAGE_POSITIONS = new Set(['left', 'right']);
 const IMAGE_CAROUSEL_MAX_ITEMS = 20;
@@ -392,6 +430,20 @@ function normalizeRichTextDecorationToken(
   return { ok: true, value: normalized };
 }
 
+function normalizeTextStyleToken(
+  value: unknown,
+  path: string,
+): ParseResult<string> {
+  if (typeof value !== 'string') {
+    return { ok: false, error: `${path} must be a string` };
+  }
+  const normalized = value.trim().toLowerCase();
+  if (!TEXT_STYLE_VALUES.has(normalized)) {
+    return { ok: false, error: `${path} must be normal, italic or oblique` };
+  }
+  return { ok: true, value: normalized };
+}
+
 function normalizeSpacingShorthandToken(
   value: unknown,
   path: string,
@@ -527,7 +579,7 @@ function normalizeHeroBackground(
 
   const imageUrl = normalizeUrl(
     input.imageUrl,
-    { allowRelative: false, httpsOnly: false },
+    { allowRelative: true, httpsOnly: false },
     'hero.data.background.imageUrl',
   );
   if (!imageUrl.ok) return imageUrl;
@@ -775,6 +827,53 @@ function normalizeStyleTokens(
       normalized[key] = value.value;
       continue;
     }
+    if (
+      key === NAV_BG_TOKEN
+      || key === NAV_TEXT_COLOR_TOKEN
+      || key === NAV_BRAND_COLOR_TOKEN
+    ) {
+      if (typeof rawValue !== 'string') {
+        return { ok: false, error: `${path}.${key} must be a string` };
+      }
+      const value = rawValue.trim();
+      if (!value) {
+        return { ok: false, error: `${path}.${key} must not be empty` };
+      }
+      if (!isSafeCssTokenValue(value)) {
+        return { ok: false, error: `${path}.${key} has an invalid token value` };
+      }
+      normalized[key] = value;
+      continue;
+    }
+    if (key === NAV_TEXT_SIZE_TOKEN || key === NAV_BRAND_SIZE_TOKEN) {
+      const value = normalizePixelLengthToken(
+        rawValue,
+        `${path}.${key}`,
+        NAV_TEXT_SIZE_MIN,
+        NAV_TEXT_SIZE_MAX,
+      );
+      if (!value.ok) return value;
+      normalized[key] = value.value;
+      continue;
+    }
+    if (key === NAV_TEXT_WEIGHT_TOKEN || key === NAV_BRAND_WEIGHT_TOKEN) {
+      const value = normalizeRichTextWeightToken(rawValue, `${path}.${key}`);
+      if (!value.ok) return value;
+      normalized[key] = value.value;
+      continue;
+    }
+    if (key === NAV_TEXT_STYLE_TOKEN || key === NAV_BRAND_STYLE_TOKEN) {
+      const value = normalizeTextStyleToken(rawValue, `${path}.${key}`);
+      if (!value.ok) return value;
+      normalized[key] = value.value;
+      continue;
+    }
+    if (key === NAV_TEXT_DECORATION_TOKEN || key === NAV_BRAND_DECORATION_TOKEN) {
+      const value = normalizeRichTextDecorationToken(rawValue, `${path}.${key}`);
+      if (!value.ok) return value;
+      normalized[key] = value.value;
+      continue;
+    }
 
     if (typeof rawValue !== 'string') {
       return { ok: false, error: `${path}.${key} must be a string` };
@@ -795,6 +894,27 @@ function normalizeStyleTokens(
   return { ok: true, value: normalized };
 }
 
+function normalizeNavigationStyleTokens(
+  input: unknown,
+  path: string,
+): ParseResult<Record<string, string> | undefined> {
+  const normalized = normalizeStyleTokens(input, path);
+  if (!normalized.ok || !normalized.value) {
+    return normalized;
+  }
+
+  for (const key of Object.keys(normalized.value)) {
+    if (!NAVIGATION_STYLE_TOKEN_KEYS.has(key)) {
+      return {
+        ok: false,
+        error: `${path}.${key} is not an allowed navigation token`,
+      };
+    }
+  }
+
+  return normalized;
+}
+
 function normalizeThemeNavigation(
   input: unknown,
   path: string,
@@ -806,7 +926,7 @@ function normalizeThemeNavigation(
     return { ok: false, error: `${path} must be an object` };
   }
 
-  const allowedKeys = new Set(['variant', 'position', 'mobileMenu']);
+  const allowedKeys = new Set(['variant', 'position', 'mobileMenu', 'styleTokens']);
   for (const key of Object.keys(input)) {
     if (!allowedKeys.has(key)) {
       return { ok: false, error: `${path}.${key} is not supported` };
@@ -886,6 +1006,17 @@ function normalizeThemeNavigation(
 
     if (Object.keys(mobileMenu).length > 0) {
       normalized.mobileMenu = mobileMenu;
+    }
+  }
+
+  if (input.styleTokens !== undefined && input.styleTokens !== null) {
+    const styleTokens = normalizeNavigationStyleTokens(
+      input.styleTokens,
+      `${path}.styleTokens`,
+    );
+    if (!styleTokens.ok) return styleTokens;
+    if (styleTokens.value && Object.keys(styleTokens.value).length > 0) {
+      normalized.styleTokens = styleTokens.value;
     }
   }
 
@@ -993,7 +1124,7 @@ function normalizeHeroData(input: unknown): ParseResult<AnyRecord> {
       ? ({ ok: true, value: undefined } as ParseResult<string | undefined>)
       : normalizeUrl(
           input.backgroundImageUrl,
-          { allowRelative: false, httpsOnly: false },
+          { allowRelative: true, httpsOnly: false },
           'hero.data.backgroundImageUrl',
         );
   if (!backgroundImageUrl.ok) {
@@ -1070,7 +1201,7 @@ function normalizeMediaTextData(input: unknown): ParseResult<AnyRecord> {
       ? ({ ok: true, value: undefined } as ParseResult<string | undefined>)
       : normalizeUrl(
           input.mediaUrl,
-          { allowRelative: false, httpsOnly: false },
+          { allowRelative: true, httpsOnly: false },
           'mediaText.data.mediaUrl',
         );
   if (!mediaUrl.ok) return { ok: false, error: mediaUrl.error };
@@ -1337,7 +1468,7 @@ function normalizeImageCarouselSlide(
 
   const imageUrl = normalizeUrl(
     input.imageUrl,
-    { allowRelative: false, httpsOnly: false },
+    { allowRelative: true, httpsOnly: false },
     `imageCarousel.data.slides[${index}].imageUrl`,
   );
   if (!imageUrl.ok) return imageUrl;
@@ -1462,7 +1593,7 @@ function normalizeImageCarouselLegacyImages(
     }
     const url = normalizeUrl(
       image.url,
-      { allowRelative: false, httpsOnly: false },
+      { allowRelative: true, httpsOnly: false },
       `imageCarousel.data.images[${i}].url`,
     );
     if (!url.ok) return { ok: false, error: url.error };

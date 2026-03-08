@@ -508,6 +508,25 @@ describe('Integration: legacy-ap admin/tooling surfaces', () => {
       }),
     });
 
+    const uploadResponse = await request(app.getHttpServer())
+      .post('/vendor-management/site-settings/9610/upload-media?target=dev')
+      .set('authorization', `Bearer ${adminToken}`)
+      .field('field', 'logo')
+      .attach('file', Buffer.from([0x89, 0x50, 0x4e, 0x47]), {
+        filename: 'logo.png',
+        contentType: 'image/png',
+      })
+      .expect(200);
+
+    expect(uploadResponse.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+      result: expect.objectContaining({
+        field: 'logo',
+        path: expect.stringMatching(/^\/vendor_site\/9610\/\d+-[a-f0-9]{16}\.png$/),
+      }),
+    });
+
     const publish = await request(app.getHttpServer())
       .post('/vendor-management/site-settings/9610/publish')
       .set('authorization', `Bearer ${adminToken}`)

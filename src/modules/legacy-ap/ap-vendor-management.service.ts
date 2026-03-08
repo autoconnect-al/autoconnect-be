@@ -1,6 +1,10 @@
+import { randomBytes } from 'crypto';
+import { mkdir, writeFile } from 'fs/promises';
+import { extname, join, resolve } from 'path';
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient, Prisma } from '@prisma/client';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
+import { getMediaRootPath } from '../../common/media-path.util';
 import { PrismaService } from '../../database/prisma.service';
 import { legacyError, legacySuccess } from '../../common/legacy-response';
 import { normalizeVendorSiteConfigInput } from '../legacy-group-a/vendor-site-config.util';
@@ -18,6 +22,15 @@ type OptionalStringResult =
   | { ok: false; error: string };
 
 const SITE_SUBDOMAIN_REGEX = /^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$/;
+const VENDOR_SITE_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
+const IMAGE_MIME_EXTENSION_MAP: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+  'image/avif': 'avif',
+};
 const SITE_SETTINGS_FIELDS_SELECT = {
   id: true,
   siteEnabled: true,
@@ -34,6 +47,7 @@ const SITE_SETTINGS_FIELDS_SELECT = {
 @Injectable()
 export class ApVendorManagementService implements OnModuleDestroy {
   private devPrismaClient: PrismaClient | null = null;
+  private readonly mediaRoot = getMediaRootPath();
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -405,6 +419,64 @@ export class ApVendorManagementService implements OnModuleDestroy {
     return legacySuccess(null, 'Vendor site settings published to prod');
   }
 
+  async uploadVendorSiteMedia(
+    id: string,
+    rawTarget: string | undefined,
+    file: Express.Multer.File | undefined,
+    rawField?: unknown,
+  ) {
+    const target = this.parseSiteSettingsTarget(rawTarget);
+    if (!target.ok) {
+      return legacyError(target.error, 400);
+    }
+
+    const targetClient = this.resolveTargetClient(target.value);
+    if (!targetClient.ok) {
+      return legacyError(targetClient.error, 500);
+    }
+
+    const vendorId = BigInt(id);
+    const vendorExists = await targetClient.client.vendor.findUnique({
+      where: { id: vendorId },
+      select: { id: true },
+    });
+    if (!vendorExists) {
+      return legacyError('Vendor not found', 404);
+    }
+
+    if (!file?.buffer?.length) {
+      return legacyError('Image file is required', 400);
+    }
+    if (file.size > VENDOR_SITE_UPLOAD_MAX_BYTES) {
+      return legacyError('Image exceeds max size limit.', 400);
+    }
+
+    const extension = this.resolveImageExtension(file);
+    if (!extension) {
+      return legacyError(
+        'Unsupported image format. Allowed: jpeg, jpg, png, webp, gif, avif',
+        400,
+      );
+    }
+
+    const vendorFolderName = vendorId.toString();
+    const outputDir = resolve(this.mediaRoot, 'vendor_site', vendorFolderName);
+    await mkdir(outputDir, { recursive: true });
+
+    const filename = this.buildVendorSiteFilename(extension);
+    await writeFile(join(outputDir, filename), file.buffer);
+
+    const field =
+      typeof rawField === 'string' && rawField.trim().length > 0
+        ? rawField.trim()
+        : undefined;
+
+    return legacySuccess({
+      path: `/vendor_site/${vendorFolderName}/${filename}`,
+      ...(field ? { field } : {}),
+    });
+  }
+
   private extractVendor(rawVendor: unknown): {
     accountName: string;
     biography: string;
@@ -690,5 +762,29 @@ export class ApVendorManagementService implements OnModuleDestroy {
         typeof value === 'bigint' ? value.toString() : value,
       ),
     ) as T;
+  }
+
+  private resolveImageExtension(file: Express.Multer.File): string | null {
+    const mime = (file.mimetype || '').toLowerCase();
+    const mimeMapped = IMAGE_MIME_EXTENSION_MAP[mime];
+    if (mimeMapped) {
+      return mimeMapped;
+    }
+
+    const ext = extname(file.originalname || '')
+      .replace('.', '')
+      .trim()
+      .toLowerCase();
+    if (Object.values(IMAGE_MIME_EXTENSION_MAP).includes(ext)) {
+      return ext;
+    }
+
+    return null;
+  }
+
+  private buildVendorSiteFilename(extension: string): string {
+    const ts = Date.now();
+    const random = randomBytes(8).toString('hex');
+    return `${ts}-${random}.${extension}`;
   }
 }

@@ -469,6 +469,15 @@ describe('Integration: admin mutations', () => {
             mode: 'fullscreen',
             motion: 'left',
           },
+          styleTokens: {
+            '--builder-nav-bg': '#0f172a',
+            '--builder-nav-text-color': '#e2e8f0',
+            '--builder-nav-text-size': '17px',
+            '--builder-nav-text-weight': '600',
+            '--builder-nav-text-style': 'normal',
+            '--builder-nav-text-decoration': 'none',
+            '--builder-nav-brand-size': '20px',
+          },
         },
       },
       pages: {
@@ -658,6 +667,11 @@ describe('Integration: admin mutations', () => {
                 mobileMenu: expect.objectContaining({
                   mode: 'fullscreen',
                   motion: 'left',
+                }),
+                styleTokens: expect.objectContaining({
+                  '--builder-nav-bg': '#0f172a',
+                  '--builder-nav-text-size': '17px',
+                  '--builder-nav-brand-size': '20px',
                 }),
               }),
               components: expect.objectContaining({
