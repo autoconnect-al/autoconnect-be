@@ -489,6 +489,8 @@ describe('Integration: admin mutations', () => {
               layout: {
                 wrapper: 'sectionContent',
                 minHeightPx: 320,
+                marginTopPx: 16,
+                marginBottomPx: 28,
               },
               data: {
                 heading: 'Welcome to Auto Connect',
@@ -513,6 +515,7 @@ describe('Integration: admin mutations', () => {
                 wrapper: 'none',
                 minHeightPx: 260,
                 heightPx: 500,
+                marginBottomPx: 12,
               },
               data: {
                 title: 'Trusted inventory',
@@ -690,6 +693,8 @@ describe('Integration: admin mutations', () => {
                     layout: expect.objectContaining({
                       wrapper: 'sectionContent',
                       minHeightPx: 320,
+                      marginTopPx: 16,
+                      marginBottomPx: 28,
                     }),
                     data: expect.objectContaining({
                       variant: 'fullWidth',
@@ -705,6 +710,7 @@ describe('Integration: admin mutations', () => {
                       wrapper: 'none',
                       minHeightPx: 260,
                       heightPx: 500,
+                      marginBottomPx: 12,
                     }),
                     data: expect.objectContaining({
                       mediaPosition: 'right',
@@ -1163,6 +1169,56 @@ describe('Integration: admin mutations', () => {
           },
         },
         expectedMessage: 'layout.heightPx must be greater than or equal to',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'layout-bad-margin-top',
+                  type: 'hero',
+                  data: {
+                    heading: 'Valid heading',
+                  },
+                  layout: {
+                    wrapper: 'section',
+                    marginTopPx: -1,
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'layout.marginTopPx must be an integer between 0 and 240',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'layout-bad-margin-bottom',
+                  type: 'hero',
+                  data: {
+                    heading: 'Valid heading',
+                  },
+                  layout: {
+                    wrapper: 'section',
+                    marginBottomPx: 280,
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'layout.marginBottomPx must be an integer between 0 and 240',
       },
       {
         siteConfig: {

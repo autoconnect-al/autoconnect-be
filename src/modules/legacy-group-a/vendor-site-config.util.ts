@@ -210,6 +210,8 @@ const IMAGE_CAROUSEL_OVERLAY_DEFAULT_OPACITY = 0.35;
 const SECTION_LAYOUT_WRAPPERS = new Set(['section', 'sectionContent', 'none']);
 const SECTION_LAYOUT_HEIGHT_MIN = 120;
 const SECTION_LAYOUT_HEIGHT_MAX = 1600;
+const SECTION_LAYOUT_MARGIN_MIN = 0;
+const SECTION_LAYOUT_MARGIN_MAX = 240;
 
 type ParseResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -347,6 +349,25 @@ function normalizeSectionLayoutHeight(
     return {
       ok: false,
       error: `${path} must be an integer between ${SECTION_LAYOUT_HEIGHT_MIN} and ${SECTION_LAYOUT_HEIGHT_MAX}`,
+    };
+  }
+  return { ok: true, value: normalized.value };
+}
+
+function normalizeSectionLayoutMargin(
+  value: unknown,
+  path: string,
+): ParseResult<number> {
+  const normalized = normalizeNumber(value, path);
+  if (!normalized.ok) return normalized;
+  if (
+    !Number.isInteger(normalized.value)
+    || normalized.value < SECTION_LAYOUT_MARGIN_MIN
+    || normalized.value > SECTION_LAYOUT_MARGIN_MAX
+  ) {
+    return {
+      ok: false,
+      error: `${path} must be an integer between ${SECTION_LAYOUT_MARGIN_MIN} and ${SECTION_LAYOUT_MARGIN_MAX}`,
     };
   }
   return { ok: true, value: normalized.value };
@@ -1831,7 +1852,13 @@ function normalizeSectionLayout(
     return { ok: false, error: `${path} must be an object` };
   }
 
-  const allowedKeys = new Set(['wrapper', 'minHeightPx', 'heightPx']);
+  const allowedKeys = new Set([
+    'wrapper',
+    'minHeightPx',
+    'heightPx',
+    'marginTopPx',
+    'marginBottomPx',
+  ]);
   for (const key of Object.keys(input)) {
     if (!allowedKeys.has(key)) {
       return { ok: false, error: `${path}.${key} is not supported` };
@@ -1868,6 +1895,26 @@ function normalizeSectionLayout(
     heightPx = normalizedHeight.value;
   }
 
+  let marginTopPx: number | undefined;
+  if (input.marginTopPx !== undefined && input.marginTopPx !== null) {
+    const normalizedMarginTop = normalizeSectionLayoutMargin(
+      input.marginTopPx,
+      `${path}.marginTopPx`,
+    );
+    if (!normalizedMarginTop.ok) return normalizedMarginTop;
+    marginTopPx = normalizedMarginTop.value;
+  }
+
+  let marginBottomPx: number | undefined;
+  if (input.marginBottomPx !== undefined && input.marginBottomPx !== null) {
+    const normalizedMarginBottom = normalizeSectionLayoutMargin(
+      input.marginBottomPx,
+      `${path}.marginBottomPx`,
+    );
+    if (!normalizedMarginBottom.ok) return normalizedMarginBottom;
+    marginBottomPx = normalizedMarginBottom.value;
+  }
+
   if (minHeightPx !== undefined && heightPx !== undefined && heightPx < minHeightPx) {
     return {
       ok: false,
@@ -1879,6 +1926,8 @@ function normalizeSectionLayout(
     ...(wrapper ? { wrapper } : {}),
     ...(minHeightPx !== undefined ? { minHeightPx } : {}),
     ...(heightPx !== undefined ? { heightPx } : {}),
+    ...(marginTopPx !== undefined ? { marginTopPx } : {}),
+    ...(marginBottomPx !== undefined ? { marginBottomPx } : {}),
   };
 
   return Object.keys(layout).length > 0
