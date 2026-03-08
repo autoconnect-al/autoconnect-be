@@ -472,7 +472,7 @@ export class ApVendorManagementService implements OnModuleDestroy {
         : undefined;
 
     return legacySuccess({
-      path: `/vendor_site/${vendorFolderName}/${filename}`,
+      path: `/media/vendor_site/${vendorFolderName}/${filename}`,
       ...(field ? { field } : {}),
     });
   }

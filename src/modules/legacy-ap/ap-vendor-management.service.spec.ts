@@ -188,7 +188,7 @@ describe('ApVendorManagementService', () => {
       expect(response.success).toBe(true);
       expect(response.result).toEqual(
         expect.objectContaining({
-          path: expect.stringMatching(/^\/vendor_site\/1\/\d+-[a-f0-9]{16}\.png$/),
+          path: expect.stringMatching(/^\/media\/vendor_site\/1\/\d+-[a-f0-9]{16}\.png$/),
           field: 'logo',
         }),
       );
