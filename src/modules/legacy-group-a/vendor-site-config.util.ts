@@ -51,6 +51,7 @@ const ALLOWED_STYLE_TOKEN_KEYS = new Set([
   '--builder-border',
   '--builder-accent',
   '--builder-accent-contrast',
+  '--builder-radius-base',
   '--builder-media-image-height-desktop',
   '--builder-media-text-align-desktop',
   '--builder-richtext-text-color',
@@ -58,10 +59,12 @@ const ALLOWED_STYLE_TOKEN_KEYS = new Set([
   '--builder-richtext-text-weight',
   '--builder-richtext-text-decoration',
   '--builder-richtext-surface',
+  '--builder-richtext-accent-bar-color',
   '--builder-richtext-border-color',
   '--builder-richtext-border-width',
   '--builder-richtext-padding',
   '--builder-richtext-margin',
+  '--builder-testimonials-card-bg',
   '--builder-testimonials-quote-color',
   '--builder-testimonials-quote-size',
   '--builder-testimonials-quote-weight',
@@ -95,6 +98,8 @@ const ALLOWED_STYLE_TOKEN_KEYS = new Set([
   '--builder-footer-copyright-weight',
   '--builder-footer-copyright-decoration',
   '--builder-nav-bg',
+  '--builder-nav-border-color',
+  '--builder-nav-border-width',
   '--builder-nav-text-color',
   '--builder-nav-text-size',
   '--builder-nav-text-weight',
@@ -105,9 +110,22 @@ const ALLOWED_STYLE_TOKEN_KEYS = new Set([
   '--builder-nav-brand-weight',
   '--builder-nav-brand-style',
   '--builder-nav-brand-decoration',
+  '--builder-hero-inner-radius',
+]);
+const GLOBAL_THEME_STYLE_TOKEN_KEYS = new Set([
+  '--builder-bg',
+  '--builder-surface',
+  '--builder-text',
+  '--builder-muted-text',
+  '--builder-border',
+  '--builder-accent',
+  '--builder-accent-contrast',
+  '--builder-radius-base',
 ]);
 const NAVIGATION_STYLE_TOKEN_KEYS = new Set([
   '--builder-nav-bg',
+  '--builder-nav-border-color',
+  '--builder-nav-border-width',
   '--builder-nav-text-color',
   '--builder-nav-text-size',
   '--builder-nav-text-weight',
@@ -201,9 +219,18 @@ const FOOTER_COPYRIGHT_COLOR_TOKEN = '--builder-footer-copyright-color';
 const FOOTER_COPYRIGHT_SIZE_TOKEN = '--builder-footer-copyright-size';
 const FOOTER_COPYRIGHT_WEIGHT_TOKEN = '--builder-footer-copyright-weight';
 const FOOTER_COPYRIGHT_DECORATION_TOKEN = '--builder-footer-copyright-decoration';
+const GLOBAL_RADIUS_BASE_TOKEN = '--builder-radius-base';
+const GLOBAL_RADIUS_BASE_MIN = 0;
+const GLOBAL_RADIUS_BASE_MAX = 300;
+const TESTIMONIALS_CARD_BG_TOKEN = '--builder-testimonials-card-bg';
+const RICH_TEXT_ACCENT_BAR_COLOR_TOKEN = '--builder-richtext-accent-bar-color';
 const NAV_TEXT_SIZE_MIN = 12;
 const NAV_TEXT_SIZE_MAX = 40;
+const NAV_BORDER_WIDTH_MIN = 0;
+const NAV_BORDER_WIDTH_MAX = 12;
 const NAV_BG_TOKEN = '--builder-nav-bg';
+const NAV_BORDER_COLOR_TOKEN = '--builder-nav-border-color';
+const NAV_BORDER_WIDTH_TOKEN = '--builder-nav-border-width';
 const NAV_TEXT_COLOR_TOKEN = '--builder-nav-text-color';
 const NAV_TEXT_SIZE_TOKEN = '--builder-nav-text-size';
 const NAV_TEXT_WEIGHT_TOKEN = '--builder-nav-text-weight';
@@ -214,6 +241,9 @@ const NAV_BRAND_SIZE_TOKEN = '--builder-nav-brand-size';
 const NAV_BRAND_WEIGHT_TOKEN = '--builder-nav-brand-weight';
 const NAV_BRAND_STYLE_TOKEN = '--builder-nav-brand-style';
 const NAV_BRAND_DECORATION_TOKEN = '--builder-nav-brand-decoration';
+const HERO_INNER_RADIUS_TOKEN = '--builder-hero-inner-radius';
+const HERO_INNER_RADIUS_MIN = 0;
+const HERO_INNER_RADIUS_MAX = 300;
 const IMAGE_CAROUSEL_VARIANTS = new Set(['plain', 'overlay', 'split']);
 const IMAGE_CAROUSEL_SPLIT_IMAGE_POSITIONS = new Set(['left', 'right']);
 const IMAGE_CAROUSEL_TEXT_POSITIONS_X = new Set(['left', 'center', 'right']);
@@ -233,6 +263,20 @@ const SECTION_LAYOUT_BORDER_RADIUS_MIN = 0;
 const SECTION_LAYOUT_BORDER_RADIUS_MAX = 300;
 const IMAGE_CAROUSEL_TEXT_SIZE_MIN = 8;
 const IMAGE_CAROUSEL_TEXT_SIZE_MAX = 240;
+const MAP_PROVIDER_EMBED_ERROR = 'map.data.embedUrl must be an embeddable Google Maps or OpenStreetMap URL';
+const MAP_GOOGLE_HOSTS = new Set([
+  'google.com',
+  'www.google.com',
+  'maps.google.com',
+  'google.al',
+  'www.google.al',
+  'google.co.uk',
+  'www.google.co.uk',
+]);
+const MAP_OSM_HOSTS = new Set([
+  'openstreetmap.org',
+  'www.openstreetmap.org',
+]);
 
 type ParseResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -794,6 +838,17 @@ function normalizeStyleTokens(
     if (!ALLOWED_STYLE_TOKEN_KEYS.has(key)) {
       return { ok: false, error: `${path}.${key} is not an allowed token` };
     }
+    if (key === GLOBAL_RADIUS_BASE_TOKEN || key === HERO_INNER_RADIUS_TOKEN) {
+      const value = normalizePixelLengthToken(
+        rawValue,
+        `${path}.${key}`,
+        key === GLOBAL_RADIUS_BASE_TOKEN ? GLOBAL_RADIUS_BASE_MIN : HERO_INNER_RADIUS_MIN,
+        key === GLOBAL_RADIUS_BASE_TOKEN ? GLOBAL_RADIUS_BASE_MAX : HERO_INNER_RADIUS_MAX,
+      );
+      if (!value.ok) return value;
+      normalized[key] = value.value;
+      continue;
+    }
     if (key === MEDIA_TEXT_DESKTOP_IMAGE_HEIGHT_TOKEN) {
       const value = normalizeDesktopImageHeightToken(rawValue, `${path}.${key}`);
       if (!value.ok) return value;
@@ -810,6 +865,7 @@ function normalizeStyleTokens(
       key === RICH_TEXT_TEXT_COLOR_TOKEN
       || key === RICH_TEXT_SURFACE_TOKEN
       || key === RICH_TEXT_BORDER_COLOR_TOKEN
+      || key === RICH_TEXT_ACCENT_BAR_COLOR_TOKEN
     ) {
       if (typeof rawValue !== 'string') {
         return { ok: false, error: `${path}.${key} must be a string` };
@@ -867,6 +923,7 @@ function normalizeStyleTokens(
     if (
       key === TESTIMONIALS_QUOTE_COLOR_TOKEN
       || key === TESTIMONIALS_META_COLOR_TOKEN
+      || key === TESTIMONIALS_CARD_BG_TOKEN
     ) {
       if (typeof rawValue !== 'string') {
         return { ok: false, error: `${path}.${key} must be a string` };
@@ -976,6 +1033,7 @@ function normalizeStyleTokens(
       key === NAV_BG_TOKEN
       || key === NAV_TEXT_COLOR_TOKEN
       || key === NAV_BRAND_COLOR_TOKEN
+      || key === NAV_BORDER_COLOR_TOKEN
     ) {
       if (typeof rawValue !== 'string') {
         return { ok: false, error: `${path}.${key} must be a string` };
@@ -996,6 +1054,17 @@ function normalizeStyleTokens(
         `${path}.${key}`,
         NAV_TEXT_SIZE_MIN,
         NAV_TEXT_SIZE_MAX,
+      );
+      if (!value.ok) return value;
+      normalized[key] = value.value;
+      continue;
+    }
+    if (key === NAV_BORDER_WIDTH_TOKEN) {
+      const value = normalizePixelLengthToken(
+        rawValue,
+        `${path}.${key}`,
+        NAV_BORDER_WIDTH_MIN,
+        NAV_BORDER_WIDTH_MAX,
       );
       if (!value.ok) return value;
       normalized[key] = value.value;
@@ -1053,6 +1122,27 @@ function normalizeNavigationStyleTokens(
       return {
         ok: false,
         error: `${path}.${key} is not an allowed navigation token`,
+      };
+    }
+  }
+
+  return normalized;
+}
+
+function normalizeGlobalThemeStyleTokens(
+  input: unknown,
+  path: string,
+): ParseResult<Record<string, string> | undefined> {
+  const normalized = normalizeStyleTokens(input, path);
+  if (!normalized.ok || !normalized.value) {
+    return normalized;
+  }
+
+  for (const key of Object.keys(normalized.value)) {
+    if (!GLOBAL_THEME_STYLE_TOKEN_KEYS.has(key)) {
+      return {
+        ok: false,
+        error: `${path}.${key} is not an allowed global style token`,
       };
     }
   }
@@ -1252,6 +1342,65 @@ function normalizeUrl(
   }
 }
 
+function isSupportedGoogleMapHost(hostname: string): boolean {
+  const normalizedHost = hostname.toLowerCase();
+  if (MAP_GOOGLE_HOSTS.has(normalizedHost)) {
+    return true;
+  }
+  return normalizedHost.startsWith('maps.google.');
+}
+
+function normalizeGoogleMapEmbedUrl(rawUrl: string): string | null {
+  try {
+    const parsed = new URL(rawUrl);
+    if (!isSupportedGoogleMapHost(parsed.hostname)) {
+      return null;
+    }
+
+    if (parsed.pathname.includes('/maps/embed')) {
+      return parsed.toString();
+    }
+
+    if (parsed.searchParams.get('output') === 'embed') {
+      return parsed.toString();
+    }
+
+    const queryValue = parsed.searchParams.get('q')
+      || parsed.searchParams.get('query')
+      || parsed.searchParams.get('destination');
+    if (queryValue) {
+      return `https://www.google.com/maps?q=${encodeURIComponent(queryValue)}&output=embed`;
+    }
+
+    const placeMatch = parsed.pathname.match(/\/(?:maps\/)?place\/([^/]+)/i);
+    if (placeMatch?.[1]) {
+      const placeValue = decodeURIComponent(placeMatch[1]).replace(/\+/g, ' ').trim();
+      if (placeValue) {
+        return `https://www.google.com/maps?q=${encodeURIComponent(placeValue)}&output=embed`;
+      }
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function normalizeOpenStreetMapEmbedUrl(rawUrl: string): string | null {
+  try {
+    const parsed = new URL(rawUrl);
+    if (!MAP_OSM_HOSTS.has(parsed.hostname.toLowerCase())) {
+      return null;
+    }
+    if (!parsed.pathname.startsWith('/export/embed.html')) {
+      return null;
+    }
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
 function normalizeMapEmbedUrl(value: unknown, path: string): ParseResult<string> {
   const normalized = normalizeUrl(
     value,
@@ -1265,7 +1414,16 @@ function normalizeMapEmbedUrl(value: unknown, path: string): ParseResult<string>
   if (/[\s<>"'`]/.test(url)) {
     return { ok: false, error: `${path} contains unsafe characters` };
   }
-  return { ok: true, value: url };
+
+  const embedUrl = normalizeGoogleMapEmbedUrl(url)
+    || normalizeOpenStreetMapEmbedUrl(url)
+    || null;
+
+  if (!embedUrl) {
+    return { ok: false, error: MAP_PROVIDER_EMBED_ERROR };
+  }
+
+  return { ok: true, value: embedUrl };
 }
 
 function normalizeHeroData(input: unknown): ParseResult<AnyRecord> {
@@ -2575,6 +2733,13 @@ export function normalizeVendorSiteConfigInput(
     }
 
     const themeData: AnyRecord = {};
+    const globalStyleTokens = normalizeGlobalThemeStyleTokens(
+      root.value.theme.globalStyleTokens,
+      'siteConfig.theme.globalStyleTokens',
+    );
+    if (!globalStyleTokens.ok) {
+      return globalStyleTokens;
+    }
     const componentsRaw = root.value.theme.components;
     if (componentsRaw !== undefined && componentsRaw !== null) {
       if (!isRecord(componentsRaw)) {
@@ -2607,6 +2772,10 @@ export function normalizeVendorSiteConfigInput(
 
     if (footer.value) {
       themeData.footer = footer.value;
+    }
+
+    if (globalStyleTokens.value && Object.keys(globalStyleTokens.value).length > 0) {
+      themeData.globalStyleTokens = globalStyleTokens.value;
     }
 
     theme = themeData;

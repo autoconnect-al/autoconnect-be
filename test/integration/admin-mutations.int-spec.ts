@@ -405,10 +405,16 @@ describe('Integration: admin mutations', () => {
     const siteConfig = {
       version: 1,
       theme: {
+        globalStyleTokens: {
+          '--builder-bg': '#0f172a',
+          '--builder-surface': '#111827',
+          '--builder-radius-base': '20px',
+        },
         components: {
           hero: {
             '--builder-bg': '#ffffff',
             '--builder-accent': '#f5351f',
+            '--builder-hero-inner-radius': '18px',
           },
           mediaText: {
             '--builder-media-image-height-desktop': '340px',
@@ -420,12 +426,14 @@ describe('Integration: admin mutations', () => {
             '--builder-richtext-text-weight': '600',
             '--builder-richtext-text-decoration': 'underline',
             '--builder-richtext-surface': 'transparent',
+            '--builder-richtext-accent-bar-color': '#818cf8',
             '--builder-richtext-border-color': '#cbd5e1',
             '--builder-richtext-border-width': '0px',
             '--builder-richtext-padding': '24px 20px',
             '--builder-richtext-margin': '0 0 28px',
           },
           testimonials: {
+            '--builder-testimonials-card-bg': '#ede9fe',
             '--builder-testimonials-quote-color': '#0f172a',
             '--builder-testimonials-quote-size': '20px',
             '--builder-testimonials-quote-weight': '700',
@@ -475,6 +483,8 @@ describe('Integration: admin mutations', () => {
           },
           styleTokens: {
             '--builder-nav-bg': '#0f172a',
+            '--builder-nav-border-color': '#334155',
+            '--builder-nav-border-width': '2px',
             '--builder-nav-text-color': '#e2e8f0',
             '--builder-nav-text-size': '17px',
             '--builder-nav-text-weight': '600',
@@ -722,6 +732,11 @@ describe('Integration: admin mutations', () => {
           siteConfig: expect.objectContaining({
             version: 1,
             theme: expect.objectContaining({
+              globalStyleTokens: expect.objectContaining({
+                '--builder-bg': '#0f172a',
+                '--builder-surface': '#111827',
+                '--builder-radius-base': '20px',
+              }),
               navigation: expect.objectContaining({
                 variant: 'floating',
                 position: 'bottom',
@@ -735,6 +750,8 @@ describe('Integration: admin mutations', () => {
                 }),
                 styleTokens: expect.objectContaining({
                   '--builder-nav-bg': '#0f172a',
+                  '--builder-nav-border-color': '#334155',
+                  '--builder-nav-border-width': '2px',
                   '--builder-nav-text-size': '17px',
                   '--builder-nav-brand-size': '20px',
                 }),
@@ -993,6 +1010,53 @@ describe('Integration: admin mutations', () => {
         url: 'https://cdn.example.invalid/legacy-2.jpg',
       },
     ]);
+  });
+
+  it('POST /admin/vendor/site-config normalizes Google map share URLs to embed URLs', async () => {
+    await seedAdminIdentity();
+    const adminToken = await issueAdminToken();
+
+    const siteConfig = {
+      version: 1,
+      pages: {
+        home: { sections: [] },
+        about: { sections: [] },
+        contact: {
+          sections: [
+            {
+              id: 'contact-map',
+              type: 'map',
+              data: {
+                embedUrl: 'https://www.google.com/maps/place/Tirana,+Albania',
+              },
+            },
+          ],
+        },
+      },
+    };
+
+    await request(app.getHttpServer())
+      .post('/admin/vendor/site-config')
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({
+        vendor: {
+          siteConfig,
+        },
+      })
+      .expect(200);
+
+    const getUserResponse = await request(app.getHttpServer())
+      .get('/admin/user')
+      .set('authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    const persistedContactSections = getUserResponse.body?.result?.vendor?.siteConfig?.pages?.contact?.sections ?? [];
+    const persistedMap = persistedContactSections.find(
+      (section: unknown) => (section as { type?: string })?.type === 'map',
+    ) as { data?: { embedUrl?: string } } | undefined;
+
+    expect(persistedMap?.data?.embedUrl).toContain('https://www.google.com/maps?q=');
+    expect(persistedMap?.data?.embedUrl).toContain('&output=embed');
   });
 
   it('POST /admin/vendor/site-config returns validation errors for invalid payloads', async () => {
@@ -1654,6 +1718,41 @@ describe('Integration: admin mutations', () => {
           },
         },
         expectedMessage: 'protocol is not allowed',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: { sections: [] },
+            about: { sections: [] },
+            contact: {
+              sections: [
+                {
+                  id: 'map-unsupported-provider',
+                  type: 'map',
+                  data: { embedUrl: 'https://example.com/maps/embed?id=1' },
+                },
+              ],
+            },
+          },
+        },
+        expectedMessage: 'embeddable Google Maps or OpenStreetMap URL',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          theme: {
+            globalStyleTokens: {
+              '--builder-nav-bg': '#ffffff',
+            },
+          },
+          pages: {
+            home: { sections: [] },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'not an allowed global style token',
       },
       {
         siteConfig: {
