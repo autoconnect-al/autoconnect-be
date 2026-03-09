@@ -149,8 +149,8 @@ const MEDIA_TEXT_IMAGE_WIDTH_DESKTOP_PERCENT_MAX = 80;
 const MEDIA_TEXT_DEFAULT_DESKTOP_FROM_BREAKPOINT = 'md';
 const MEDIA_TEXT_DESKTOP_IMAGE_HEIGHT_TOKEN = '--builder-media-image-height-desktop';
 const MEDIA_TEXT_DESKTOP_TEXT_ALIGN_TOKEN = '--builder-media-text-align-desktop';
-const RICH_TEXT_TEXT_SIZE_MIN = 12;
-const RICH_TEXT_TEXT_SIZE_MAX = 48;
+const RICH_TEXT_TEXT_SIZE_MIN = 8;
+const RICH_TEXT_TEXT_SIZE_MAX = 240;
 const RICH_TEXT_BORDER_WIDTH_MIN = 0;
 const RICH_TEXT_BORDER_WIDTH_MAX = 8;
 const RICH_TEXT_SPACING_MIN = 0;
@@ -164,8 +164,8 @@ const RICH_TEXT_BORDER_COLOR_TOKEN = '--builder-richtext-border-color';
 const RICH_TEXT_BORDER_WIDTH_TOKEN = '--builder-richtext-border-width';
 const RICH_TEXT_PADDING_TOKEN = '--builder-richtext-padding';
 const RICH_TEXT_MARGIN_TOKEN = '--builder-richtext-margin';
-const TESTIMONIALS_TEXT_SIZE_MIN = 12;
-const TESTIMONIALS_TEXT_SIZE_MAX = 48;
+const TESTIMONIALS_TEXT_SIZE_MIN = 8;
+const TESTIMONIALS_TEXT_SIZE_MAX = 240;
 const TESTIMONIALS_GRID_MAX_ITEMS = 9;
 const TESTIMONIALS_QUOTE_COLOR_TOKEN = '--builder-testimonials-quote-color';
 const TESTIMONIALS_QUOTE_SIZE_TOKEN = '--builder-testimonials-quote-size';
@@ -216,6 +216,9 @@ const NAV_BRAND_STYLE_TOKEN = '--builder-nav-brand-style';
 const NAV_BRAND_DECORATION_TOKEN = '--builder-nav-brand-decoration';
 const IMAGE_CAROUSEL_VARIANTS = new Set(['plain', 'overlay', 'split']);
 const IMAGE_CAROUSEL_SPLIT_IMAGE_POSITIONS = new Set(['left', 'right']);
+const IMAGE_CAROUSEL_TEXT_POSITIONS_X = new Set(['left', 'center', 'right']);
+const IMAGE_CAROUSEL_TEXT_POSITIONS_Y = new Set(['top', 'center', 'bottom']);
+const IMAGE_CAROUSEL_TEXT_ALIGNS = new Set(['left', 'center', 'right']);
 const IMAGE_CAROUSEL_MAX_ITEMS = 20;
 const IMAGE_CAROUSEL_OVERLAY_DEFAULT_COLOR = '#000000';
 const IMAGE_CAROUSEL_OVERLAY_DEFAULT_OPACITY = 0.35;
@@ -224,6 +227,12 @@ const SECTION_LAYOUT_HEIGHT_MIN = 120;
 const SECTION_LAYOUT_HEIGHT_MAX = 1600;
 const SECTION_LAYOUT_MARGIN_MIN = 0;
 const SECTION_LAYOUT_MARGIN_MAX = 240;
+const SECTION_LAYOUT_BORDER_WIDTH_MIN = 0;
+const SECTION_LAYOUT_BORDER_WIDTH_MAX = 24;
+const SECTION_LAYOUT_BORDER_RADIUS_MIN = 0;
+const SECTION_LAYOUT_BORDER_RADIUS_MAX = 300;
+const IMAGE_CAROUSEL_TEXT_SIZE_MIN = 8;
+const IMAGE_CAROUSEL_TEXT_SIZE_MAX = 240;
 
 type ParseResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -328,6 +337,48 @@ function normalizeImageCarouselSplitImagePosition(
     return { ok: false, error: `${path} must be one of left or right` };
   }
   return { ok: true, value: normalized as 'left' | 'right' };
+}
+
+function normalizeImageCarouselTextPositionX(
+  value: unknown,
+  path: string,
+): ParseResult<'left' | 'center' | 'right'> {
+  if (typeof value !== 'string') {
+    return { ok: false, error: `${path} must be a string` };
+  }
+  const normalized = value.trim().toLowerCase();
+  if (!IMAGE_CAROUSEL_TEXT_POSITIONS_X.has(normalized)) {
+    return { ok: false, error: `${path} must be one of left, center or right` };
+  }
+  return { ok: true, value: normalized as 'left' | 'center' | 'right' };
+}
+
+function normalizeImageCarouselTextPositionY(
+  value: unknown,
+  path: string,
+): ParseResult<'top' | 'center' | 'bottom'> {
+  if (typeof value !== 'string') {
+    return { ok: false, error: `${path} must be a string` };
+  }
+  const normalized = value.trim().toLowerCase();
+  if (!IMAGE_CAROUSEL_TEXT_POSITIONS_Y.has(normalized)) {
+    return { ok: false, error: `${path} must be one of top, center or bottom` };
+  }
+  return { ok: true, value: normalized as 'top' | 'center' | 'bottom' };
+}
+
+function normalizeImageCarouselTextAlign(
+  value: unknown,
+  path: string,
+): ParseResult<'left' | 'center' | 'right'> {
+  if (typeof value !== 'string') {
+    return { ok: false, error: `${path} must be a string` };
+  }
+  const normalized = value.trim().toLowerCase();
+  if (!IMAGE_CAROUSEL_TEXT_ALIGNS.has(normalized)) {
+    return { ok: false, error: `${path} must be one of left, center or right` };
+  }
+  return { ok: true, value: normalized as 'left' | 'center' | 'right' };
 }
 
 function normalizeSectionLayoutWrapper(
@@ -1736,6 +1787,75 @@ function normalizeImageCarouselSlide(
   }
 
   if (variant.value === 'overlay') {
+    const textPositionX =
+      input.textPositionX === undefined || input.textPositionX === null
+        ? ({ ok: true, value: 'center' } as ParseResult<'left' | 'center' | 'right'>)
+        : normalizeImageCarouselTextPositionX(
+            input.textPositionX,
+            `imageCarousel.data.slides[${index}].textPositionX`,
+          );
+    if (!textPositionX.ok) return textPositionX;
+
+    const textPositionY =
+      input.textPositionY === undefined || input.textPositionY === null
+        ? ({ ok: true, value: 'center' } as ParseResult<'top' | 'center' | 'bottom'>)
+        : normalizeImageCarouselTextPositionY(
+            input.textPositionY,
+            `imageCarousel.data.slides[${index}].textPositionY`,
+          );
+    if (!textPositionY.ok) return textPositionY;
+
+    const textAlign =
+      input.textAlign === undefined || input.textAlign === null
+        ? ({ ok: true, value: 'center' } as ParseResult<'left' | 'center' | 'right'>)
+        : normalizeImageCarouselTextAlign(
+            input.textAlign,
+            `imageCarousel.data.slides[${index}].textAlign`,
+          );
+    if (!textAlign.ok) return textAlign;
+
+    if (input.titleSizePx !== undefined && input.titleSizePx !== null) {
+      const titleSizePx = normalizeNumber(
+        input.titleSizePx,
+        `imageCarousel.data.slides[${index}].titleSizePx`,
+      );
+      if (!titleSizePx.ok) return titleSizePx;
+      if (
+        !Number.isInteger(titleSizePx.value)
+        || titleSizePx.value < IMAGE_CAROUSEL_TEXT_SIZE_MIN
+        || titleSizePx.value > IMAGE_CAROUSEL_TEXT_SIZE_MAX
+      ) {
+        return {
+          ok: false,
+          error: `imageCarousel.data.slides[${index}].titleSizePx must be an integer between ${IMAGE_CAROUSEL_TEXT_SIZE_MIN} and ${IMAGE_CAROUSEL_TEXT_SIZE_MAX}`,
+        };
+      }
+      normalized.titleSizePx = titleSizePx.value;
+    }
+
+    if (input.descriptionSizePx !== undefined && input.descriptionSizePx !== null) {
+      const descriptionSizePx = normalizeNumber(
+        input.descriptionSizePx,
+        `imageCarousel.data.slides[${index}].descriptionSizePx`,
+      );
+      if (!descriptionSizePx.ok) return descriptionSizePx;
+      if (
+        !Number.isInteger(descriptionSizePx.value)
+        || descriptionSizePx.value < IMAGE_CAROUSEL_TEXT_SIZE_MIN
+        || descriptionSizePx.value > IMAGE_CAROUSEL_TEXT_SIZE_MAX
+      ) {
+        return {
+          ok: false,
+          error: `imageCarousel.data.slides[${index}].descriptionSizePx must be an integer between ${IMAGE_CAROUSEL_TEXT_SIZE_MIN} and ${IMAGE_CAROUSEL_TEXT_SIZE_MAX}`,
+        };
+      }
+      normalized.descriptionSizePx = descriptionSizePx.value;
+    }
+
+    normalized.textPositionX = textPositionX.value;
+    normalized.textPositionY = textPositionY.value;
+    normalized.textAlign = textAlign.value;
+
     const overlay = normalizeImageCarouselOverlay(
       input.overlay,
       `imageCarousel.data.slides[${index}].overlay`,
@@ -1754,6 +1874,65 @@ function normalizeImageCarouselSlide(
   );
   if (!imagePosition.ok) return imagePosition;
   normalized.imagePosition = imagePosition.value;
+
+  const textPositionY =
+    input.textPositionY === undefined || input.textPositionY === null
+      ? ({ ok: true, value: 'center' } as ParseResult<'top' | 'center' | 'bottom'>)
+      : normalizeImageCarouselTextPositionY(
+          input.textPositionY,
+          `imageCarousel.data.slides[${index}].textPositionY`,
+        );
+  if (!textPositionY.ok) return textPositionY;
+
+  const textAlign =
+    input.textAlign === undefined || input.textAlign === null
+      ? ({ ok: true, value: 'left' } as ParseResult<'left' | 'center' | 'right'>)
+      : normalizeImageCarouselTextAlign(
+          input.textAlign,
+          `imageCarousel.data.slides[${index}].textAlign`,
+        );
+  if (!textAlign.ok) return textAlign;
+
+  if (input.titleSizePx !== undefined && input.titleSizePx !== null) {
+    const titleSizePx = normalizeNumber(
+      input.titleSizePx,
+      `imageCarousel.data.slides[${index}].titleSizePx`,
+    );
+    if (!titleSizePx.ok) return titleSizePx;
+    if (
+      !Number.isInteger(titleSizePx.value)
+      || titleSizePx.value < IMAGE_CAROUSEL_TEXT_SIZE_MIN
+      || titleSizePx.value > IMAGE_CAROUSEL_TEXT_SIZE_MAX
+    ) {
+      return {
+        ok: false,
+        error: `imageCarousel.data.slides[${index}].titleSizePx must be an integer between ${IMAGE_CAROUSEL_TEXT_SIZE_MIN} and ${IMAGE_CAROUSEL_TEXT_SIZE_MAX}`,
+      };
+    }
+    normalized.titleSizePx = titleSizePx.value;
+  }
+
+  if (input.descriptionSizePx !== undefined && input.descriptionSizePx !== null) {
+    const descriptionSizePx = normalizeNumber(
+      input.descriptionSizePx,
+      `imageCarousel.data.slides[${index}].descriptionSizePx`,
+    );
+    if (!descriptionSizePx.ok) return descriptionSizePx;
+    if (
+      !Number.isInteger(descriptionSizePx.value)
+      || descriptionSizePx.value < IMAGE_CAROUSEL_TEXT_SIZE_MIN
+      || descriptionSizePx.value > IMAGE_CAROUSEL_TEXT_SIZE_MAX
+    ) {
+      return {
+        ok: false,
+        error: `imageCarousel.data.slides[${index}].descriptionSizePx must be an integer between ${IMAGE_CAROUSEL_TEXT_SIZE_MIN} and ${IMAGE_CAROUSEL_TEXT_SIZE_MAX}`,
+      };
+    }
+    normalized.descriptionSizePx = descriptionSizePx.value;
+  }
+
+  normalized.textPositionY = textPositionY.value;
+  normalized.textAlign = textAlign.value;
 
   return { ok: true, value: normalized };
 }
@@ -2035,6 +2214,44 @@ function normalizeFooterData(input: unknown): ParseResult<AnyRecord> {
   };
 }
 
+function normalizeThemeFooter(
+  input: unknown,
+  path: string,
+): ParseResult<AnyRecord | undefined> {
+  if (input === undefined || input === null) {
+    return { ok: true, value: undefined };
+  }
+  if (!isRecord(input)) {
+    return { ok: false, error: `${path} must be an object` };
+  }
+
+  const allowedKeys = new Set(['data', 'styleTokens', 'layout']);
+  for (const key of Object.keys(input)) {
+    if (!allowedKeys.has(key)) {
+      return { ok: false, error: `${path}.${key} is not supported` };
+    }
+  }
+
+  const data = normalizeFooterData(input.data);
+  if (!data.ok) {
+    return { ok: false, error: data.error };
+  }
+
+  const styleTokens = normalizeStyleTokens(input.styleTokens, `${path}.styleTokens`);
+  if (!styleTokens.ok) return styleTokens;
+  const layout = normalizeSectionLayout(input.layout, `${path}.layout`);
+  if (!layout.ok) return layout;
+
+  return {
+    ok: true,
+    value: {
+      data: data.value,
+      ...(styleTokens.value ? { styleTokens: styleTokens.value } : {}),
+      ...(layout.value ? { layout: layout.value } : {}),
+    },
+  };
+}
+
 function normalizeSectionLayout(
   input: unknown,
   path: string,
@@ -2052,6 +2269,9 @@ function normalizeSectionLayout(
     'heightPx',
     'marginTopPx',
     'marginBottomPx',
+    'borderWidthPx',
+    'borderRadiusPx',
+    'borderColor',
   ]);
   for (const key of Object.keys(input)) {
     if (!allowedKeys.has(key)) {
@@ -2109,6 +2329,61 @@ function normalizeSectionLayout(
     marginBottomPx = normalizedMarginBottom.value;
   }
 
+  let borderWidthPx: number | undefined;
+  if (input.borderWidthPx !== undefined && input.borderWidthPx !== null) {
+    const normalizedBorderWidth = normalizeNumber(
+      input.borderWidthPx,
+      `${path}.borderWidthPx`,
+    );
+    if (!normalizedBorderWidth.ok) return normalizedBorderWidth;
+    if (
+      !Number.isInteger(normalizedBorderWidth.value)
+      || normalizedBorderWidth.value < SECTION_LAYOUT_BORDER_WIDTH_MIN
+      || normalizedBorderWidth.value > SECTION_LAYOUT_BORDER_WIDTH_MAX
+    ) {
+      return {
+        ok: false,
+        error: `${path}.borderWidthPx must be an integer between ${SECTION_LAYOUT_BORDER_WIDTH_MIN} and ${SECTION_LAYOUT_BORDER_WIDTH_MAX}`,
+      };
+    }
+    borderWidthPx = normalizedBorderWidth.value;
+  }
+
+  let borderRadiusPx: number | undefined;
+  if (input.borderRadiusPx !== undefined && input.borderRadiusPx !== null) {
+    const normalizedBorderRadius = normalizeNumber(
+      input.borderRadiusPx,
+      `${path}.borderRadiusPx`,
+    );
+    if (!normalizedBorderRadius.ok) return normalizedBorderRadius;
+    if (
+      !Number.isInteger(normalizedBorderRadius.value)
+      || normalizedBorderRadius.value < SECTION_LAYOUT_BORDER_RADIUS_MIN
+      || normalizedBorderRadius.value > SECTION_LAYOUT_BORDER_RADIUS_MAX
+    ) {
+      return {
+        ok: false,
+        error: `${path}.borderRadiusPx must be an integer between ${SECTION_LAYOUT_BORDER_RADIUS_MIN} and ${SECTION_LAYOUT_BORDER_RADIUS_MAX}`,
+      };
+    }
+    borderRadiusPx = normalizedBorderRadius.value;
+  }
+
+  let borderColor: string | undefined;
+  if (input.borderColor !== undefined && input.borderColor !== null) {
+    if (typeof input.borderColor !== 'string') {
+      return { ok: false, error: `${path}.borderColor must be a string` };
+    }
+    const normalizedBorderColor = input.borderColor.trim();
+    if (!normalizedBorderColor) {
+      return { ok: false, error: `${path}.borderColor must not be empty` };
+    }
+    if (!isSafeColorValue(normalizedBorderColor)) {
+      return { ok: false, error: `${path}.borderColor is invalid` };
+    }
+    borderColor = normalizedBorderColor;
+  }
+
   if (minHeightPx !== undefined && heightPx !== undefined && heightPx < minHeightPx) {
     return {
       ok: false,
@@ -2122,6 +2397,9 @@ function normalizeSectionLayout(
     ...(heightPx !== undefined ? { heightPx } : {}),
     ...(marginTopPx !== undefined ? { marginTopPx } : {}),
     ...(marginBottomPx !== undefined ? { marginBottomPx } : {}),
+    ...(borderWidthPx !== undefined ? { borderWidthPx } : {}),
+    ...(borderRadiusPx !== undefined ? { borderRadiusPx } : {}),
+    ...(borderColor ? { borderColor } : {}),
   };
 
   return Object.keys(layout).length > 0
@@ -2288,6 +2566,13 @@ export function normalizeVendorSiteConfigInput(
     if (!navigation.ok) {
       return navigation;
     }
+    const footer = normalizeThemeFooter(
+      root.value.theme.footer,
+      'siteConfig.theme.footer',
+    );
+    if (!footer.ok) {
+      return footer;
+    }
 
     const themeData: AnyRecord = {};
     const componentsRaw = root.value.theme.components;
@@ -2318,6 +2603,10 @@ export function normalizeVendorSiteConfigInput(
 
     if (navigation.value) {
       themeData.navigation = navigation.value;
+    }
+
+    if (footer.value) {
+      themeData.footer = footer.value;
     }
 
     theme = themeData;

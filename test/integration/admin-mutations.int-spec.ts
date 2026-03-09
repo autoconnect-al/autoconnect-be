@@ -483,6 +483,38 @@ describe('Integration: admin mutations', () => {
             '--builder-nav-brand-size': '20px',
           },
         },
+        footer: {
+          data: {
+            brandTitle: 'AutoConnect',
+            brandDescription: 'Trusted inventory and direct vendor support.',
+            copyright: 'AutoConnect. All rights reserved.',
+            linkGroups: [
+              {
+                title: 'Explore',
+                links: [
+                  { label: 'Home', url: '/sq-al' },
+                  { label: 'Vehicles', url: '/sq-al/automjete' },
+                ],
+              },
+            ],
+            socialLinks: [
+              { platform: 'Facebook', url: 'https://www.facebook.com/autoconnect' },
+            ],
+          },
+          styleTokens: {
+            '--builder-footer-brand-size': '22px',
+            '--builder-footer-link-weight': '500',
+            '--builder-footer-copyright-color': '#94a3b8',
+          },
+          layout: {
+            wrapper: 'sectionContent',
+            marginTopPx: 14,
+            marginBottomPx: 10,
+            borderWidthPx: 1,
+            borderRadiusPx: 20,
+            borderColor: '#1f2937',
+          },
+        },
       },
       pages: {
         home: {
@@ -495,6 +527,9 @@ describe('Integration: admin mutations', () => {
                 minHeightPx: 320,
                 marginTopPx: 16,
                 marginBottomPx: 28,
+                borderWidthPx: 2,
+                borderRadiusPx: 24,
+                borderColor: '#334155',
               },
               data: {
                 heading: 'Welcome to Auto Connect',
@@ -524,6 +559,9 @@ describe('Integration: admin mutations', () => {
                 minHeightPx: 260,
                 heightPx: 500,
                 marginBottomPx: 12,
+                borderWidthPx: 1,
+                borderRadiusPx: 12,
+                borderColor: '#475569',
               },
               data: {
                 title: 'Trusted inventory',
@@ -578,6 +616,11 @@ describe('Integration: admin mutations', () => {
                     imageUrl: 'https://cdn.example.invalid/slide-overlay.jpg',
                     title: 'Overlay headline',
                     description: 'Overlay description',
+                    textPositionX: 'left',
+                    textPositionY: 'bottom',
+                    textAlign: 'left',
+                    titleSizePx: 32,
+                    descriptionSizePx: 18,
                     cta: {
                       label: 'Browse vehicles',
                       url: '/sq-al/vehicles',
@@ -589,6 +632,10 @@ describe('Integration: admin mutations', () => {
                     title: 'Split headline',
                     description: 'Split description',
                     imagePosition: 'right',
+                    textPositionY: 'top',
+                    textAlign: 'right',
+                    titleSizePx: 28,
+                    descriptionSizePx: 16,
                     cta: {
                       label: 'About vendor',
                       url: '/sq-al/about',
@@ -699,6 +746,24 @@ describe('Integration: admin mutations', () => {
                   '--builder-footer-copyright-color': '#94a3b8',
                 }),
               }),
+              footer: expect.objectContaining({
+                data: expect.objectContaining({
+                  brandTitle: 'AutoConnect',
+                }),
+                styleTokens: expect.objectContaining({
+                  '--builder-footer-brand-size': '22px',
+                  '--builder-footer-link-weight': '500',
+                  '--builder-footer-copyright-color': '#94a3b8',
+                }),
+                layout: expect.objectContaining({
+                  wrapper: 'sectionContent',
+                  marginTopPx: 14,
+                  marginBottomPx: 10,
+                  borderWidthPx: 1,
+                  borderRadiusPx: 20,
+                  borderColor: '#1f2937',
+                }),
+              }),
             }),
             pages: expect.objectContaining({
               home: expect.objectContaining({
@@ -710,6 +775,9 @@ describe('Integration: admin mutations', () => {
                       minHeightPx: 320,
                       marginTopPx: 16,
                       marginBottomPx: 28,
+                      borderWidthPx: 2,
+                      borderRadiusPx: 24,
+                      borderColor: '#334155',
                     }),
                     data: expect.objectContaining({
                       variant: 'fullWidth',
@@ -730,6 +798,9 @@ describe('Integration: admin mutations', () => {
                       minHeightPx: 260,
                       heightPx: 500,
                       marginBottomPx: 12,
+                      borderWidthPx: 1,
+                      borderRadiusPx: 12,
+                      borderColor: '#475569',
                     }),
                     data: expect.objectContaining({
                       mediaPosition: 'right',
@@ -773,11 +844,20 @@ describe('Integration: admin mutations', () => {
                           variant: 'overlay',
                           imageUrl: 'https://cdn.example.invalid/slide-overlay.jpg',
                           title: 'Overlay headline',
+                          textPositionX: 'left',
+                          textPositionY: 'bottom',
+                          textAlign: 'left',
+                          titleSizePx: 32,
+                          descriptionSizePx: 18,
                         }),
                         expect.objectContaining({
                           variant: 'split',
                           imageUrl: 'https://cdn.example.invalid/slide-split.jpg',
                           imagePosition: 'right',
+                          textPositionY: 'top',
+                          textAlign: 'right',
+                          titleSizePx: 28,
+                          descriptionSizePx: 16,
                         }),
                       ]),
                     }),
@@ -833,6 +913,11 @@ describe('Integration: admin mutations', () => {
     expect(persistedCarousel?.data?.slides).toHaveLength(3);
     expect(persistedCarousel?.data?.slides?.[1]).toMatchObject({
       variant: 'overlay',
+      textPositionX: 'left',
+      textPositionY: 'bottom',
+      textAlign: 'left',
+      titleSizePx: 32,
+      descriptionSizePx: 18,
       overlay: {
         color: '#000000',
         opacity: 0.35,
@@ -841,6 +926,10 @@ describe('Integration: admin mutations', () => {
     expect(persistedCarousel?.data?.slides?.[2]).toMatchObject({
       variant: 'split',
       imagePosition: 'right',
+      textPositionY: 'top',
+      textAlign: 'right',
+      titleSizePx: 28,
+      descriptionSizePx: 16,
     });
   });
 
@@ -1321,6 +1410,54 @@ describe('Integration: admin mutations', () => {
             home: {
               sections: [
                 {
+                  id: 'layout-bad-border-width',
+                  type: 'hero',
+                  data: {
+                    heading: 'Valid heading',
+                  },
+                  layout: {
+                    borderWidthPx: 30,
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'layout.borderWidthPx must be an integer between 0 and 24',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'layout-bad-border-color',
+                  type: 'hero',
+                  data: {
+                    heading: 'Valid heading',
+                  },
+                  layout: {
+                    borderColor: 'javascript:alert(1)',
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'layout.borderColor is invalid',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
                   id: 'carousel-bad-variant',
                   type: 'imageCarousel',
                   data: {
@@ -1368,6 +1505,65 @@ describe('Integration: admin mutations', () => {
           },
         },
         expectedMessage: 'imagePosition must be one of left or right',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'carousel-bad-text-position-y',
+                  type: 'imageCarousel',
+                  data: {
+                    slides: [
+                      {
+                        variant: 'split',
+                        imageUrl: 'https://cdn.example.invalid/slide.jpg',
+                        title: 'Valid title',
+                        description: 'Valid description',
+                        imagePosition: 'left',
+                        textPositionY: 'middle',
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'textPositionY must be one of top, center or bottom',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'carousel-bad-title-size',
+                  type: 'imageCarousel',
+                  data: {
+                    slides: [
+                      {
+                        variant: 'overlay',
+                        imageUrl: 'https://cdn.example.invalid/slide.jpg',
+                        title: 'Valid title',
+                        description: 'Valid description',
+                        titleSizePx: 500,
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'titleSizePx must be an integer between 8 and 240',
       },
       {
         siteConfig: {
@@ -1547,7 +1743,7 @@ describe('Integration: admin mutations', () => {
                     ],
                   },
                   styleTokens: {
-                    '--builder-testimonials-quote-size': '10px',
+                    '--builder-testimonials-quote-size': '7px',
                   },
                 },
               ],
@@ -1556,7 +1752,7 @@ describe('Integration: admin mutations', () => {
             contact: { sections: [] },
           },
         },
-        expectedMessage: 'must be between 12px and 48px',
+        expectedMessage: 'must be between 8px and 240px',
       },
       {
         siteConfig: {
@@ -1648,7 +1844,7 @@ describe('Integration: admin mutations', () => {
                     paragraphs: ['Valid paragraph'],
                   },
                   styleTokens: {
-                    '--builder-richtext-text-size': '9px',
+                    '--builder-richtext-text-size': '7px',
                   },
                 },
               ],
@@ -1657,7 +1853,7 @@ describe('Integration: admin mutations', () => {
             contact: { sections: [] },
           },
         },
-        expectedMessage: 'must be between 12px and 48px',
+        expectedMessage: 'must be between 8px and 240px',
       },
       {
         siteConfig: {
