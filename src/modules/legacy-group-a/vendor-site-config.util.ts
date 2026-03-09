@@ -144,6 +144,8 @@ const DEFAULT_HERO_IMAGE_POSITION_Y = 'center';
 const DEFAULT_HERO_IMAGE_REPEAT = 'no-repeat';
 const MEDIA_TEXT_IMAGE_HEIGHT_MIN = 80;
 const MEDIA_TEXT_IMAGE_HEIGHT_MAX = 2000;
+const MEDIA_TEXT_IMAGE_WIDTH_DESKTOP_PERCENT_MIN = 20;
+const MEDIA_TEXT_IMAGE_WIDTH_DESKTOP_PERCENT_MAX = 80;
 const MEDIA_TEXT_DEFAULT_DESKTOP_FROM_BREAKPOINT = 'md';
 const MEDIA_TEXT_DESKTOP_IMAGE_HEIGHT_TOKEN = '--builder-media-image-height-desktop';
 const MEDIA_TEXT_DESKTOP_TEXT_ALIGN_TOKEN = '--builder-media-text-align-desktop';
@@ -1401,6 +1403,23 @@ function normalizeMediaTextData(input: unknown): ParseResult<AnyRecord> {
     };
   }
 
+  const imageWidthDesktopPercent =
+    input.imageWidthDesktopPercent === undefined || input.imageWidthDesktopPercent === null
+      ? ({ ok: true, value: undefined } as ParseResult<number | undefined>)
+      : normalizeNumber(input.imageWidthDesktopPercent, 'mediaText.data.imageWidthDesktopPercent');
+  if (!imageWidthDesktopPercent.ok) return imageWidthDesktopPercent;
+  if (
+    imageWidthDesktopPercent.value !== undefined
+    && (!Number.isInteger(imageWidthDesktopPercent.value)
+      || imageWidthDesktopPercent.value < MEDIA_TEXT_IMAGE_WIDTH_DESKTOP_PERCENT_MIN
+      || imageWidthDesktopPercent.value > MEDIA_TEXT_IMAGE_WIDTH_DESKTOP_PERCENT_MAX)
+  ) {
+    return {
+      ok: false,
+      error: `mediaText.data.imageWidthDesktopPercent must be an integer between ${MEDIA_TEXT_IMAGE_WIDTH_DESKTOP_PERCENT_MIN} and ${MEDIA_TEXT_IMAGE_WIDTH_DESKTOP_PERCENT_MAX}`,
+    };
+  }
+
   const desktopFromBreakpoint =
     input.desktopFromBreakpoint === undefined || input.desktopFromBreakpoint === null
       ? ({ ok: true, value: MEDIA_TEXT_DEFAULT_DESKTOP_FROM_BREAKPOINT } as ParseResult<string>)
@@ -1435,6 +1454,7 @@ function normalizeMediaTextData(input: unknown): ParseResult<AnyRecord> {
       ...(legacyDesktopImageHeightPx.value !== undefined ? { imageHeightPx: legacyDesktopImageHeightPx.value } : {}),
       ...(imageHeightMobilePx.value !== undefined ? { imageHeightMobilePx: imageHeightMobilePx.value } : {}),
       ...(imageHeightDesktopPx.value !== undefined ? { imageHeightDesktopPx: imageHeightDesktopPx.value } : {}),
+      ...(imageWidthDesktopPercent.value !== undefined ? { imageWidthDesktopPercent: imageWidthDesktopPercent.value } : {}),
       ...(desktopFromBreakpoint.value ? { desktopFromBreakpoint: desktopFromBreakpoint.value } : {}),
       ...(textAlign.value ? { textAlign: textAlign.value } : {}),
     },

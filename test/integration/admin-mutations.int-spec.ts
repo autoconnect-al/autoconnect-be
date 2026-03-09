@@ -531,6 +531,7 @@ describe('Integration: admin mutations', () => {
                 mediaPosition: 'right',
                 imageHeightMobilePx: 260,
                 imageHeightDesktopPx: 460,
+                imageWidthDesktopPercent: 62,
                 desktopFromBreakpoint: 'lg',
                 textAlign: 'left',
                 mediaUrl: 'https://cdn.example.invalid/media.jpg',
@@ -734,6 +735,7 @@ describe('Integration: admin mutations', () => {
                       mediaPosition: 'right',
                       imageHeightMobilePx: 260,
                       imageHeightDesktopPx: 460,
+                      imageWidthDesktopPercent: 62,
                       desktopFromBreakpoint: 'lg',
                       textAlign: 'left',
                     }),
@@ -1060,6 +1062,29 @@ describe('Integration: admin mutations', () => {
           },
         },
         expectedMessage: 'desktopFromBreakpoint must be one of sm, md, lg or xl',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'media-bad-width',
+                  type: 'mediaText',
+                  data: {
+                    title: 'Valid title',
+                    body: 'Valid body',
+                    imageWidthDesktopPercent: 81,
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'imageWidthDesktopPercent must be an integer between 20 and 80',
       },
       {
         siteConfig: {
