@@ -523,7 +523,7 @@ describe('Integration: legacy-ap admin/tooling surfaces', () => {
       statusCode: '200',
       result: expect.objectContaining({
         field: 'logo',
-        path: expect.stringMatching(/^\/vendor_site\/9610\/\d+-[a-f0-9]{16}\.png$/),
+        path: expect.stringMatching(/^\/media\/vendor_site\/9610\/\d+-[a-f0-9]{16}\.png$/),
       }),
     });
 

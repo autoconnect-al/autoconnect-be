@@ -29,7 +29,12 @@ const THEME_NAVIGATION_MOBILE_MENU_MOTIONS = new Set(['left']);
 const HERO_VARIANTS = new Set(['inset', 'fullWidth']);
 const HERO_CONTENT_ALIGNS = new Set(['left', 'center']);
 const HERO_BACKGROUND_MODES = new Set(['solid', 'gradient', 'image']);
+const HERO_IMAGE_FITS = new Set(['cover', 'contain', 'auto']);
+const HERO_IMAGE_POSITION_X = new Set(['left', 'center', 'right']);
+const HERO_IMAGE_POSITION_Y = new Set(['top', 'center', 'bottom']);
+const HERO_IMAGE_REPEATS = new Set(['no-repeat', 'repeat', 'repeat-x', 'repeat-y']);
 const MEDIA_TEXT_ALIGNS = new Set(['left', 'center']);
+const MEDIA_TEXT_DESKTOP_FROM_BREAKPOINTS = new Set(['sm', 'md', 'lg', 'xl']);
 const TESTIMONIALS_VARIANTS = new Set(['grid', 'carousel']);
 const RICH_TEXT_TEXT_DECORATIONS = new Set([
   'none',
@@ -133,8 +138,13 @@ const MAX_URL_LENGTH = 2048;
 const DEFAULT_HERO_GRADIENT_ANGLE = 135;
 const LEGACY_HERO_OVERLAY_COLOR = '#000000';
 const LEGACY_HERO_OVERLAY_OPACITY = 0.35;
-const MEDIA_TEXT_IMAGE_HEIGHT_MIN = 180;
-const MEDIA_TEXT_IMAGE_HEIGHT_MAX = 900;
+const DEFAULT_HERO_IMAGE_FIT = 'cover';
+const DEFAULT_HERO_IMAGE_POSITION_X = 'center';
+const DEFAULT_HERO_IMAGE_POSITION_Y = 'center';
+const DEFAULT_HERO_IMAGE_REPEAT = 'no-repeat';
+const MEDIA_TEXT_IMAGE_HEIGHT_MIN = 80;
+const MEDIA_TEXT_IMAGE_HEIGHT_MAX = 2000;
+const MEDIA_TEXT_DEFAULT_DESKTOP_FROM_BREAKPOINT = 'md';
 const MEDIA_TEXT_DESKTOP_IMAGE_HEIGHT_TOKEN = '--builder-media-image-height-desktop';
 const MEDIA_TEXT_DESKTOP_TEXT_ALIGN_TOKEN = '--builder-media-text-align-desktop';
 const RICH_TEXT_TEXT_SIZE_MIN = 12;
@@ -510,7 +520,17 @@ function normalizeHeroBackground(
     return { ok: false, error: 'hero.data.background must be an object' };
   }
 
-  const allowedKeys = new Set(['mode', 'solidColor', 'gradient', 'imageUrl', 'overlay']);
+  const allowedKeys = new Set([
+    'mode',
+    'solidColor',
+    'gradient',
+    'imageUrl',
+    'imageFit',
+    'imagePositionX',
+    'imagePositionY',
+    'imageRepeat',
+    'overlay',
+  ]);
   for (const key of Object.keys(input)) {
     if (!allowedKeys.has(key)) {
       return { ok: false, error: `hero.data.background.${key} is not supported` };
@@ -604,6 +624,53 @@ function normalizeHeroBackground(
     'hero.data.background.imageUrl',
   );
   if (!imageUrl.ok) return imageUrl;
+  const imageFit =
+    input.imageFit === undefined || input.imageFit === null
+      ? ({ ok: true, value: DEFAULT_HERO_IMAGE_FIT } as ParseResult<string>)
+      : normalizeString(input.imageFit, 20);
+  if (!imageFit.ok) return { ok: false, error: `hero.data.background.imageFit ${imageFit.error}` };
+  if (!HERO_IMAGE_FITS.has(imageFit.value)) {
+    return {
+      ok: false,
+      error: 'hero.data.background.imageFit must be one of cover, contain or auto',
+    };
+  }
+
+  const imagePositionX =
+    input.imagePositionX === undefined || input.imagePositionX === null
+      ? ({ ok: true, value: DEFAULT_HERO_IMAGE_POSITION_X } as ParseResult<string>)
+      : normalizeString(input.imagePositionX, 20);
+  if (!imagePositionX.ok) return { ok: false, error: `hero.data.background.imagePositionX ${imagePositionX.error}` };
+  if (!HERO_IMAGE_POSITION_X.has(imagePositionX.value)) {
+    return {
+      ok: false,
+      error: 'hero.data.background.imagePositionX must be one of left, center or right',
+    };
+  }
+
+  const imagePositionY =
+    input.imagePositionY === undefined || input.imagePositionY === null
+      ? ({ ok: true, value: DEFAULT_HERO_IMAGE_POSITION_Y } as ParseResult<string>)
+      : normalizeString(input.imagePositionY, 20);
+  if (!imagePositionY.ok) return { ok: false, error: `hero.data.background.imagePositionY ${imagePositionY.error}` };
+  if (!HERO_IMAGE_POSITION_Y.has(imagePositionY.value)) {
+    return {
+      ok: false,
+      error: 'hero.data.background.imagePositionY must be one of top, center or bottom',
+    };
+  }
+
+  const imageRepeat =
+    input.imageRepeat === undefined || input.imageRepeat === null
+      ? ({ ok: true, value: DEFAULT_HERO_IMAGE_REPEAT } as ParseResult<string>)
+      : normalizeString(input.imageRepeat, 20);
+  if (!imageRepeat.ok) return { ok: false, error: `hero.data.background.imageRepeat ${imageRepeat.error}` };
+  if (!HERO_IMAGE_REPEATS.has(imageRepeat.value)) {
+    return {
+      ok: false,
+      error: 'hero.data.background.imageRepeat must be one of no-repeat, repeat, repeat-x or repeat-y',
+    };
+  }
 
   if (input.overlay !== undefined && input.overlay !== null && !isRecord(input.overlay)) {
     return { ok: false, error: 'hero.data.background.overlay must be an object' };
@@ -649,6 +716,10 @@ function normalizeHeroBackground(
     value: {
       mode: 'image',
       imageUrl: imageUrl.value,
+      imageFit: imageFit.value,
+      imagePositionX: imagePositionX.value,
+      imagePositionY: imagePositionY.value,
+      imageRepeat: imageRepeat.value,
       ...(overlay ? { overlay } : {}),
     },
   };
@@ -1160,6 +1231,10 @@ function normalizeHeroData(input: unknown): ParseResult<AnyRecord> {
       ? {
         mode: 'image',
         imageUrl: backgroundImageUrl.value,
+        imageFit: DEFAULT_HERO_IMAGE_FIT,
+        imagePositionX: DEFAULT_HERO_IMAGE_POSITION_X,
+        imagePositionY: DEFAULT_HERO_IMAGE_POSITION_Y,
+        imageRepeat: DEFAULT_HERO_IMAGE_REPEAT,
         overlay: {
           color: LEGACY_HERO_OVERLAY_COLOR,
           opacity: LEGACY_HERO_OVERLAY_OPACITY,
@@ -1230,20 +1305,71 @@ function normalizeMediaTextData(input: unknown): ParseResult<AnyRecord> {
   const mediaAlt = normalizeOptionalString(input.mediaAlt, MAX_SHORT_TEXT_LENGTH);
   if (!mediaAlt.ok) return { ok: false, error: `mediaText.data.mediaAlt ${mediaAlt.error}` };
 
-  const imageHeightPx =
+  const legacyDesktopImageHeightPx =
     input.imageHeightPx === undefined || input.imageHeightPx === null
       ? ({ ok: true, value: undefined } as ParseResult<number | undefined>)
       : normalizeNumber(input.imageHeightPx, 'mediaText.data.imageHeightPx');
-  if (!imageHeightPx.ok) return imageHeightPx;
+  if (!legacyDesktopImageHeightPx.ok) return legacyDesktopImageHeightPx;
   if (
-    imageHeightPx.value !== undefined
-    && (!Number.isInteger(imageHeightPx.value)
-      || imageHeightPx.value < MEDIA_TEXT_IMAGE_HEIGHT_MIN
-      || imageHeightPx.value > MEDIA_TEXT_IMAGE_HEIGHT_MAX)
+    legacyDesktopImageHeightPx.value !== undefined
+    && (!Number.isInteger(legacyDesktopImageHeightPx.value)
+      || legacyDesktopImageHeightPx.value < MEDIA_TEXT_IMAGE_HEIGHT_MIN
+      || legacyDesktopImageHeightPx.value > MEDIA_TEXT_IMAGE_HEIGHT_MAX)
   ) {
     return {
       ok: false,
       error: `mediaText.data.imageHeightPx must be an integer between ${MEDIA_TEXT_IMAGE_HEIGHT_MIN} and ${MEDIA_TEXT_IMAGE_HEIGHT_MAX}`,
+    };
+  }
+
+  const imageHeightMobilePx =
+    input.imageHeightMobilePx === undefined || input.imageHeightMobilePx === null
+      ? ({ ok: true, value: undefined } as ParseResult<number | undefined>)
+      : normalizeNumber(input.imageHeightMobilePx, 'mediaText.data.imageHeightMobilePx');
+  if (!imageHeightMobilePx.ok) return imageHeightMobilePx;
+  if (
+    imageHeightMobilePx.value !== undefined
+    && (!Number.isInteger(imageHeightMobilePx.value)
+      || imageHeightMobilePx.value < MEDIA_TEXT_IMAGE_HEIGHT_MIN
+      || imageHeightMobilePx.value > MEDIA_TEXT_IMAGE_HEIGHT_MAX)
+  ) {
+    return {
+      ok: false,
+      error: `mediaText.data.imageHeightMobilePx must be an integer between ${MEDIA_TEXT_IMAGE_HEIGHT_MIN} and ${MEDIA_TEXT_IMAGE_HEIGHT_MAX}`,
+    };
+  }
+
+  const imageHeightDesktopPx =
+    input.imageHeightDesktopPx === undefined || input.imageHeightDesktopPx === null
+      ? ({ ok: true, value: legacyDesktopImageHeightPx.value } as ParseResult<number | undefined>)
+      : normalizeNumber(input.imageHeightDesktopPx, 'mediaText.data.imageHeightDesktopPx');
+  if (!imageHeightDesktopPx.ok) return imageHeightDesktopPx;
+  if (
+    imageHeightDesktopPx.value !== undefined
+    && (!Number.isInteger(imageHeightDesktopPx.value)
+      || imageHeightDesktopPx.value < MEDIA_TEXT_IMAGE_HEIGHT_MIN
+      || imageHeightDesktopPx.value > MEDIA_TEXT_IMAGE_HEIGHT_MAX)
+  ) {
+    return {
+      ok: false,
+      error: `mediaText.data.imageHeightDesktopPx must be an integer between ${MEDIA_TEXT_IMAGE_HEIGHT_MIN} and ${MEDIA_TEXT_IMAGE_HEIGHT_MAX}`,
+    };
+  }
+
+  const desktopFromBreakpoint =
+    input.desktopFromBreakpoint === undefined || input.desktopFromBreakpoint === null
+      ? ({ ok: true, value: MEDIA_TEXT_DEFAULT_DESKTOP_FROM_BREAKPOINT } as ParseResult<string>)
+      : normalizeString(input.desktopFromBreakpoint, 20);
+  if (!desktopFromBreakpoint.ok) {
+    return {
+      ok: false,
+      error: `mediaText.data.desktopFromBreakpoint ${desktopFromBreakpoint.error}`,
+    };
+  }
+  if (!MEDIA_TEXT_DESKTOP_FROM_BREAKPOINTS.has(desktopFromBreakpoint.value)) {
+    return {
+      ok: false,
+      error: 'mediaText.data.desktopFromBreakpoint must be one of sm, md, lg or xl',
     };
   }
 
@@ -1261,7 +1387,10 @@ function normalizeMediaTextData(input: unknown): ParseResult<AnyRecord> {
       mediaPosition: mediaPositionValue,
       ...(mediaUrl.value ? { mediaUrl: mediaUrl.value } : {}),
       ...(mediaAlt.value ? { mediaAlt: mediaAlt.value } : {}),
-      ...(imageHeightPx.value !== undefined ? { imageHeightPx: imageHeightPx.value } : {}),
+      ...(legacyDesktopImageHeightPx.value !== undefined ? { imageHeightPx: legacyDesktopImageHeightPx.value } : {}),
+      ...(imageHeightMobilePx.value !== undefined ? { imageHeightMobilePx: imageHeightMobilePx.value } : {}),
+      ...(imageHeightDesktopPx.value !== undefined ? { imageHeightDesktopPx: imageHeightDesktopPx.value } : {}),
+      ...(desktopFromBreakpoint.value ? { desktopFromBreakpoint: desktopFromBreakpoint.value } : {}),
       ...(textAlign.value ? { textAlign: textAlign.value } : {}),
     },
   };

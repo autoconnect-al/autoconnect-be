@@ -500,6 +500,10 @@ describe('Integration: admin mutations', () => {
                 background: {
                   mode: 'image',
                   imageUrl: 'https://cdn.example.invalid/hero-banner.jpg',
+                  imageFit: 'contain',
+                  imagePositionX: 'right',
+                  imagePositionY: 'bottom',
+                  imageRepeat: 'repeat-x',
                   overlay: {
                     color: '#000000',
                     opacity: 0.4,
@@ -521,7 +525,9 @@ describe('Integration: admin mutations', () => {
                 title: 'Trusted inventory',
                 body: 'Preview media styling controls for desktop layout.',
                 mediaPosition: 'right',
-                imageHeightPx: 460,
+                imageHeightMobilePx: 260,
+                imageHeightDesktopPx: 460,
+                desktopFromBreakpoint: 'lg',
                 textAlign: 'left',
                 mediaUrl: 'https://cdn.example.invalid/media.jpg',
               },
@@ -701,6 +707,10 @@ describe('Integration: admin mutations', () => {
                       contentAlign: 'center',
                       background: expect.objectContaining({
                         mode: 'image',
+                        imageFit: 'contain',
+                        imagePositionX: 'right',
+                        imagePositionY: 'bottom',
+                        imageRepeat: 'repeat-x',
                       }),
                     }),
                   }),
@@ -714,7 +724,9 @@ describe('Integration: admin mutations', () => {
                     }),
                     data: expect.objectContaining({
                       mediaPosition: 'right',
-                      imageHeightPx: 460,
+                      imageHeightMobilePx: 260,
+                      imageHeightDesktopPx: 460,
+                      desktopFromBreakpoint: 'lg',
                       textAlign: 'left',
                     }),
                     styleTokens: expect.objectContaining({
@@ -976,12 +988,15 @@ describe('Integration: admin mutations', () => {
             home: {
               sections: [
                 {
-                  id: 'media-bad-height',
-                  type: 'mediaText',
+                  id: 'hero-bad-image-fit',
+                  type: 'hero',
                   data: {
-                    title: 'Valid title',
-                    body: 'Valid body',
-                    imageHeightPx: 1200,
+                    heading: 'Valid heading',
+                    background: {
+                      mode: 'image',
+                      imageUrl: 'https://cdn.example.invalid/hero.jpg',
+                      imageFit: 'fill',
+                    },
                   },
                 },
               ],
@@ -990,7 +1005,53 @@ describe('Integration: admin mutations', () => {
             contact: { sections: [] },
           },
         },
-        expectedMessage: 'imageHeightPx must be an integer between 180 and 900',
+        expectedMessage: 'imageFit must be one of cover, contain or auto',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'media-bad-height',
+                  type: 'mediaText',
+                  data: {
+                    title: 'Valid title',
+                    body: 'Valid body',
+                    imageHeightPx: 2201,
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'imageHeightPx must be an integer between 80 and 2000',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'media-bad-breakpoint',
+                  type: 'mediaText',
+                  data: {
+                    title: 'Valid title',
+                    body: 'Valid body',
+                    desktopFromBreakpoint: 'xxl',
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'desktopFromBreakpoint must be one of sm, md, lg or xl',
       },
       {
         siteConfig: {
@@ -1399,7 +1460,7 @@ describe('Integration: admin mutations', () => {
                     body: 'Valid body',
                   },
                   styleTokens: {
-                    '--builder-media-image-height-desktop': '90px',
+                    '--builder-media-image-height-desktop': '79px',
                   },
                 },
               ],
@@ -1408,7 +1469,7 @@ describe('Integration: admin mutations', () => {
             contact: { sections: [] },
           },
         },
-        expectedMessage: 'must be between 180px and 900px',
+        expectedMessage: 'must be between 80px and 2000px',
       },
       {
         siteConfig: {
