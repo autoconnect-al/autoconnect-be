@@ -1018,7 +1018,16 @@ function normalizeThemeNavigation(
     return { ok: false, error: `${path} must be an object` };
   }
 
-  const allowedKeys = new Set(['variant', 'position', 'mobileMenu', 'styleTokens']);
+  const allowedKeys = new Set([
+    'variant',
+    'position',
+    'marginTopPx',
+    'marginRightPx',
+    'marginBottomPx',
+    'marginLeftPx',
+    'mobileMenu',
+    'styleTokens',
+  ]);
   for (const key of Object.keys(input)) {
     if (!allowedKeys.has(key)) {
       return { ok: false, error: `${path}.${key} is not supported` };
@@ -1053,6 +1062,42 @@ function normalizeThemeNavigation(
       };
     }
     normalized.position = position;
+  }
+
+  if (input.marginTopPx !== undefined && input.marginTopPx !== null) {
+    const marginTop = normalizeSectionLayoutMargin(
+      input.marginTopPx,
+      `${path}.marginTopPx`,
+    );
+    if (!marginTop.ok) return marginTop;
+    normalized.marginTopPx = marginTop.value;
+  }
+
+  if (input.marginRightPx !== undefined && input.marginRightPx !== null) {
+    const marginRight = normalizeSectionLayoutMargin(
+      input.marginRightPx,
+      `${path}.marginRightPx`,
+    );
+    if (!marginRight.ok) return marginRight;
+    normalized.marginRightPx = marginRight.value;
+  }
+
+  if (input.marginBottomPx !== undefined && input.marginBottomPx !== null) {
+    const marginBottom = normalizeSectionLayoutMargin(
+      input.marginBottomPx,
+      `${path}.marginBottomPx`,
+    );
+    if (!marginBottom.ok) return marginBottom;
+    normalized.marginBottomPx = marginBottom.value;
+  }
+
+  if (input.marginLeftPx !== undefined && input.marginLeftPx !== null) {
+    const marginLeft = normalizeSectionLayoutMargin(
+      input.marginLeftPx,
+      `${path}.marginLeftPx`,
+    );
+    if (!marginLeft.ok) return marginLeft;
+    normalized.marginLeftPx = marginLeft.value;
   }
 
   if (input.mobileMenu !== undefined && input.mobileMenu !== null) {

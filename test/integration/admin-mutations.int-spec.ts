@@ -465,6 +465,10 @@ describe('Integration: admin mutations', () => {
         navigation: {
           variant: 'floating',
           position: 'bottom',
+          marginTopPx: 14,
+          marginRightPx: 10,
+          marginBottomPx: 18,
+          marginLeftPx: 8,
           mobileMenu: {
             mode: 'fullscreen',
             motion: 'left',
@@ -673,6 +677,10 @@ describe('Integration: admin mutations', () => {
               navigation: expect.objectContaining({
                 variant: 'floating',
                 position: 'bottom',
+                marginTopPx: 14,
+                marginRightPx: 10,
+                marginBottomPx: 18,
+                marginLeftPx: 8,
                 mobileMenu: expect.objectContaining({
                   mode: 'fullscreen',
                   motion: 'left',
@@ -1713,6 +1721,22 @@ describe('Integration: admin mutations', () => {
           },
         },
         expectedMessage: 'variant must be one of floating or fullWidth',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          theme: {
+            navigation: {
+              marginRightPx: 280,
+            },
+          },
+          pages: {
+            home: { sections: [] },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'marginRightPx must be an integer between 0 and 240',
       },
       {
         siteConfig: {
