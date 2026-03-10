@@ -34,6 +34,9 @@ const HERO_IMAGE_POSITION_X = new Set(['left', 'center', 'right']);
 const HERO_IMAGE_POSITION_Y = new Set(['top', 'center', 'bottom']);
 const HERO_IMAGE_REPEATS = new Set(['no-repeat', 'repeat', 'repeat-x', 'repeat-y']);
 const MEDIA_TEXT_ALIGNS = new Set(['left', 'center']);
+const MEDIA_TEXT_IMAGE_FITS = new Set(['cover', 'contain', 'auto']);
+const MEDIA_TEXT_IMAGE_POSITION_X = new Set(['left', 'center', 'right']);
+const MEDIA_TEXT_IMAGE_POSITION_Y = new Set(['top', 'center', 'bottom']);
 const MEDIA_TEXT_DESKTOP_FROM_BREAKPOINTS = new Set(['sm', 'md', 'lg', 'xl']);
 const TESTIMONIALS_VARIANTS = new Set(['grid', 'carousel']);
 const RICH_TEXT_TEXT_DECORATIONS = new Set([
@@ -60,6 +63,12 @@ const ALLOWED_STYLE_TOKEN_KEYS = new Set([
   '--builder-richtext-text-decoration',
   '--builder-richtext-surface',
   '--builder-richtext-accent-bar-color',
+  '--builder-richtext-accent-bar-size',
+  '--builder-richtext-shadow-offset-x',
+  '--builder-richtext-shadow-offset-y',
+  '--builder-richtext-shadow-blur',
+  '--builder-richtext-shadow-spread',
+  '--builder-richtext-shadow-color',
   '--builder-richtext-border-color',
   '--builder-richtext-border-width',
   '--builder-richtext-padding',
@@ -169,8 +178,6 @@ const MEDIA_TEXT_IMAGE_WIDTH_DESKTOP_PERCENT_MAX = 80;
 const MEDIA_TEXT_DEFAULT_DESKTOP_FROM_BREAKPOINT = 'md';
 const MEDIA_TEXT_DESKTOP_IMAGE_HEIGHT_TOKEN = '--builder-media-image-height-desktop';
 const MEDIA_TEXT_DESKTOP_TEXT_ALIGN_TOKEN = '--builder-media-text-align-desktop';
-const RICH_TEXT_TEXT_SIZE_MIN = 8;
-const RICH_TEXT_TEXT_SIZE_MAX = 240;
 const RICH_TEXT_BORDER_WIDTH_MIN = 0;
 const RICH_TEXT_BORDER_WIDTH_MAX = 8;
 const RICH_TEXT_SPACING_MIN = 0;
@@ -180,12 +187,24 @@ const RICH_TEXT_TEXT_SIZE_TOKEN = '--builder-richtext-text-size';
 const RICH_TEXT_TEXT_WEIGHT_TOKEN = '--builder-richtext-text-weight';
 const RICH_TEXT_TEXT_DECORATION_TOKEN = '--builder-richtext-text-decoration';
 const RICH_TEXT_SURFACE_TOKEN = '--builder-richtext-surface';
+const RICH_TEXT_ACCENT_BAR_SIZE_TOKEN = '--builder-richtext-accent-bar-size';
+const RICH_TEXT_SHADOW_OFFSET_X_TOKEN = '--builder-richtext-shadow-offset-x';
+const RICH_TEXT_SHADOW_OFFSET_Y_TOKEN = '--builder-richtext-shadow-offset-y';
+const RICH_TEXT_SHADOW_BLUR_TOKEN = '--builder-richtext-shadow-blur';
+const RICH_TEXT_SHADOW_SPREAD_TOKEN = '--builder-richtext-shadow-spread';
+const RICH_TEXT_SHADOW_COLOR_TOKEN = '--builder-richtext-shadow-color';
+const RICH_TEXT_ACCENT_BAR_SIZE_MIN = 0;
+const RICH_TEXT_ACCENT_BAR_SIZE_MAX = 80;
+const RICH_TEXT_SHADOW_OFFSET_MIN = -400;
+const RICH_TEXT_SHADOW_OFFSET_MAX = 400;
+const RICH_TEXT_SHADOW_BLUR_MIN = 0;
+const RICH_TEXT_SHADOW_BLUR_MAX = 500;
+const RICH_TEXT_SHADOW_SPREAD_MIN = -400;
+const RICH_TEXT_SHADOW_SPREAD_MAX = 500;
 const RICH_TEXT_BORDER_COLOR_TOKEN = '--builder-richtext-border-color';
 const RICH_TEXT_BORDER_WIDTH_TOKEN = '--builder-richtext-border-width';
 const RICH_TEXT_PADDING_TOKEN = '--builder-richtext-padding';
 const RICH_TEXT_MARGIN_TOKEN = '--builder-richtext-margin';
-const TESTIMONIALS_TEXT_SIZE_MIN = 8;
-const TESTIMONIALS_TEXT_SIZE_MAX = 240;
 const TESTIMONIALS_GRID_MAX_ITEMS = 9;
 const TESTIMONIALS_QUOTE_COLOR_TOKEN = '--builder-testimonials-quote-color';
 const TESTIMONIALS_QUOTE_SIZE_TOKEN = '--builder-testimonials-quote-size';
@@ -195,8 +214,6 @@ const TESTIMONIALS_META_COLOR_TOKEN = '--builder-testimonials-meta-color';
 const TESTIMONIALS_META_SIZE_TOKEN = '--builder-testimonials-meta-size';
 const TESTIMONIALS_META_WEIGHT_TOKEN = '--builder-testimonials-meta-weight';
 const TESTIMONIALS_META_DECORATION_TOKEN = '--builder-testimonials-meta-decoration';
-const FOOTER_TEXT_SIZE_MIN = 12;
-const FOOTER_TEXT_SIZE_MAX = 48;
 const FOOTER_BRAND_COLOR_TOKEN = '--builder-footer-brand-color';
 const FOOTER_BRAND_SIZE_TOKEN = '--builder-footer-brand-size';
 const FOOTER_BRAND_WEIGHT_TOKEN = '--builder-footer-brand-weight';
@@ -226,8 +243,6 @@ const GLOBAL_RADIUS_BASE_MIN = 0;
 const GLOBAL_RADIUS_BASE_MAX = 300;
 const TESTIMONIALS_CARD_BG_TOKEN = '--builder-testimonials-card-bg';
 const RICH_TEXT_ACCENT_BAR_COLOR_TOKEN = '--builder-richtext-accent-bar-color';
-const NAV_TEXT_SIZE_MIN = 12;
-const NAV_TEXT_SIZE_MAX = 40;
 const NAV_BORDER_WIDTH_MIN = 0;
 const NAV_BORDER_WIDTH_MAX = 12;
 const NAV_BORDER_RADIUS_MIN = 0;
@@ -266,8 +281,7 @@ const SECTION_LAYOUT_BORDER_WIDTH_MIN = 0;
 const SECTION_LAYOUT_BORDER_WIDTH_MAX = 24;
 const SECTION_LAYOUT_BORDER_RADIUS_MIN = 0;
 const SECTION_LAYOUT_BORDER_RADIUS_MAX = 300;
-const IMAGE_CAROUSEL_TEXT_SIZE_MIN = 8;
-const IMAGE_CAROUSEL_TEXT_SIZE_MAX = 240;
+const TEXT_SIZE_TOKEN_PATTERN = /^(\d+(?:\.\d+)?)(px|em|rem)$/i;
 const MAP_PROVIDER_EMBED_ERROR = 'map.data.embedUrl must be an embeddable Google Maps or OpenStreetMap URL';
 const MAP_GOOGLE_HOSTS = new Set([
   'google.com',
@@ -355,6 +369,48 @@ function normalizeMediaTextAlign(
     return { ok: false, error: `${path} must be one of left or center` };
   }
   return { ok: true, value: normalized as 'left' | 'center' };
+}
+
+function normalizeMediaTextImageFit(
+  value: unknown,
+  path: string,
+): ParseResult<'cover' | 'contain' | 'auto'> {
+  if (typeof value !== 'string') {
+    return { ok: false, error: `${path} must be a string` };
+  }
+  const normalized = value.trim().toLowerCase();
+  if (!MEDIA_TEXT_IMAGE_FITS.has(normalized)) {
+    return { ok: false, error: `${path} must be one of cover, contain or auto` };
+  }
+  return { ok: true, value: normalized as 'cover' | 'contain' | 'auto' };
+}
+
+function normalizeMediaTextImagePositionX(
+  value: unknown,
+  path: string,
+): ParseResult<'left' | 'center' | 'right'> {
+  if (typeof value !== 'string') {
+    return { ok: false, error: `${path} must be a string` };
+  }
+  const normalized = value.trim().toLowerCase();
+  if (!MEDIA_TEXT_IMAGE_POSITION_X.has(normalized)) {
+    return { ok: false, error: `${path} must be one of left, center or right` };
+  }
+  return { ok: true, value: normalized as 'left' | 'center' | 'right' };
+}
+
+function normalizeMediaTextImagePositionY(
+  value: unknown,
+  path: string,
+): ParseResult<'top' | 'center' | 'bottom'> {
+  if (typeof value !== 'string') {
+    return { ok: false, error: `${path} must be a string` };
+  }
+  const normalized = value.trim().toLowerCase();
+  if (!MEDIA_TEXT_IMAGE_POSITION_Y.has(normalized)) {
+    return { ok: false, error: `${path} must be one of top, center or bottom` };
+  }
+  return { ok: true, value: normalized as 'top' | 'center' | 'bottom' };
 }
 
 function normalizeImageCarouselVariant(
@@ -530,6 +586,69 @@ function normalizePixelLengthToken(
     return { ok: false, error: `${path} must be between ${min}px and ${max}px` };
   }
   return { ok: true, value: `${parsed}px` };
+}
+
+function normalizeSignedPixelLengthToken(
+  value: unknown,
+  path: string,
+  min: number,
+  max: number,
+): ParseResult<string> {
+  if (typeof value !== 'string') {
+    return { ok: false, error: `${path} must be a string` };
+  }
+  const trimmed = value.trim();
+  const match = trimmed.match(/^(-?\d{1,4})px$/i);
+  if (!match) {
+    return { ok: false, error: `${path} must be in Npx format` };
+  }
+  const parsed = Number.parseInt(match[1], 10);
+  if (!Number.isInteger(parsed) || parsed < min || parsed > max) {
+    return { ok: false, error: `${path} must be between ${min}px and ${max}px` };
+  }
+  return { ok: true, value: `${parsed}px` };
+}
+
+function normalizeTextSizeToken(
+  value: unknown,
+  path: string,
+): ParseResult<string> {
+  if (typeof value !== 'string') {
+    return { ok: false, error: `${path} must be a string` };
+  }
+  const trimmed = value.trim();
+  const match = trimmed.match(TEXT_SIZE_TOKEN_PATTERN);
+  if (!match) {
+    return { ok: false, error: `${path} must use px, em, or rem format` };
+  }
+  const numeric = Number.parseFloat(match[1]);
+  if (!Number.isFinite(numeric) || numeric < 0) {
+    return { ok: false, error: `${path} must be a valid non-negative size` };
+  }
+  const unit = match[2].toLowerCase();
+  return { ok: true, value: `${match[1]}${unit}` };
+}
+
+function normalizeTextSizeFromLegacyNumber(
+  value: unknown,
+  path: string,
+): ParseResult<string | undefined> {
+  if (value === undefined || value === null) {
+    return { ok: true, value: undefined };
+  }
+
+  if (typeof value === 'string') {
+    const normalized = normalizeTextSizeToken(value, path);
+    if (!normalized.ok) return normalized;
+    return { ok: true, value: normalized.value };
+  }
+
+  const normalized = normalizeNumber(value, path);
+  if (!normalized.ok) return normalized;
+  if (normalized.value < 0) {
+    return { ok: false, error: `${path} must be greater than or equal to 0` };
+  }
+  return { ok: true, value: `${normalized.value}px` };
 }
 
 function normalizeRichTextWeightToken(
@@ -871,6 +990,7 @@ function normalizeStyleTokens(
       || key === RICH_TEXT_SURFACE_TOKEN
       || key === RICH_TEXT_BORDER_COLOR_TOKEN
       || key === RICH_TEXT_ACCENT_BAR_COLOR_TOKEN
+      || key === RICH_TEXT_SHADOW_COLOR_TOKEN
     ) {
       if (typeof rawValue !== 'string') {
         return { ok: false, error: `${path}.${key} must be a string` };
@@ -886,12 +1006,7 @@ function normalizeStyleTokens(
       continue;
     }
     if (key === RICH_TEXT_TEXT_SIZE_TOKEN) {
-      const value = normalizePixelLengthToken(
-        rawValue,
-        `${path}.${key}`,
-        RICH_TEXT_TEXT_SIZE_MIN,
-        RICH_TEXT_TEXT_SIZE_MAX,
-      );
+      const value = normalizeTextSizeToken(rawValue, `${path}.${key}`);
       if (!value.ok) return value;
       normalized[key] = value.value;
       continue;
@@ -902,6 +1017,50 @@ function normalizeStyleTokens(
         `${path}.${key}`,
         RICH_TEXT_BORDER_WIDTH_MIN,
         RICH_TEXT_BORDER_WIDTH_MAX,
+      );
+      if (!value.ok) return value;
+      normalized[key] = value.value;
+      continue;
+    }
+    if (key === RICH_TEXT_ACCENT_BAR_SIZE_TOKEN) {
+      const value = normalizePixelLengthToken(
+        rawValue,
+        `${path}.${key}`,
+        RICH_TEXT_ACCENT_BAR_SIZE_MIN,
+        RICH_TEXT_ACCENT_BAR_SIZE_MAX,
+      );
+      if (!value.ok) return value;
+      normalized[key] = value.value;
+      continue;
+    }
+    if (key === RICH_TEXT_SHADOW_OFFSET_X_TOKEN || key === RICH_TEXT_SHADOW_OFFSET_Y_TOKEN) {
+      const value = normalizeSignedPixelLengthToken(
+        rawValue,
+        `${path}.${key}`,
+        RICH_TEXT_SHADOW_OFFSET_MIN,
+        RICH_TEXT_SHADOW_OFFSET_MAX,
+      );
+      if (!value.ok) return value;
+      normalized[key] = value.value;
+      continue;
+    }
+    if (key === RICH_TEXT_SHADOW_BLUR_TOKEN) {
+      const value = normalizePixelLengthToken(
+        rawValue,
+        `${path}.${key}`,
+        RICH_TEXT_SHADOW_BLUR_MIN,
+        RICH_TEXT_SHADOW_BLUR_MAX,
+      );
+      if (!value.ok) return value;
+      normalized[key] = value.value;
+      continue;
+    }
+    if (key === RICH_TEXT_SHADOW_SPREAD_TOKEN) {
+      const value = normalizeSignedPixelLengthToken(
+        rawValue,
+        `${path}.${key}`,
+        RICH_TEXT_SHADOW_SPREAD_MIN,
+        RICH_TEXT_SHADOW_SPREAD_MAX,
       );
       if (!value.ok) return value;
       normalized[key] = value.value;
@@ -944,12 +1103,7 @@ function normalizeStyleTokens(
       continue;
     }
     if (key === TESTIMONIALS_QUOTE_SIZE_TOKEN || key === TESTIMONIALS_META_SIZE_TOKEN) {
-      const value = normalizePixelLengthToken(
-        rawValue,
-        `${path}.${key}`,
-        TESTIMONIALS_TEXT_SIZE_MIN,
-        TESTIMONIALS_TEXT_SIZE_MAX,
-      );
+      const value = normalizeTextSizeToken(rawValue, `${path}.${key}`);
       if (!value.ok) return value;
       normalized[key] = value.value;
       continue;
@@ -998,12 +1152,7 @@ function normalizeStyleTokens(
       || key === FOOTER_SOCIAL_SIZE_TOKEN
       || key === FOOTER_COPYRIGHT_SIZE_TOKEN
     ) {
-      const value = normalizePixelLengthToken(
-        rawValue,
-        `${path}.${key}`,
-        FOOTER_TEXT_SIZE_MIN,
-        FOOTER_TEXT_SIZE_MAX,
-      );
+      const value = normalizeTextSizeToken(rawValue, `${path}.${key}`);
       if (!value.ok) return value;
       normalized[key] = value.value;
       continue;
@@ -1054,12 +1203,7 @@ function normalizeStyleTokens(
       continue;
     }
     if (key === NAV_TEXT_SIZE_TOKEN || key === NAV_BRAND_SIZE_TOKEN) {
-      const value = normalizePixelLengthToken(
-        rawValue,
-        `${path}.${key}`,
-        NAV_TEXT_SIZE_MIN,
-        NAV_TEXT_SIZE_MAX,
-      );
+      const value = normalizeTextSizeToken(rawValue, `${path}.${key}`);
       if (!value.ok) return value;
       normalized[key] = value.value;
       continue;
@@ -1668,12 +1812,54 @@ function normalizeMediaTextData(input: unknown): ParseResult<AnyRecord> {
       : normalizeMediaTextAlign(input.textAlign, 'mediaText.data.textAlign');
   if (!textAlign.ok) return textAlign;
 
+  const imageFitMobile =
+    input.imageFitMobile === undefined || input.imageFitMobile === null
+      ? ({ ok: true, value: 'cover' } as ParseResult<'cover' | 'contain' | 'auto'>)
+      : normalizeMediaTextImageFit(input.imageFitMobile, 'mediaText.data.imageFitMobile');
+  if (!imageFitMobile.ok) return imageFitMobile;
+
+  const imageFitDesktop =
+    input.imageFitDesktop === undefined || input.imageFitDesktop === null
+      ? ({ ok: true, value: imageFitMobile.value } as ParseResult<'cover' | 'contain' | 'auto'>)
+      : normalizeMediaTextImageFit(input.imageFitDesktop, 'mediaText.data.imageFitDesktop');
+  if (!imageFitDesktop.ok) return imageFitDesktop;
+
+  const imagePositionXMobile =
+    input.imagePositionXMobile === undefined || input.imagePositionXMobile === null
+      ? ({ ok: true, value: 'center' } as ParseResult<'left' | 'center' | 'right'>)
+      : normalizeMediaTextImagePositionX(input.imagePositionXMobile, 'mediaText.data.imagePositionXMobile');
+  if (!imagePositionXMobile.ok) return imagePositionXMobile;
+
+  const imagePositionYMobile =
+    input.imagePositionYMobile === undefined || input.imagePositionYMobile === null
+      ? ({ ok: true, value: 'center' } as ParseResult<'top' | 'center' | 'bottom'>)
+      : normalizeMediaTextImagePositionY(input.imagePositionYMobile, 'mediaText.data.imagePositionYMobile');
+  if (!imagePositionYMobile.ok) return imagePositionYMobile;
+
+  const imagePositionXDesktop =
+    input.imagePositionXDesktop === undefined || input.imagePositionXDesktop === null
+      ? ({ ok: true, value: imagePositionXMobile.value } as ParseResult<'left' | 'center' | 'right'>)
+      : normalizeMediaTextImagePositionX(input.imagePositionXDesktop, 'mediaText.data.imagePositionXDesktop');
+  if (!imagePositionXDesktop.ok) return imagePositionXDesktop;
+
+  const imagePositionYDesktop =
+    input.imagePositionYDesktop === undefined || input.imagePositionYDesktop === null
+      ? ({ ok: true, value: imagePositionYMobile.value } as ParseResult<'top' | 'center' | 'bottom'>)
+      : normalizeMediaTextImagePositionY(input.imagePositionYDesktop, 'mediaText.data.imagePositionYDesktop');
+  if (!imagePositionYDesktop.ok) return imagePositionYDesktop;
+
   return {
     ok: true,
     value: {
       title: title.value,
       body: body.value,
       mediaPosition: mediaPositionValue,
+      imageFitMobile: imageFitMobile.value,
+      imageFitDesktop: imageFitDesktop.value,
+      imagePositionXMobile: imagePositionXMobile.value,
+      imagePositionYMobile: imagePositionYMobile.value,
+      imagePositionXDesktop: imagePositionXDesktop.value,
+      imagePositionYDesktop: imagePositionYDesktop.value,
       ...(mediaUrl.value ? { mediaUrl: mediaUrl.value } : {}),
       ...(mediaAlt.value ? { mediaAlt: mediaAlt.value } : {}),
       ...(legacyDesktopImageHeightPx.value !== undefined ? { imageHeightPx: legacyDesktopImageHeightPx.value } : {}),
@@ -1951,6 +2137,24 @@ function normalizeImageCarouselSlide(
   normalized.title = title.value;
   normalized.description = description.value;
 
+  const titleSize = normalizeTextSizeFromLegacyNumber(
+    input.titleSize !== undefined && input.titleSize !== null ? input.titleSize : input.titleSizePx,
+    `imageCarousel.data.slides[${index}].titleSize`,
+  );
+  if (!titleSize.ok) return titleSize;
+  if (titleSize.value) {
+    normalized.titleSize = titleSize.value;
+  }
+
+  const descriptionSize = normalizeTextSizeFromLegacyNumber(
+    input.descriptionSize !== undefined && input.descriptionSize !== null ? input.descriptionSize : input.descriptionSizePx,
+    `imageCarousel.data.slides[${index}].descriptionSize`,
+  );
+  if (!descriptionSize.ok) return descriptionSize;
+  if (descriptionSize.value) {
+    normalized.descriptionSize = descriptionSize.value;
+  }
+
   const cta = normalizeImageCarouselCta(
     input.cta,
     `imageCarousel.data.slides[${index}].cta`,
@@ -1987,44 +2191,6 @@ function normalizeImageCarouselSlide(
             `imageCarousel.data.slides[${index}].textAlign`,
           );
     if (!textAlign.ok) return textAlign;
-
-    if (input.titleSizePx !== undefined && input.titleSizePx !== null) {
-      const titleSizePx = normalizeNumber(
-        input.titleSizePx,
-        `imageCarousel.data.slides[${index}].titleSizePx`,
-      );
-      if (!titleSizePx.ok) return titleSizePx;
-      if (
-        !Number.isInteger(titleSizePx.value)
-        || titleSizePx.value < IMAGE_CAROUSEL_TEXT_SIZE_MIN
-        || titleSizePx.value > IMAGE_CAROUSEL_TEXT_SIZE_MAX
-      ) {
-        return {
-          ok: false,
-          error: `imageCarousel.data.slides[${index}].titleSizePx must be an integer between ${IMAGE_CAROUSEL_TEXT_SIZE_MIN} and ${IMAGE_CAROUSEL_TEXT_SIZE_MAX}`,
-        };
-      }
-      normalized.titleSizePx = titleSizePx.value;
-    }
-
-    if (input.descriptionSizePx !== undefined && input.descriptionSizePx !== null) {
-      const descriptionSizePx = normalizeNumber(
-        input.descriptionSizePx,
-        `imageCarousel.data.slides[${index}].descriptionSizePx`,
-      );
-      if (!descriptionSizePx.ok) return descriptionSizePx;
-      if (
-        !Number.isInteger(descriptionSizePx.value)
-        || descriptionSizePx.value < IMAGE_CAROUSEL_TEXT_SIZE_MIN
-        || descriptionSizePx.value > IMAGE_CAROUSEL_TEXT_SIZE_MAX
-      ) {
-        return {
-          ok: false,
-          error: `imageCarousel.data.slides[${index}].descriptionSizePx must be an integer between ${IMAGE_CAROUSEL_TEXT_SIZE_MIN} and ${IMAGE_CAROUSEL_TEXT_SIZE_MAX}`,
-        };
-      }
-      normalized.descriptionSizePx = descriptionSizePx.value;
-    }
 
     normalized.textPositionX = textPositionX.value;
     normalized.textPositionY = textPositionY.value;
@@ -2066,44 +2232,6 @@ function normalizeImageCarouselSlide(
           `imageCarousel.data.slides[${index}].textAlign`,
         );
   if (!textAlign.ok) return textAlign;
-
-  if (input.titleSizePx !== undefined && input.titleSizePx !== null) {
-    const titleSizePx = normalizeNumber(
-      input.titleSizePx,
-      `imageCarousel.data.slides[${index}].titleSizePx`,
-    );
-    if (!titleSizePx.ok) return titleSizePx;
-    if (
-      !Number.isInteger(titleSizePx.value)
-      || titleSizePx.value < IMAGE_CAROUSEL_TEXT_SIZE_MIN
-      || titleSizePx.value > IMAGE_CAROUSEL_TEXT_SIZE_MAX
-    ) {
-      return {
-        ok: false,
-        error: `imageCarousel.data.slides[${index}].titleSizePx must be an integer between ${IMAGE_CAROUSEL_TEXT_SIZE_MIN} and ${IMAGE_CAROUSEL_TEXT_SIZE_MAX}`,
-      };
-    }
-    normalized.titleSizePx = titleSizePx.value;
-  }
-
-  if (input.descriptionSizePx !== undefined && input.descriptionSizePx !== null) {
-    const descriptionSizePx = normalizeNumber(
-      input.descriptionSizePx,
-      `imageCarousel.data.slides[${index}].descriptionSizePx`,
-    );
-    if (!descriptionSizePx.ok) return descriptionSizePx;
-    if (
-      !Number.isInteger(descriptionSizePx.value)
-      || descriptionSizePx.value < IMAGE_CAROUSEL_TEXT_SIZE_MIN
-      || descriptionSizePx.value > IMAGE_CAROUSEL_TEXT_SIZE_MAX
-    ) {
-      return {
-        ok: false,
-        error: `imageCarousel.data.slides[${index}].descriptionSizePx must be an integer between ${IMAGE_CAROUSEL_TEXT_SIZE_MIN} and ${IMAGE_CAROUSEL_TEXT_SIZE_MAX}`,
-      };
-    }
-    normalized.descriptionSizePx = descriptionSizePx.value;
-  }
 
   normalized.textPositionY = textPositionY.value;
   normalized.textAlign = textAlign.value;

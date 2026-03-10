@@ -866,8 +866,8 @@ describe('Integration: admin mutations', () => {
                           textPositionX: 'left',
                           textPositionY: 'bottom',
                           textAlign: 'left',
-                          titleSizePx: 32,
-                          descriptionSizePx: 18,
+                          titleSize: '32px',
+                          descriptionSize: '18px',
                         }),
                         expect.objectContaining({
                           variant: 'split',
@@ -875,8 +875,8 @@ describe('Integration: admin mutations', () => {
                           imagePosition: 'right',
                           textPositionY: 'top',
                           textAlign: 'right',
-                          titleSizePx: 28,
-                          descriptionSizePx: 16,
+                          titleSize: '28px',
+                          descriptionSize: '16px',
                         }),
                       ]),
                     }),
@@ -935,8 +935,8 @@ describe('Integration: admin mutations', () => {
       textPositionX: 'left',
       textPositionY: 'bottom',
       textAlign: 'left',
-      titleSizePx: 32,
-      descriptionSizePx: 18,
+      titleSize: '32px',
+      descriptionSize: '18px',
       overlay: {
         color: '#000000',
         opacity: 0.35,
@@ -947,8 +947,8 @@ describe('Integration: admin mutations', () => {
       imagePosition: 'right',
       textPositionY: 'top',
       textAlign: 'right',
-      titleSizePx: 28,
-      descriptionSizePx: 16,
+      titleSize: '28px',
+      descriptionSize: '16px',
     });
   });
 
@@ -1618,7 +1618,7 @@ describe('Integration: admin mutations', () => {
                         imageUrl: 'https://cdn.example.invalid/slide.jpg',
                         title: 'Valid title',
                         description: 'Valid description',
-                        titleSizePx: 500,
+                        titleSize: '12vw',
                       },
                     ],
                   },
@@ -1629,7 +1629,7 @@ describe('Integration: admin mutations', () => {
             contact: { sections: [] },
           },
         },
-        expectedMessage: 'titleSizePx must be an integer between 8 and 240',
+        expectedMessage: 'titleSize must use px, em, or rem format',
       },
       {
         siteConfig: {
@@ -1844,7 +1844,7 @@ describe('Integration: admin mutations', () => {
                     ],
                   },
                   styleTokens: {
-                    '--builder-testimonials-quote-size': '7px',
+                    '--builder-testimonials-quote-size': '7pt',
                   },
                 },
               ],
@@ -1853,7 +1853,7 @@ describe('Integration: admin mutations', () => {
             contact: { sections: [] },
           },
         },
-        expectedMessage: 'must be between 8px and 240px',
+        expectedMessage: 'must use px, em, or rem format',
       },
       {
         siteConfig: {
@@ -1897,7 +1897,7 @@ describe('Integration: admin mutations', () => {
                     brandTitle: 'Valid footer',
                   },
                   styleTokens: {
-                    '--builder-footer-brand-size': '9px',
+                    '--builder-footer-brand-size': '9vh',
                   },
                 },
               ],
@@ -1906,7 +1906,7 @@ describe('Integration: admin mutations', () => {
             contact: { sections: [] },
           },
         },
-        expectedMessage: 'must be between 12px and 48px',
+        expectedMessage: 'must use px, em, or rem format',
       },
       {
         siteConfig: {
@@ -1945,7 +1945,7 @@ describe('Integration: admin mutations', () => {
                     paragraphs: ['Valid paragraph'],
                   },
                   styleTokens: {
-                    '--builder-richtext-text-size': '7px',
+                    '--builder-richtext-text-size': '7vw',
                   },
                 },
               ],
@@ -1954,7 +1954,7 @@ describe('Integration: admin mutations', () => {
             contact: { sections: [] },
           },
         },
-        expectedMessage: 'must be between 8px and 240px',
+        expectedMessage: 'must use px, em, or rem format',
       },
       {
         siteConfig: {
