@@ -100,6 +100,7 @@ const ALLOWED_STYLE_TOKEN_KEYS = new Set([
   '--builder-nav-bg',
   '--builder-nav-border-color',
   '--builder-nav-border-width',
+  '--builder-nav-border-radius',
   '--builder-nav-text-color',
   '--builder-nav-text-size',
   '--builder-nav-text-weight',
@@ -126,6 +127,7 @@ const NAVIGATION_STYLE_TOKEN_KEYS = new Set([
   '--builder-nav-bg',
   '--builder-nav-border-color',
   '--builder-nav-border-width',
+  '--builder-nav-border-radius',
   '--builder-nav-text-color',
   '--builder-nav-text-size',
   '--builder-nav-text-weight',
@@ -228,9 +230,12 @@ const NAV_TEXT_SIZE_MIN = 12;
 const NAV_TEXT_SIZE_MAX = 40;
 const NAV_BORDER_WIDTH_MIN = 0;
 const NAV_BORDER_WIDTH_MAX = 12;
+const NAV_BORDER_RADIUS_MIN = 0;
+const NAV_BORDER_RADIUS_MAX = 300;
 const NAV_BG_TOKEN = '--builder-nav-bg';
 const NAV_BORDER_COLOR_TOKEN = '--builder-nav-border-color';
 const NAV_BORDER_WIDTH_TOKEN = '--builder-nav-border-width';
+const NAV_BORDER_RADIUS_TOKEN = '--builder-nav-border-radius';
 const NAV_TEXT_COLOR_TOKEN = '--builder-nav-text-color';
 const NAV_TEXT_SIZE_TOKEN = '--builder-nav-text-size';
 const NAV_TEXT_WEIGHT_TOKEN = '--builder-nav-text-weight';
@@ -1065,6 +1070,17 @@ function normalizeStyleTokens(
         `${path}.${key}`,
         NAV_BORDER_WIDTH_MIN,
         NAV_BORDER_WIDTH_MAX,
+      );
+      if (!value.ok) return value;
+      normalized[key] = value.value;
+      continue;
+    }
+    if (key === NAV_BORDER_RADIUS_TOKEN) {
+      const value = normalizePixelLengthToken(
+        rawValue,
+        `${path}.${key}`,
+        NAV_BORDER_RADIUS_MIN,
+        NAV_BORDER_RADIUS_MAX,
       );
       if (!value.ok) return value;
       normalized[key] = value.value;
