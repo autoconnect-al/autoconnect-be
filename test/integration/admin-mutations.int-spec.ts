@@ -613,6 +613,9 @@ describe('Integration: admin mutations', () => {
               data: {
                 variant: 'grid',
                 itemsPerViewDesktop: 3,
+                showArrows: false,
+                showIndicators: true,
+                autoplay: true,
                 items: Array.from({ length: 11 }, (_, index) => ({
                   quote: `Quote ${index + 1}`,
                   author: `Author ${index + 1}`,
@@ -879,6 +882,9 @@ describe('Integration: admin mutations', () => {
                     data: expect.objectContaining({
                       variant: 'grid',
                       itemsPerViewDesktop: 3,
+                      showArrows: false,
+                      showIndicators: true,
+                      autoplay: true,
                       items: expect.any(Array),
                     }),
                     styleTokens: expect.objectContaining({
@@ -950,7 +956,17 @@ describe('Integration: admin mutations', () => {
     const persistedHomeSections = getUserResponse.body?.result?.vendor?.siteConfig?.pages?.home?.sections ?? [];
     const persistedTestimonials = persistedHomeSections.find(
       (section: unknown) => (section as { type?: string })?.type === 'testimonials',
-    ) as { data?: { items?: Array<{ quote?: string; author?: string }> } } | undefined;
+    ) as {
+      data?: {
+        showArrows?: boolean;
+        showIndicators?: boolean;
+        autoplay?: boolean;
+        items?: Array<{ quote?: string; author?: string }>;
+      };
+    } | undefined;
+    expect(persistedTestimonials?.data?.showArrows).toBe(false);
+    expect(persistedTestimonials?.data?.showIndicators).toBe(true);
+    expect(persistedTestimonials?.data?.autoplay).toBe(true);
     expect(persistedTestimonials?.data?.items).toHaveLength(9);
     expect(persistedTestimonials?.data?.items?.[0]).toMatchObject({
       quote: 'Quote 1',
@@ -1394,6 +1410,34 @@ describe('Integration: admin mutations', () => {
           },
         },
         expectedMessage: 'itemsPerViewDesktop must be an integer between 1 and 3',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'testimonials-bad-controls',
+                  type: 'testimonials',
+                  data: {
+                    variant: 'carousel',
+                    showArrows: 'yes',
+                    items: [
+                      {
+                        quote: 'Valid quote',
+                        author: 'Valid author',
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'showArrows must be a boolean',
       },
       {
         siteConfig: {

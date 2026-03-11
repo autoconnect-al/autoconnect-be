@@ -2078,11 +2078,32 @@ function normalizeTestimonialsData(input: unknown): ParseResult<AnyRecord> {
     ? items.slice(0, TESTIMONIALS_GRID_MAX_ITEMS)
     : items;
 
+  const showArrows =
+    input.showArrows === undefined || input.showArrows === null
+      ? ({ ok: true, value: undefined } as ParseResult<boolean | undefined>)
+      : normalizeBoolean(input.showArrows, 'testimonials.data.showArrows');
+  if (!showArrows.ok) return showArrows;
+
+  const showIndicators =
+    input.showIndicators === undefined || input.showIndicators === null
+      ? ({ ok: true, value: undefined } as ParseResult<boolean | undefined>)
+      : normalizeBoolean(input.showIndicators, 'testimonials.data.showIndicators');
+  if (!showIndicators.ok) return showIndicators;
+
+  const autoplay =
+    input.autoplay === undefined || input.autoplay === null
+      ? ({ ok: true, value: undefined } as ParseResult<boolean | undefined>)
+      : normalizeBoolean(input.autoplay, 'testimonials.data.autoplay');
+  if (!autoplay.ok) return autoplay;
+
   return {
     ok: true,
     value: {
       variant,
       itemsPerViewDesktop,
+      ...(showArrows.value !== undefined ? { showArrows: showArrows.value } : {}),
+      ...(showIndicators.value !== undefined ? { showIndicators: showIndicators.value } : {}),
+      ...(autoplay.value !== undefined ? { autoplay: autoplay.value } : {}),
       items: normalizedItems,
     },
   };
