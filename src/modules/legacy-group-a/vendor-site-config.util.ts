@@ -112,9 +112,21 @@ const ALLOWED_STYLE_TOKEN_KEYS = new Set([
   '--builder-nav-border-color',
   '--builder-nav-border-width',
   '--builder-nav-border-radius',
+  '--builder-nav-button-bg',
+  '--builder-nav-button-text',
+  '--builder-nav-button-active-bg',
+  '--builder-nav-button-active-text',
+  '--builder-nav-desktop-button-bg',
+  '--builder-nav-desktop-button-text',
+  '--builder-nav-desktop-button-active-bg',
+  '--builder-nav-desktop-button-active-text',
   '--builder-nav-desktop-button-border-color',
   '--builder-nav-desktop-button-border-width',
   '--builder-nav-desktop-button-border-radius',
+  '--builder-nav-mobile-button-bg',
+  '--builder-nav-mobile-button-text',
+  '--builder-nav-mobile-button-active-bg',
+  '--builder-nav-mobile-button-active-text',
   '--builder-nav-mobile-button-border-color',
   '--builder-nav-mobile-button-border-width',
   '--builder-nav-mobile-button-border-radius',
@@ -162,9 +174,21 @@ const NAVIGATION_STYLE_TOKEN_KEYS = new Set([
   '--builder-nav-border-color',
   '--builder-nav-border-width',
   '--builder-nav-border-radius',
+  '--builder-nav-button-bg',
+  '--builder-nav-button-text',
+  '--builder-nav-button-active-bg',
+  '--builder-nav-button-active-text',
+  '--builder-nav-desktop-button-bg',
+  '--builder-nav-desktop-button-text',
+  '--builder-nav-desktop-button-active-bg',
+  '--builder-nav-desktop-button-active-text',
   '--builder-nav-desktop-button-border-color',
   '--builder-nav-desktop-button-border-width',
   '--builder-nav-desktop-button-border-radius',
+  '--builder-nav-mobile-button-bg',
+  '--builder-nav-mobile-button-text',
+  '--builder-nav-mobile-button-active-bg',
+  '--builder-nav-mobile-button-active-text',
   '--builder-nav-mobile-button-border-color',
   '--builder-nav-mobile-button-border-width',
   '--builder-nav-mobile-button-border-radius',
@@ -284,9 +308,21 @@ const NAV_MOBILE_BACKDROP_BG_TOKEN = '--builder-nav-mobile-backdrop-bg';
 const NAV_BORDER_COLOR_TOKEN = '--builder-nav-border-color';
 const NAV_BORDER_WIDTH_TOKEN = '--builder-nav-border-width';
 const NAV_BORDER_RADIUS_TOKEN = '--builder-nav-border-radius';
+const NAV_BUTTON_BG_TOKEN = '--builder-nav-button-bg';
+const NAV_BUTTON_TEXT_TOKEN = '--builder-nav-button-text';
+const NAV_BUTTON_ACTIVE_BG_TOKEN = '--builder-nav-button-active-bg';
+const NAV_BUTTON_ACTIVE_TEXT_TOKEN = '--builder-nav-button-active-text';
+const NAV_DESKTOP_BUTTON_BG_TOKEN = '--builder-nav-desktop-button-bg';
+const NAV_DESKTOP_BUTTON_TEXT_TOKEN = '--builder-nav-desktop-button-text';
+const NAV_DESKTOP_BUTTON_ACTIVE_BG_TOKEN = '--builder-nav-desktop-button-active-bg';
+const NAV_DESKTOP_BUTTON_ACTIVE_TEXT_TOKEN = '--builder-nav-desktop-button-active-text';
 const NAV_DESKTOP_BUTTON_BORDER_COLOR_TOKEN = '--builder-nav-desktop-button-border-color';
 const NAV_DESKTOP_BUTTON_BORDER_WIDTH_TOKEN = '--builder-nav-desktop-button-border-width';
 const NAV_DESKTOP_BUTTON_BORDER_RADIUS_TOKEN = '--builder-nav-desktop-button-border-radius';
+const NAV_MOBILE_BUTTON_BG_TOKEN = '--builder-nav-mobile-button-bg';
+const NAV_MOBILE_BUTTON_TEXT_TOKEN = '--builder-nav-mobile-button-text';
+const NAV_MOBILE_BUTTON_ACTIVE_BG_TOKEN = '--builder-nav-mobile-button-active-bg';
+const NAV_MOBILE_BUTTON_ACTIVE_TEXT_TOKEN = '--builder-nav-mobile-button-active-text';
 const NAV_MOBILE_BUTTON_BORDER_COLOR_TOKEN = '--builder-nav-mobile-button-border-color';
 const NAV_MOBILE_BUTTON_BORDER_WIDTH_TOKEN = '--builder-nav-mobile-button-border-width';
 const NAV_MOBILE_BUTTON_BORDER_RADIUS_TOKEN = '--builder-nav-mobile-button-border-radius';
@@ -1276,6 +1312,18 @@ function normalizeStyleTokens(
       || key === NAV_TEXT_COLOR_TOKEN
       || key === NAV_BRAND_COLOR_TOKEN
       || key === NAV_BORDER_COLOR_TOKEN
+      || key === NAV_BUTTON_BG_TOKEN
+      || key === NAV_BUTTON_TEXT_TOKEN
+      || key === NAV_BUTTON_ACTIVE_BG_TOKEN
+      || key === NAV_BUTTON_ACTIVE_TEXT_TOKEN
+      || key === NAV_DESKTOP_BUTTON_BG_TOKEN
+      || key === NAV_DESKTOP_BUTTON_TEXT_TOKEN
+      || key === NAV_DESKTOP_BUTTON_ACTIVE_BG_TOKEN
+      || key === NAV_DESKTOP_BUTTON_ACTIVE_TEXT_TOKEN
+      || key === NAV_MOBILE_BUTTON_BG_TOKEN
+      || key === NAV_MOBILE_BUTTON_TEXT_TOKEN
+      || key === NAV_MOBILE_BUTTON_ACTIVE_BG_TOKEN
+      || key === NAV_MOBILE_BUTTON_ACTIVE_TEXT_TOKEN
       || key === NAV_DESKTOP_BUTTON_BORDER_COLOR_TOKEN
       || key === NAV_MOBILE_BUTTON_BORDER_COLOR_TOKEN
     ) {
