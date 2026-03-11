@@ -107,6 +107,8 @@ const ALLOWED_STYLE_TOKEN_KEYS = new Set([
   '--builder-footer-copyright-weight',
   '--builder-footer-copyright-decoration',
   '--builder-nav-bg',
+  '--builder-nav-mobile-panel-bg',
+  '--builder-nav-mobile-backdrop-bg',
   '--builder-nav-border-color',
   '--builder-nav-border-width',
   '--builder-nav-border-radius',
@@ -134,6 +136,8 @@ const GLOBAL_THEME_STYLE_TOKEN_KEYS = new Set([
 ]);
 const NAVIGATION_STYLE_TOKEN_KEYS = new Set([
   '--builder-nav-bg',
+  '--builder-nav-mobile-panel-bg',
+  '--builder-nav-mobile-backdrop-bg',
   '--builder-nav-border-color',
   '--builder-nav-border-width',
   '--builder-nav-border-radius',
@@ -248,6 +252,8 @@ const NAV_BORDER_WIDTH_MAX = 12;
 const NAV_BORDER_RADIUS_MIN = 0;
 const NAV_BORDER_RADIUS_MAX = 300;
 const NAV_BG_TOKEN = '--builder-nav-bg';
+const NAV_MOBILE_PANEL_BG_TOKEN = '--builder-nav-mobile-panel-bg';
+const NAV_MOBILE_BACKDROP_BG_TOKEN = '--builder-nav-mobile-backdrop-bg';
 const NAV_BORDER_COLOR_TOKEN = '--builder-nav-border-color';
 const NAV_BORDER_WIDTH_TOKEN = '--builder-nav-border-width';
 const NAV_BORDER_RADIUS_TOKEN = '--builder-nav-border-radius';
@@ -1185,6 +1191,8 @@ function normalizeStyleTokens(
     }
     if (
       key === NAV_BG_TOKEN
+      || key === NAV_MOBILE_PANEL_BG_TOKEN
+      || key === NAV_MOBILE_BACKDROP_BG_TOKEN
       || key === NAV_TEXT_COLOR_TOKEN
       || key === NAV_BRAND_COLOR_TOKEN
       || key === NAV_BORDER_COLOR_TOKEN

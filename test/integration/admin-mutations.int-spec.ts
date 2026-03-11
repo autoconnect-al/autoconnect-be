@@ -483,6 +483,8 @@ describe('Integration: admin mutations', () => {
           },
           styleTokens: {
             '--builder-nav-bg': '#0f172a',
+            '--builder-nav-mobile-panel-bg': '#020617',
+            '--builder-nav-mobile-backdrop-bg': 'rgba(15, 23, 42, 0.72)',
             '--builder-nav-border-color': '#334155',
             '--builder-nav-border-width': '2px',
             '--builder-nav-border-radius': '18px',
@@ -751,6 +753,8 @@ describe('Integration: admin mutations', () => {
                 }),
                 styleTokens: expect.objectContaining({
                   '--builder-nav-bg': '#0f172a',
+                  '--builder-nav-mobile-panel-bg': '#020617',
+                  '--builder-nav-mobile-backdrop-bg': 'rgba(15, 23, 42, 0.72)',
                   '--builder-nav-border-color': '#334155',
                   '--builder-nav-border-width': '2px',
                   '--builder-nav-border-radius': '18px',
@@ -2027,6 +2031,24 @@ describe('Integration: admin mutations', () => {
           },
         },
         expectedMessage: 'must be in Npx format',
+      },
+      {
+        siteConfig: {
+          version: 1,
+          theme: {
+            navigation: {
+              styleTokens: {
+                '--builder-nav-mobile-panel-bg': 'javascript:alert(1)',
+              },
+            },
+          },
+          pages: {
+            home: { sections: [] },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'has an invalid token value',
       },
       {
         siteConfig: {
