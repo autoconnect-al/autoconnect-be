@@ -33,6 +33,7 @@ const IMAGE_MIME_EXTENSION_MAP: Record<string, string> = {
 };
 const SITE_SETTINGS_FIELDS_SELECT = {
   id: true,
+  accountName: true,
   siteEnabled: true,
   subdomain: true,
   customDomain: true,
@@ -208,6 +209,7 @@ export class ApVendorManagementService implements OnModuleDestroy {
 
     return legacySuccess({
       id: String(vendor.id),
+      accountName: vendor.accountName ?? null,
       target: target.value,
       siteEnabled: Boolean(vendor.siteEnabled),
       subdomain: vendor.subdomain ?? null,

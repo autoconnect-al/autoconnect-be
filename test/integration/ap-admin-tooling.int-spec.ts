@@ -498,6 +498,7 @@ describe('Integration: legacy-ap admin/tooling surfaces', () => {
       statusCode: '200',
       result: expect.objectContaining({
         id: '9610',
+        accountName: 'site-settings-vendor',
         target: 'dev',
         siteEnabled: true,
         subdomain: 'site-settings-vendor',
@@ -547,6 +548,7 @@ describe('Integration: legacy-ap admin/tooling surfaces', () => {
       statusCode: '200',
       result: expect.objectContaining({
         id: '9610',
+        accountName: 'site-settings-vendor',
         target: 'prod',
         siteEnabled: true,
         subdomain: 'site-settings-vendor',
