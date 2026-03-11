@@ -414,6 +414,21 @@ describe('Integration: admin mutations', () => {
           hero: {
             '--builder-bg': '#ffffff',
             '--builder-accent': '#f5351f',
+            '--builder-hero-title-color': '#ffffff',
+            '--builder-hero-title-size': '2rem',
+            '--builder-hero-title-weight': '700',
+            '--builder-hero-title-style': 'italic',
+            '--builder-hero-title-decoration': 'underline',
+            '--builder-hero-subtitle-color': '#e2e8f0',
+            '--builder-hero-subtitle-size': '1.1rem',
+            '--builder-hero-subtitle-weight': '500',
+            '--builder-hero-subtitle-style': 'normal',
+            '--builder-hero-subtitle-decoration': 'none',
+            '--builder-hero-cta-color': '#ffffff',
+            '--builder-hero-cta-size': '1rem',
+            '--builder-hero-cta-weight': '700',
+            '--builder-hero-cta-style': 'normal',
+            '--builder-hero-cta-decoration': 'none',
             '--builder-hero-inner-radius': '18px',
           },
           mediaText: {
@@ -618,6 +633,9 @@ describe('Integration: admin mutations', () => {
                 heightPx: 420,
               },
               data: {
+                showArrows: false,
+                showIndicators: true,
+                autoplay: true,
                 slides: [
                   {
                     variant: 'plain',
@@ -763,6 +781,24 @@ describe('Integration: admin mutations', () => {
                 }),
               }),
               components: expect.objectContaining({
+                hero: expect.objectContaining({
+                  '--builder-hero-title-color': '#ffffff',
+                  '--builder-hero-title-size': '2rem',
+                  '--builder-hero-title-weight': '700',
+                  '--builder-hero-title-style': 'italic',
+                  '--builder-hero-title-decoration': 'underline',
+                  '--builder-hero-subtitle-color': '#e2e8f0',
+                  '--builder-hero-subtitle-size': '1.1rem',
+                  '--builder-hero-subtitle-weight': '500',
+                  '--builder-hero-subtitle-style': 'normal',
+                  '--builder-hero-subtitle-decoration': 'none',
+                  '--builder-hero-cta-color': '#ffffff',
+                  '--builder-hero-cta-size': '1rem',
+                  '--builder-hero-cta-weight': '700',
+                  '--builder-hero-cta-style': 'normal',
+                  '--builder-hero-cta-decoration': 'none',
+                  '--builder-hero-inner-radius': '18px',
+                }),
                 footer: expect.objectContaining({
                   '--builder-footer-brand-size': '22px',
                   '--builder-footer-link-weight': '500',
@@ -858,6 +894,9 @@ describe('Integration: admin mutations', () => {
                       heightPx: 420,
                     }),
                     data: expect.objectContaining({
+                      showArrows: false,
+                      showIndicators: true,
+                      autoplay: true,
                       slides: expect.arrayContaining([
                         expect.objectContaining({
                           variant: 'plain',
@@ -926,6 +965,9 @@ describe('Integration: admin mutations', () => {
       (section: unknown) => (section as { type?: string })?.type === 'imageCarousel',
     ) as {
       data?: {
+        showArrows?: boolean;
+        showIndicators?: boolean;
+        autoplay?: boolean;
         slides?: Array<{
           variant?: string;
           overlay?: { color?: string; opacity?: number };
@@ -934,6 +976,9 @@ describe('Integration: admin mutations', () => {
       };
     } | undefined;
     expect(persistedCarousel?.data?.slides).toHaveLength(3);
+    expect(persistedCarousel?.data?.showArrows).toBe(false);
+    expect(persistedCarousel?.data?.showIndicators).toBe(true);
+    expect(persistedCarousel?.data?.autoplay).toBe(true);
     expect(persistedCarousel?.data?.slides?.[1]).toMatchObject({
       variant: 'overlay',
       textPositionX: 'left',
@@ -1073,6 +1118,33 @@ describe('Integration: admin mutations', () => {
       95_000,
     )}"}`;
     const cases = [
+      {
+        siteConfig: {
+          version: 1,
+          pages: {
+            home: {
+              sections: [
+                {
+                  id: 'carousel-bad-controls',
+                  type: 'imageCarousel',
+                  data: {
+                    showArrows: 'yes',
+                    slides: [
+                      {
+                        variant: 'plain',
+                        imageUrl: 'https://cdn.example.invalid/slide.jpg',
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+            about: { sections: [] },
+            contact: { sections: [] },
+          },
+        },
+        expectedMessage: 'showArrows must be a boolean',
+      },
       {
         siteConfig: {
           version: 1,

@@ -122,6 +122,21 @@ const ALLOWED_STYLE_TOKEN_KEYS = new Set([
   '--builder-nav-brand-weight',
   '--builder-nav-brand-style',
   '--builder-nav-brand-decoration',
+  '--builder-hero-title-color',
+  '--builder-hero-title-size',
+  '--builder-hero-title-weight',
+  '--builder-hero-title-style',
+  '--builder-hero-title-decoration',
+  '--builder-hero-subtitle-color',
+  '--builder-hero-subtitle-size',
+  '--builder-hero-subtitle-weight',
+  '--builder-hero-subtitle-style',
+  '--builder-hero-subtitle-decoration',
+  '--builder-hero-cta-color',
+  '--builder-hero-cta-size',
+  '--builder-hero-cta-weight',
+  '--builder-hero-cta-style',
+  '--builder-hero-cta-decoration',
   '--builder-hero-inner-radius',
 ]);
 const GLOBAL_THEME_STYLE_TOKEN_KEYS = new Set([
@@ -267,9 +282,49 @@ const NAV_BRAND_SIZE_TOKEN = '--builder-nav-brand-size';
 const NAV_BRAND_WEIGHT_TOKEN = '--builder-nav-brand-weight';
 const NAV_BRAND_STYLE_TOKEN = '--builder-nav-brand-style';
 const NAV_BRAND_DECORATION_TOKEN = '--builder-nav-brand-decoration';
+const HERO_TITLE_COLOR_TOKEN = '--builder-hero-title-color';
+const HERO_TITLE_SIZE_TOKEN = '--builder-hero-title-size';
+const HERO_TITLE_WEIGHT_TOKEN = '--builder-hero-title-weight';
+const HERO_TITLE_STYLE_TOKEN = '--builder-hero-title-style';
+const HERO_TITLE_DECORATION_TOKEN = '--builder-hero-title-decoration';
+const HERO_SUBTITLE_COLOR_TOKEN = '--builder-hero-subtitle-color';
+const HERO_SUBTITLE_SIZE_TOKEN = '--builder-hero-subtitle-size';
+const HERO_SUBTITLE_WEIGHT_TOKEN = '--builder-hero-subtitle-weight';
+const HERO_SUBTITLE_STYLE_TOKEN = '--builder-hero-subtitle-style';
+const HERO_SUBTITLE_DECORATION_TOKEN = '--builder-hero-subtitle-decoration';
+const HERO_CTA_COLOR_TOKEN = '--builder-hero-cta-color';
+const HERO_CTA_SIZE_TOKEN = '--builder-hero-cta-size';
+const HERO_CTA_WEIGHT_TOKEN = '--builder-hero-cta-weight';
+const HERO_CTA_STYLE_TOKEN = '--builder-hero-cta-style';
+const HERO_CTA_DECORATION_TOKEN = '--builder-hero-cta-decoration';
 const HERO_INNER_RADIUS_TOKEN = '--builder-hero-inner-radius';
 const HERO_INNER_RADIUS_MIN = 0;
 const HERO_INNER_RADIUS_MAX = 300;
+const HERO_TEXT_COLOR_TOKENS = new Set([
+  HERO_TITLE_COLOR_TOKEN,
+  HERO_SUBTITLE_COLOR_TOKEN,
+  HERO_CTA_COLOR_TOKEN,
+]);
+const HERO_TEXT_SIZE_TOKENS = new Set([
+  HERO_TITLE_SIZE_TOKEN,
+  HERO_SUBTITLE_SIZE_TOKEN,
+  HERO_CTA_SIZE_TOKEN,
+]);
+const HERO_TEXT_WEIGHT_TOKENS = new Set([
+  HERO_TITLE_WEIGHT_TOKEN,
+  HERO_SUBTITLE_WEIGHT_TOKEN,
+  HERO_CTA_WEIGHT_TOKEN,
+]);
+const HERO_TEXT_STYLE_TOKENS = new Set([
+  HERO_TITLE_STYLE_TOKEN,
+  HERO_SUBTITLE_STYLE_TOKEN,
+  HERO_CTA_STYLE_TOKEN,
+]);
+const HERO_TEXT_DECORATION_TOKENS = new Set([
+  HERO_TITLE_DECORATION_TOKEN,
+  HERO_SUBTITLE_DECORATION_TOKEN,
+  HERO_CTA_DECORATION_TOKEN,
+]);
 const IMAGE_CAROUSEL_VARIANTS = new Set(['plain', 'overlay', 'split']);
 const IMAGE_CAROUSEL_SPLIT_IMAGE_POSITIONS = new Set(['left', 'right']);
 const IMAGE_CAROUSEL_TEXT_POSITIONS_X = new Set(['left', 'center', 'right']);
@@ -359,6 +414,13 @@ function isSafeColorValue(value: string): boolean {
 function normalizeNumber(value: unknown, path: string): ParseResult<number> {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return { ok: false, error: `${path} must be a finite number` };
+  }
+  return { ok: true, value };
+}
+
+function normalizeBoolean(value: unknown, path: string): ParseResult<boolean> {
+  if (typeof value !== 'boolean') {
+    return { ok: false, error: `${path} must be a boolean` };
   }
   return { ok: true, value };
 }
@@ -1251,6 +1313,44 @@ function normalizeStyleTokens(
       continue;
     }
     if (key === NAV_TEXT_DECORATION_TOKEN || key === NAV_BRAND_DECORATION_TOKEN) {
+      const value = normalizeRichTextDecorationToken(rawValue, `${path}.${key}`);
+      if (!value.ok) return value;
+      normalized[key] = value.value;
+      continue;
+    }
+    if (HERO_TEXT_COLOR_TOKENS.has(key)) {
+      if (typeof rawValue !== 'string') {
+        return { ok: false, error: `${path}.${key} must be a string` };
+      }
+      const value = rawValue.trim();
+      if (!value) {
+        return { ok: false, error: `${path}.${key} must not be empty` };
+      }
+      if (!isSafeCssTokenValue(value)) {
+        return { ok: false, error: `${path}.${key} has an invalid token value` };
+      }
+      normalized[key] = value;
+      continue;
+    }
+    if (HERO_TEXT_SIZE_TOKENS.has(key)) {
+      const value = normalizeTextSizeToken(rawValue, `${path}.${key}`);
+      if (!value.ok) return value;
+      normalized[key] = value.value;
+      continue;
+    }
+    if (HERO_TEXT_WEIGHT_TOKENS.has(key)) {
+      const value = normalizeRichTextWeightToken(rawValue, `${path}.${key}`);
+      if (!value.ok) return value;
+      normalized[key] = value.value;
+      continue;
+    }
+    if (HERO_TEXT_STYLE_TOKENS.has(key)) {
+      const value = normalizeTextStyleToken(rawValue, `${path}.${key}`);
+      if (!value.ok) return value;
+      normalized[key] = value.value;
+      continue;
+    }
+    if (HERO_TEXT_DECORATION_TOKENS.has(key)) {
       const value = normalizeRichTextDecorationToken(rawValue, `${path}.${key}`);
       if (!value.ok) return value;
       normalized[key] = value.value;
@@ -2324,6 +2424,24 @@ function normalizeImageCarouselData(input: unknown): ParseResult<AnyRecord> {
     return { ok: false, error: 'imageCarousel.data must be an object' };
   }
 
+  const showArrows =
+    input.showArrows === undefined || input.showArrows === null
+      ? ({ ok: true, value: undefined } as ParseResult<boolean | undefined>)
+      : normalizeBoolean(input.showArrows, 'imageCarousel.data.showArrows');
+  if (!showArrows.ok) return showArrows;
+
+  const showIndicators =
+    input.showIndicators === undefined || input.showIndicators === null
+      ? ({ ok: true, value: undefined } as ParseResult<boolean | undefined>)
+      : normalizeBoolean(input.showIndicators, 'imageCarousel.data.showIndicators');
+  if (!showIndicators.ok) return showIndicators;
+
+  const autoplay =
+    input.autoplay === undefined || input.autoplay === null
+      ? ({ ok: true, value: undefined } as ParseResult<boolean | undefined>)
+      : normalizeBoolean(input.autoplay, 'imageCarousel.data.autoplay');
+  if (!autoplay.ok) return autoplay;
+
   const slides = normalizeImageCarouselSlides(input.slides);
   if (!slides.ok) return slides;
 
@@ -2337,6 +2455,9 @@ function normalizeImageCarouselData(input: unknown): ParseResult<AnyRecord> {
   return {
     ok: true,
     value: {
+      ...(showArrows.value !== undefined ? { showArrows: showArrows.value } : {}),
+      ...(showIndicators.value !== undefined ? { showIndicators: showIndicators.value } : {}),
+      ...(autoplay.value !== undefined ? { autoplay: autoplay.value } : {}),
       ...(slides.value ? { slides: slides.value } : {}),
       ...(images.value ? { images: images.value } : {}),
     },
