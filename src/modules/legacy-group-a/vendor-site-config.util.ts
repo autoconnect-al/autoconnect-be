@@ -112,6 +112,12 @@ const ALLOWED_STYLE_TOKEN_KEYS = new Set([
   '--builder-nav-border-color',
   '--builder-nav-border-width',
   '--builder-nav-border-radius',
+  '--builder-nav-desktop-button-border-color',
+  '--builder-nav-desktop-button-border-width',
+  '--builder-nav-desktop-button-border-radius',
+  '--builder-nav-mobile-button-border-color',
+  '--builder-nav-mobile-button-border-width',
+  '--builder-nav-mobile-button-border-radius',
   '--builder-nav-text-color',
   '--builder-nav-text-size',
   '--builder-nav-text-weight',
@@ -156,6 +162,12 @@ const NAVIGATION_STYLE_TOKEN_KEYS = new Set([
   '--builder-nav-border-color',
   '--builder-nav-border-width',
   '--builder-nav-border-radius',
+  '--builder-nav-desktop-button-border-color',
+  '--builder-nav-desktop-button-border-width',
+  '--builder-nav-desktop-button-border-radius',
+  '--builder-nav-mobile-button-border-color',
+  '--builder-nav-mobile-button-border-width',
+  '--builder-nav-mobile-button-border-radius',
   '--builder-nav-text-color',
   '--builder-nav-text-size',
   '--builder-nav-text-weight',
@@ -272,6 +284,12 @@ const NAV_MOBILE_BACKDROP_BG_TOKEN = '--builder-nav-mobile-backdrop-bg';
 const NAV_BORDER_COLOR_TOKEN = '--builder-nav-border-color';
 const NAV_BORDER_WIDTH_TOKEN = '--builder-nav-border-width';
 const NAV_BORDER_RADIUS_TOKEN = '--builder-nav-border-radius';
+const NAV_DESKTOP_BUTTON_BORDER_COLOR_TOKEN = '--builder-nav-desktop-button-border-color';
+const NAV_DESKTOP_BUTTON_BORDER_WIDTH_TOKEN = '--builder-nav-desktop-button-border-width';
+const NAV_DESKTOP_BUTTON_BORDER_RADIUS_TOKEN = '--builder-nav-desktop-button-border-radius';
+const NAV_MOBILE_BUTTON_BORDER_COLOR_TOKEN = '--builder-nav-mobile-button-border-color';
+const NAV_MOBILE_BUTTON_BORDER_WIDTH_TOKEN = '--builder-nav-mobile-button-border-width';
+const NAV_MOBILE_BUTTON_BORDER_RADIUS_TOKEN = '--builder-nav-mobile-button-border-radius';
 const NAV_TEXT_COLOR_TOKEN = '--builder-nav-text-color';
 const NAV_TEXT_SIZE_TOKEN = '--builder-nav-text-size';
 const NAV_TEXT_WEIGHT_TOKEN = '--builder-nav-text-weight';
@@ -1258,6 +1276,8 @@ function normalizeStyleTokens(
       || key === NAV_TEXT_COLOR_TOKEN
       || key === NAV_BRAND_COLOR_TOKEN
       || key === NAV_BORDER_COLOR_TOKEN
+      || key === NAV_DESKTOP_BUTTON_BORDER_COLOR_TOKEN
+      || key === NAV_MOBILE_BUTTON_BORDER_COLOR_TOKEN
     ) {
       if (typeof rawValue !== 'string') {
         return { ok: false, error: `${path}.${key} must be a string` };
@@ -1289,7 +1309,35 @@ function normalizeStyleTokens(
       normalized[key] = value.value;
       continue;
     }
+    if (
+      key === NAV_DESKTOP_BUTTON_BORDER_WIDTH_TOKEN
+      || key === NAV_MOBILE_BUTTON_BORDER_WIDTH_TOKEN
+    ) {
+      const value = normalizePixelLengthToken(
+        rawValue,
+        `${path}.${key}`,
+        NAV_BORDER_WIDTH_MIN,
+        NAV_BORDER_WIDTH_MAX,
+      );
+      if (!value.ok) return value;
+      normalized[key] = value.value;
+      continue;
+    }
     if (key === NAV_BORDER_RADIUS_TOKEN) {
+      const value = normalizePixelLengthToken(
+        rawValue,
+        `${path}.${key}`,
+        NAV_BORDER_RADIUS_MIN,
+        NAV_BORDER_RADIUS_MAX,
+      );
+      if (!value.ok) return value;
+      normalized[key] = value.value;
+      continue;
+    }
+    if (
+      key === NAV_DESKTOP_BUTTON_BORDER_RADIUS_TOKEN
+      || key === NAV_MOBILE_BUTTON_BORDER_RADIUS_TOKEN
+    ) {
       const value = normalizePixelLengthToken(
         rawValue,
         `${path}.${key}`,
