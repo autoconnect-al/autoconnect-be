@@ -1,7 +1,7 @@
 # Personalization Rebalance V2 Rollout Runbook
 
 ## Scope
-This runbook applies to backend rollout of the personalization rebalance that introduces event counters, confidence-based ranking, and slot composition caps.
+This runbook applies to backend rollout of the personalization rebalance that introduces event counters, confidence-based ranking, slot composition caps, and daily stale-term deterioration.
 
 ## Preconditions
 - Deployment target has `PERSONALIZATION_ENABLED=false`.
@@ -27,7 +27,7 @@ SELECT COUNT(*) AS visitor_terms FROM visitor_interest_term;
 
 ```bash
 PERSONALIZATION_ENABLED=true
-PERSONALIZATION_MAX_PERSONALIZED_SHARE=0.6
+PERSONALIZATION_MAX_PERSONALIZED_SHARE=0.4
 PERSONALIZATION_MODEL_MAX_SHARE=0.25
 PERSONALIZATION_MAKE_MAX_SHARE=0.4
 PERSONALIZATION_MODEL_OPEN_THRESHOLD=3
@@ -38,17 +38,20 @@ PERSONALIZATION_CONTACT_THRESHOLD=1
 PERSONALIZATION_SEARCH_CANDIDATE_MULTIPLIER=5
 PERSONALIZATION_SEARCH_CANDIDATE_MAX=500
 PERSONALIZATION_MOST_WANTED_CANDIDATES=24
+PERSONALIZATION_STALE_TERM_DAYS=2
+PERSONALIZATION_STALE_TERM_DECAY=10
 ```
 
 ## Validation
 1. Verify logs include:
 - `personalization.search.compose`
 - `personalization.most_wanted.compose`
+- `cron.personalization-retention.completed` with `staleTermRowsDecayed`/`staleTermRowsDeleted`
 
 2. Validate behavior manually:
 - Single open does not dominate default feed.
 - After repeated opens (>=3), model influence appears.
-- Default feed keeps freshness mix (no hard domination).
+- Default feed keeps freshness-majority mix (approximately 40% personalized / 60% fresh).
 - Most-wanted respects caps and still returns 4 rows.
 
 ## Rollback

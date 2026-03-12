@@ -419,10 +419,11 @@ export class LegacyAuthService {
       await tx.$executeRawUnsafe(
         `
         INSERT INTO vendor (
-          id, dateCreated, dateUpdated, deleted, contact, accountName, profilePicture, accountExists, initialised, biography,
+          id, dateCreated, dateUpdated, deleted, contact, accountName, profilePicture, accountExists, initialised,
+          isVendor, isNormalUser, isReposter, biography,
           name, username, email, phoneNumber, whatsAppNumber, location, blocked, attemptedLogin, password, verified, verificationCode, profileImage
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         userId,
         now,
@@ -433,6 +434,9 @@ export class LegacyAuthService {
         profile.picture || '',
         true,
         true,
+        true,
+        false,
+        false,
         '',
         displayName,
         username,

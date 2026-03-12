@@ -60,6 +60,116 @@ describe('ApVendorManagementService', () => {
     expect(response.message).toContain('Could not mark vendor for crawl next');
   });
 
+  it('addVendor initializes placeholder identity defaults', async () => {
+    const prisma = {
+      vendor: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({}),
+      },
+    } as any;
+
+    const service = createService(prisma);
+    const response = await service.addVendor('33');
+
+    expect(response.success).toBe(true);
+    expect(prisma.vendor.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          accountExists: false,
+          initialised: false,
+          isVendor: false,
+          isNormalUser: true,
+          isReposter: false,
+        }),
+      }),
+    );
+  });
+
+  it('addVendorDetails sets vendor identity defaults', async () => {
+    const prisma = {
+      vendor: {
+        update: jest.fn().mockResolvedValue({}),
+      },
+    } as any;
+
+    const service = createService(prisma);
+    const response = await service.addVendorDetails('44', {
+      account: JSON.stringify({
+        username: 'vendor-44',
+        profilePicUrl: 'https://img.example/vendor-44.webp',
+      }),
+    });
+
+    expect(response.success).toBe(true);
+    expect(prisma.vendor.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 44n },
+        data: expect.objectContaining({
+          accountExists: true,
+          isVendor: true,
+          isNormalUser: false,
+          isReposter: false,
+        }),
+      }),
+    );
+  });
+
+  it('editVendor enforces identity exclusivity and reposter coercion', async () => {
+    const prisma = {
+      vendor: {
+        update: jest.fn().mockResolvedValue({}),
+      },
+    } as any;
+
+    const service = createService(prisma);
+    const response = await service.editVendor('55', {
+      vendor: {
+        isNormalUser: true,
+        isReposter: true,
+      },
+    });
+
+    expect(response.success).toBe(true);
+    expect(prisma.vendor.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 55n },
+        data: expect.objectContaining({
+          isVendor: false,
+          isNormalUser: true,
+          isReposter: false,
+        }),
+      }),
+    );
+  });
+
+  it('editVendor keeps reposter true for explicit vendor profiles', async () => {
+    const prisma = {
+      vendor: {
+        update: jest.fn().mockResolvedValue({}),
+      },
+    } as any;
+
+    const service = createService(prisma);
+    const response = await service.editVendor('56', {
+      vendor: {
+        isVendor: true,
+        isReposter: true,
+      },
+    });
+
+    expect(response.success).toBe(true);
+    expect(prisma.vendor.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 56n },
+        data: expect.objectContaining({
+          isVendor: true,
+          isNormalUser: false,
+          isReposter: true,
+        }),
+      }),
+    );
+  });
+
   it('updates site settings on requested target with validation', async () => {
     const targetClient = {
       vendor: {

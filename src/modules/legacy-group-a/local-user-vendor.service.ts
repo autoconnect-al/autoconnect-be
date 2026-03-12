@@ -86,10 +86,11 @@ export class LocalUserVendorService {
         await tx.$executeRawUnsafe(
           `
           INSERT INTO vendor (
-            id, dateCreated, dateUpdated, deleted, contact, accountName, profilePicture, accountExists, initialised, biography,
+            id, dateCreated, dateUpdated, deleted, contact, accountName, profilePicture, accountExists, initialised,
+            isVendor, isNormalUser, isReposter, biography,
             name, username, email, phoneNumber, whatsAppNumber, location, blocked, attemptedLogin, password, verified, verificationCode, profileImage
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `,
           userId,
           now,
@@ -99,6 +100,9 @@ export class LocalUserVendorService {
           `new vendor ${userId.toString()}`,
           '',
           false,
+          false,
+          false,
+          true,
           false,
           '',
           request.name,
