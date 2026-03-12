@@ -1627,7 +1627,12 @@ export class LegacySearchService {
       return null;
     }
 
-    return Math.max(0, Math.trunc(parsed));
+    const boundary = Math.trunc(parsed);
+    if (boundary <= 0) {
+      return null;
+    }
+
+    return boundary;
   }
 
   private computePriceRangeAffinity(

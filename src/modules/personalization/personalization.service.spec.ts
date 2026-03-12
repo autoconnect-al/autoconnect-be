@@ -117,6 +117,27 @@ describe('PersonalizationService', () => {
     expect(priceUpsertCall?.[3]).toBe('10000:18000');
   });
 
+  it('records canonical price range without discussable zero boundary', async () => {
+    process.env.PERSONALIZATION_ENABLED = 'true';
+    const { service, prisma } = makeService();
+    prisma.$executeRawUnsafe.mockResolvedValue(1);
+
+    await service.recordSearchSignal({
+      visitorId: 'visitor-price-zero',
+      type: 'car',
+      searchTerms: [{ key: 'price', value: { from: '0', to: '18000' } }],
+      sortTerms: [{ key: 'renewedTime', order: 'DESC' }],
+    });
+
+    const priceUpsertCall = prisma.$executeRawUnsafe.mock.calls.find(
+      (call: unknown[]) =>
+        String(call[0]).includes('INSERT INTO visitor_interest_term')
+        && call[2] === 'price',
+    ) as unknown[] | undefined;
+    expect(priceUpsertCall).toBeDefined();
+    expect(priceUpsertCall?.[3]).toBe(':18000');
+  });
+
   it('records open post signal with open counter increment', async () => {
     process.env.PERSONALIZATION_ENABLED = 'true';
     const { service, prisma } = makeService();
@@ -166,6 +187,32 @@ describe('PersonalizationService', () => {
     ) as unknown[] | undefined;
     expect(priceUpsertCall).toBeDefined();
     expect(priceUpsertCall?.[3]).toBe('20500:20500');
+  });
+
+  it('does not record discussable zero price from post signals', async () => {
+    process.env.PERSONALIZATION_ENABLED = 'true';
+    const { service, prisma } = makeService();
+    prisma.$executeRawUnsafe.mockResolvedValue(1);
+    prisma.$queryRawUnsafe.mockResolvedValue([
+      {
+        make: 'Mercedes-benz',
+        model: 'GLC',
+        bodyType: 'SUV/Off-Road/Pick-up',
+        fuelType: 'diesel',
+        transmission: 'automatic',
+        type: 'car',
+        price: 0,
+      },
+    ]);
+
+    await service.recordPostSignalByPostId(10n, 'visitor-2', 'open');
+
+    const priceUpsertCall = prisma.$executeRawUnsafe.mock.calls.find(
+      (call: unknown[]) =>
+        String(call[0]).includes('INSERT INTO visitor_interest_term')
+        && call[2] === 'price',
+    ) as unknown[] | undefined;
+    expect(priceUpsertCall).toBeUndefined();
   });
 
   it('returns false on reset for invalid visitor id', async () => {

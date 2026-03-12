@@ -555,8 +555,12 @@ export class PersonalizationService {
     if (!Number.isFinite(parsed)) {
       return '';
     }
+    const normalized = Math.trunc(parsed);
+    if (normalized <= 0) {
+      return '';
+    }
 
-    return String(Math.max(0, Math.trunc(parsed)));
+    return String(normalized);
   }
 
   private normalizeTermKey(raw: unknown): string {

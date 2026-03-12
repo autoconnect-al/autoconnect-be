@@ -601,6 +601,28 @@ describe('LegacySearchService', () => {
     );
   });
 
+  it('price affinity should exclude discussable zero values', () => {
+    const prisma = { $queryRawUnsafe: jest.fn() } as any;
+    const service = new LegacySearchService(prisma, new LegacySearchQueryBuilder());
+
+    const parsedOpenLowRange = (service as any).parsePriceRangeTerm('0:12000');
+    const parsedDiscussableRange = (service as any).parsePriceRangeTerm('0:0');
+    const zeroPriceAffinity = (service as any).computeBestPriceAffinity(
+      { price: 0 },
+      [
+        {
+          termKey: 'price',
+          termValue: '10000:12000',
+          affinity: 1,
+        },
+      ],
+    );
+
+    expect(parsedOpenLowRange).toEqual({ from: null, to: 12000 });
+    expect(parsedDiscussableRange).toBeNull();
+    expect(zeroPriceAffinity).toBe(0);
+  });
+
   it('search should ignore low-confidence terms below open threshold', async () => {
     const prisma = {
       $queryRawUnsafe: jest
