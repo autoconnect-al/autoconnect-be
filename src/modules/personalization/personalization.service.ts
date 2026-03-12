@@ -18,6 +18,11 @@ export type PersonalizationTermScore = {
   lastEventAt?: Date | string | number | null;
 };
 
+export type PersonalizationStaleTermDecayResult = {
+  decayed: number;
+  deleted: number;
+};
+
 type EventCounters = {
   searchCount: number;
   openCount: number;
@@ -39,6 +44,7 @@ type PostSignalRow = {
   fuelType: string | null;
   transmission: string | null;
   type: string | null;
+  price: number | string | null;
 };
 
 type TopTermRow = {
@@ -66,6 +72,7 @@ const FIELD_WEIGHTS: Record<string, number> = {
   fuelType: 1,
   transmission: 1,
   type: 1,
+  price: 1,
   keyword: 1,
   generalSearch: 1,
 };
@@ -178,6 +185,43 @@ export class PersonalizationService {
     return Number(deletedRows ?? 0);
   }
 
+  async decayStaleTerms(
+    staleTermDays = this.getStaleTermDays(),
+    staleTermDecay = this.getStaleTermDecay(),
+  ): Promise<PersonalizationStaleTermDecayResult> {
+    if (!this.isEnabled()) {
+      return {
+        decayed: 0,
+        deleted: 0,
+      };
+    }
+
+    const safeStaleTermDays = Number.isFinite(staleTermDays)
+      ? Math.max(1, Math.floor(staleTermDays))
+      : 2;
+    const safeStaleTermDecay = Number.isFinite(staleTermDecay)
+      ? Math.max(1, Math.floor(staleTermDecay))
+      : 10;
+
+    const decayedRows = await this.prisma.$executeRawUnsafe(
+      `UPDATE visitor_interest_term
+       SET score = score - ?,
+           dateUpdated = NOW()
+       WHERE last_event_at < DATE_SUB(NOW(), INTERVAL ${safeStaleTermDays} DAY)
+         AND score > 0`,
+      safeStaleTermDecay,
+    );
+    const deletedRows = await this.prisma.$executeRawUnsafe(
+      `DELETE FROM visitor_interest_term
+       WHERE score <= 0`,
+    );
+
+    return {
+      decayed: Number(decayedRows ?? 0),
+      deleted: Number(deletedRows ?? 0),
+    };
+  }
+
   async recordSearchSignal(filter: SearchFilter): Promise<void> {
     if (!this.isEnabled() || this.isPersonalizationDisabled(filter.personalizationDisabled)) {
       return;
@@ -215,7 +259,7 @@ export class PersonalizationService {
     }
 
     const rows = await this.prisma.$queryRawUnsafe<PostSignalRow[]>(
-      `SELECT make, model, bodyType, fuelType, transmission, type
+      `SELECT make, model, bodyType, fuelType, transmission, type, price
        FROM search
        WHERE id = ?
        LIMIT 1`,
@@ -307,6 +351,30 @@ export class PersonalizationService {
       }
     };
 
+    const addRange = (termKey: string, raw: unknown, fieldKey: keyof typeof FIELD_WEIGHTS) => {
+      const normalizedKey = this.normalizeTermKey(termKey);
+      const rangeTermValue = this.buildRangeTermValue(raw);
+      if (!normalizedKey || !rangeTermValue) {
+        return;
+      }
+
+      const mapKey = `${normalizedKey}::${rangeTermValue}`;
+      const delta = FIELD_WEIGHTS[fieldKey] * eventMultiplier;
+      const counters = this.countersForEvent('search');
+      const existing = weightedTerms.get(mapKey);
+      if (existing) {
+        existing.delta += delta;
+        existing.counters = this.mergeCounters(existing.counters, counters);
+      } else {
+        weightedTerms.set(mapKey, {
+          termKey: normalizedKey,
+          termValue: rangeTermValue,
+          delta,
+          counters,
+        });
+      }
+    };
+
     add('type', filter.type, 'type');
 
     for (const term of searchTerms) {
@@ -328,6 +396,9 @@ export class PersonalizationService {
           break;
         case 'transmission':
           add('transmission', term.value, 'transmission');
+          break;
+        case 'price':
+          addRange('price', term.value, 'price');
           break;
         default:
           break;
@@ -375,6 +446,10 @@ export class PersonalizationService {
     add('fuelType', row.fuelType, 'fuelType');
     add('transmission', row.transmission, 'transmission');
     add('type', row.type, 'type');
+    const priceRangeTermValue = this.rangeTermFromExactValue(row.price);
+    if (priceRangeTermValue) {
+      add('price', priceRangeTermValue, 'price');
+    }
 
     return Array.from(weightedTerms.values());
   }
@@ -447,6 +522,47 @@ export class PersonalizationService {
       .filter((entry): entry is string => Boolean(entry));
   }
 
+  private buildRangeTermValue(raw: unknown): string {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      return '';
+    }
+
+    const range = raw as { from?: unknown; to?: unknown };
+    const from = this.normalizeRangeBoundary(range.from);
+    const to = this.normalizeRangeBoundary(range.to);
+    if (!from && !to) {
+      return '';
+    }
+
+    return this.normalizeTermValue(`${from}:${to}`);
+  }
+
+  private rangeTermFromExactValue(raw: unknown): string {
+    const value = this.normalizeRangeBoundary(raw);
+    if (!value) {
+      return '';
+    }
+    return this.normalizeTermValue(`${value}:${value}`);
+  }
+
+  private normalizeRangeBoundary(raw: unknown): string {
+    const trimmed = String(raw ?? '').trim();
+    if (!trimmed) {
+      return '';
+    }
+
+    const parsed = Number(trimmed);
+    if (!Number.isFinite(parsed)) {
+      return '';
+    }
+    const normalized = Math.trunc(parsed);
+    if (normalized <= 0) {
+      return '';
+    }
+
+    return String(normalized);
+  }
+
   private normalizeTermKey(raw: unknown): string {
     const normalized = String(raw ?? '').trim();
     if (!normalized) return '';
@@ -464,6 +580,26 @@ export class PersonalizationService {
   private getRetentionDays(): number {
     const parsed = Number(process.env.PERSONALIZATION_RETENTION_DAYS ?? '90');
     if (!Number.isFinite(parsed)) return 90;
+    return Math.max(1, Math.floor(parsed));
+  }
+
+  private getStaleTermDays(): number {
+    return this.readPositiveIntEnv('PERSONALIZATION_STALE_TERM_DAYS', 2);
+  }
+
+  private getStaleTermDecay(): number {
+    return this.readPositiveIntEnv('PERSONALIZATION_STALE_TERM_DECAY', 10);
+  }
+
+  private readPositiveIntEnv(name: string, fallback: number): number {
+    const raw = process.env[name];
+    if (typeof raw !== 'string' || raw.trim().length === 0) {
+      return fallback;
+    }
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) {
+      return fallback;
+    }
     return Math.max(1, Math.floor(parsed));
   }
 

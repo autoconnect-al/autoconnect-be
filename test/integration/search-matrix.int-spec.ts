@@ -578,6 +578,80 @@ describe('Integration: search matrix', () => {
     );
   });
 
+  it('default unfiltered search applies price-range personalization affinity', async () => {
+    process.env.PERSONALIZATION_ENABLED = 'true';
+    await seedSearchRecord({
+      postId: 5971n,
+      vendorId: 6971n,
+      accountName: 'personalized-price-high',
+      make: 'Audi',
+      model: 'A6',
+      bodyType: 'Sedans',
+      price: 21000,
+      renewedTime: 220,
+    });
+    await seedSearchRecord({
+      postId: 5972n,
+      vendorId: 6972n,
+      accountName: 'personalized-price-range',
+      make: 'BMW',
+      model: '320',
+      bodyType: 'Sedans',
+      price: 11100,
+      renewedTime: 212,
+    });
+    await seedSearchRecord({
+      postId: 5973n,
+      vendorId: 6973n,
+      accountName: 'personalized-price-mid',
+      make: 'Toyota',
+      model: 'Corolla',
+      bodyType: 'Sedans',
+      price: 15000,
+      renewedTime: 218,
+    });
+    await seedSearchRecord({
+      postId: 5974n,
+      vendorId: 6974n,
+      accountName: 'personalized-price-low',
+      make: 'Ford',
+      model: 'Focus',
+      bodyType: 'Sedans',
+      price: 1000,
+      renewedTime: 216,
+    });
+
+    await seedVisitorInterestTerms('visitor-default-price', [
+      {
+        key: 'price',
+        value: '10000:12000',
+        score: 260,
+        openCount: 4,
+        contactCount: 0,
+      },
+    ]);
+
+    const response = await request(app.getHttpServer())
+      .post('/car-details/search')
+      .send({
+        filter: makeFilter({
+          searchTerms: [{ key: 'type', value: 'car' }],
+          sortTerms: [{ key: 'renewedTime', order: 'DESC' }],
+          maxResults: 4,
+          visitorId: 'visitor-default-price',
+        }),
+      })
+      .expect(200);
+
+    expect(response.body.result).toHaveLength(4);
+    expect(response.body.result[0]).toEqual(
+      expect.objectContaining({
+        id: '5972',
+        price: '11100',
+      }),
+    );
+  });
+
   it('non-default sort remains unpersonalized even when visitor profile exists', async () => {
     process.env.PERSONALIZATION_ENABLED = 'true';
     await seedSearchRecord({

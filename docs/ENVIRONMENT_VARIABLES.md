@@ -73,7 +73,7 @@ Validated by `src/app.module.ts`:
 ## Personalization Tuning Variables
 - `PERSONALIZATION_ENABLED`: master enable flag (`true`/`false`).
 - `PERSONALIZATION_RETENTION_DAYS`: inactive profile retention window (default `90`).
-- `PERSONALIZATION_MAX_PERSONALIZED_SHARE`: max personalized share per page (default `0.6`).
+- `PERSONALIZATION_MAX_PERSONALIZED_SHARE`: max personalized share per page (default `0.4`).
 - `PERSONALIZATION_MODEL_MAX_SHARE`: max model share per page (default `0.25`).
 - `PERSONALIZATION_MAKE_MAX_SHARE`: max make share per page (default `0.4`).
 - `PERSONALIZATION_MODEL_OPEN_THRESHOLD`: model activation threshold from opens (default `3`).
@@ -84,6 +84,8 @@ Validated by `src/app.module.ts`:
 - `PERSONALIZATION_SEARCH_CANDIDATE_MULTIPLIER`: default-feed candidate expansion multiplier (default `5`).
 - `PERSONALIZATION_SEARCH_CANDIDATE_MAX`: max default-feed candidates fetched for composition (default `500`).
 - `PERSONALIZATION_MOST_WANTED_CANDIDATES`: most-wanted candidate pool size before composition (default `24`).
+- `PERSONALIZATION_STALE_TERM_DAYS`: inactivity window before score deterioration runs (default `2`).
+- `PERSONALIZATION_STALE_TERM_DECAY`: score decrement applied to stale terms on daily cron (default `10`).
 
 ## Present in `.env` but not used directly by `src/` runtime code
 These may exist for local tooling or historical reasons:
