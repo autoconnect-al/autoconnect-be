@@ -51,7 +51,6 @@ DEALLOCATE PREPARE stmt;
 UPDATE `vendor`
 SET `isNormalUser` = CASE
   WHEN COALESCE(`accountExists`, 0) = 0
-    AND COALESCE(`initialised`, 0) = 0
   THEN 1
   WHEN LOWER(COALESCE(`accountName`, '')) LIKE '%new vendor%'
   THEN 1
