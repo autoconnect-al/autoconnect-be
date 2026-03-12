@@ -24,6 +24,7 @@ function validateEnvironment(config: Record<string, unknown>) {
 
   const required = [
     'DATABASE_URL',
+    'AP_DEV_DATABASE_URL',
     'JWT_SECRET',
     'AP_ADMIN_CODE',
     'ADMIN_CODE',

@@ -1,4 +1,7 @@
 import { ApVendorManagementService } from './ap-vendor-management.service';
+import { mkdtemp, rm } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 describe('ApVendorManagementService', () => {
   const createService = (prisma: any = {}) =>
@@ -55,5 +58,143 @@ describe('ApVendorManagementService', () => {
 
     expect(response.success).toBe(false);
     expect(response.message).toContain('Could not mark vendor for crawl next');
+  });
+
+  it('updates site settings on requested target with validation', async () => {
+    const targetClient = {
+      vendor: {
+        findUnique: jest.fn().mockResolvedValue({ id: 1n }),
+        findFirst: jest.fn().mockResolvedValue(null),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    } as any;
+
+    const service = createService({
+      vendor: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+    } as any);
+
+    jest
+      .spyOn(service as any, 'resolveTargetClient')
+      .mockReturnValue({ ok: true, client: targetClient });
+
+    const response = await service.updateVendorSiteSettings('1', 'dev', {
+      siteSettings: {
+        siteEnabled: true,
+        subdomain: 'vendor-site',
+        customDomain: 'vendor.example.com',
+        theme: 'classic',
+        primaryColor: '#123456',
+      },
+    });
+
+    expect(response.success).toBe(true);
+    expect(targetClient.vendor.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 1n },
+        data: expect.objectContaining({
+          siteEnabled: true,
+          subdomain: 'vendor-site',
+          customDomain: 'vendor.example.com',
+          theme: 'classic',
+          primaryColor: '#123456',
+        }),
+      }),
+    );
+  });
+
+  it('publishes dev site settings to prod', async () => {
+    const devClient = {
+      vendor: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 5n,
+          siteEnabled: true,
+          subdomain: 'published-vendor',
+          customDomain: 'published.example.com',
+          theme: 'clean',
+          primaryColor: '#112233',
+          secondaryColor: '#445566',
+          logo: 'logo.svg',
+          banner: 'banner.webp',
+          siteConfig: '{"version":1,"pages":{"home":{"sections":[]},"about":{"sections":[]},"contact":{"sections":[]}}}',
+        }),
+      },
+    } as any;
+
+    const prisma = {
+      vendor: {
+        findUnique: jest.fn().mockResolvedValue({ id: 5n }),
+        findFirst: jest.fn().mockResolvedValue(null),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    } as any;
+
+    const service = createService(prisma);
+    jest
+      .spyOn(service as any, 'resolveTargetClient')
+      .mockReturnValue({ ok: true, client: devClient });
+
+    const response = await service.publishVendorSiteSettings('5');
+
+    expect(response.success).toBe(true);
+    expect(prisma.vendor.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 5n },
+        data: expect.objectContaining({
+          siteEnabled: true,
+          subdomain: 'published-vendor',
+          customDomain: 'published.example.com',
+          theme: 'clean',
+        }),
+      }),
+    );
+  });
+
+  it('uploads vendor site media to vendor_site folder', async () => {
+    const mediaRoot = await mkdtemp(join(tmpdir(), 'vendor-site-upload-'));
+    const previousMediaRoot = process.env.MEDIA_ROOT;
+    process.env.MEDIA_ROOT = mediaRoot;
+
+    const targetClient = {
+      vendor: {
+        findUnique: jest.fn().mockResolvedValue({ id: 1n }),
+      },
+    } as any;
+
+    const service = createService({
+      vendor: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+    } as any);
+
+    jest
+      .spyOn(service as any, 'resolveTargetClient')
+      .mockReturnValue({ ok: true, client: targetClient });
+
+    try {
+      const response = await service.uploadVendorSiteMedia(
+        '1',
+        'dev',
+        {
+          buffer: Buffer.from([1, 2, 3, 4]),
+          size: 4,
+          mimetype: 'image/png',
+          originalname: 'logo.png',
+        } as Express.Multer.File,
+        'logo',
+      );
+
+      expect(response.success).toBe(true);
+      expect(response.result).toEqual(
+        expect.objectContaining({
+          path: expect.stringMatching(/^\/media\/vendor_site\/1\/\d+-[a-f0-9]{16}\.png$/),
+          field: 'logo',
+        }),
+      );
+    } finally {
+      process.env.MEDIA_ROOT = previousMediaRoot;
+      await rm(mediaRoot, { recursive: true, force: true });
+    }
   });
 });

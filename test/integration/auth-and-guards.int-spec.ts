@@ -180,6 +180,45 @@ describe('Integration: auth and guards', () => {
     });
   });
 
+  it('POST /admin/vendor/site-config rejects non-admin legacy JWT', async () => {
+    await seedVendor(prisma, FIXTURE_VENDOR_ID, {
+      username: 'vendor_user',
+      email: 'vendor_user@example.com',
+      password: null,
+    });
+
+    const userToken = await issueLegacyJwt({
+      userId: FIXTURE_VENDOR_ID.toString(),
+      roles: ['USER'],
+      email: 'vendor_user@example.com',
+      username: 'vendor_user',
+      name: 'Vendor User',
+    });
+
+    const response = await request(app.getHttpServer())
+      .post('/admin/vendor/site-config')
+      .set('authorization', `Bearer ${userToken}`)
+      .send({
+        vendor: {
+          siteConfig: {
+            version: 1,
+            pages: {
+              home: { sections: [] },
+              about: { sections: [] },
+              contact: { sections: [] },
+            },
+          },
+        },
+      })
+      .expect(401);
+
+    expect(response.body).toMatchObject({
+      success: false,
+      message: 'ERROR: Not authorised',
+      statusCode: '401',
+    });
+  });
+
   it('GET /role-management succeeds with a valid ADMIN legacy JWT', async () => {
     const adminToken = await issueLegacyJwt({
       userId: FIXTURE_VENDOR_ID.toString(),

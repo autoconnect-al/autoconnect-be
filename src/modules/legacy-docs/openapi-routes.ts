@@ -95,6 +95,11 @@ export const legacyRoutes: LegacyRoute[] = [
   },
   {
     method: 'get',
+    path: '/data/vendors/resolve',
+    summary: 'Resolve vendor by host/subdomain/username',
+  },
+  {
+    method: 'get',
     path: '/data/article/{lang}/{id}',
     summary: 'Single article',
   },
@@ -195,6 +200,12 @@ export const legacyRoutes: LegacyRoute[] = [
     method: 'post',
     path: '/admin/vendor/profile-picture',
     summary: 'Update vendor profile picture (deferred proxy)',
+    security: true,
+  },
+  {
+    method: 'post',
+    path: '/admin/vendor/site-config',
+    summary: 'Update vendor site configuration',
     security: true,
   },
   { method: 'post', path: '/api/v1/orders', summary: 'Create payment order' },
@@ -375,6 +386,21 @@ export const legacyRoutes: LegacyRoute[] = [
     method: 'get',
     path: '/vendor-management/toggle-deleted/{id}',
     summary: 'Toggle vendor deleted',
+  },
+  {
+    method: 'get',
+    path: '/vendor-management/site-settings/{id}',
+    summary: 'Get vendor site settings (AP)',
+  },
+  {
+    method: 'post',
+    path: '/vendor-management/site-settings/{id}',
+    summary: 'Update vendor site settings (AP)',
+  },
+  {
+    method: 'post',
+    path: '/vendor-management/site-settings/{id}/publish',
+    summary: 'Publish vendor site settings dev -> prod (AP)',
   },
   {
     method: 'get',

@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { LegacyAdminService } from './legacy-admin.service';
 import { LegacyJwtGuard } from '../../common/guards/legacy-jwt.guard';
+import { LegacyJwtAdminGuard } from '../../common/guards/legacy-jwt-admin.guard';
 import { LegacyUserId } from '../../common/decorators/legacy-auth.decorators';
 
 @Controller('admin')
@@ -79,5 +80,15 @@ export class LegacyAdminController {
     @Body('vendor') vendor: unknown,
   ) {
     return this.service.updateVendorProfilePicture(userId, vendor);
+  }
+
+  @Post('vendor/site-config')
+  @HttpCode(200)
+  @UseGuards(LegacyJwtAdminGuard)
+  vendorSiteConfig(
+    @LegacyUserId() userId: string,
+    @Body('vendor') vendor: unknown,
+  ) {
+    return this.service.updateVendorSiteConfig(userId, vendor);
   }
 }
