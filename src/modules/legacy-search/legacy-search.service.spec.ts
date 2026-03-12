@@ -538,6 +538,69 @@ describe('LegacySearchService', () => {
     expect(searchCall[searchCall.length - 1]).toBe(0);
   });
 
+  it('should default max personalized share to 0.4 when env is unset', () => {
+    const prisma = { $queryRawUnsafe: jest.fn() } as any;
+    const service = new LegacySearchService(prisma, new LegacySearchQueryBuilder());
+
+    expect((service as any).getPersonalizationMaxPersonalizedShare()).toBe(0.4);
+  });
+
+  it('search should apply price-range affinity without exact price matches', async () => {
+    const prisma = {
+      $queryRawUnsafe: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          { id: 1, make: 'Audi', model: 'A6', price: 20000, renewedTime: 300 },
+          { id: 2, make: 'BMW', model: '320', price: 11050, renewedTime: 250 },
+          { id: 3, make: 'Toyota', model: 'Corolla', price: 14500, renewedTime: 260 },
+          { id: 4, make: 'Ford', model: 'Focus', price: 9000, renewedTime: 240 },
+        ]),
+    } as any;
+    const personalizationService = {
+      isEnabled: jest.fn().mockReturnValue(true),
+      isPersonalizationDisabled: jest.fn().mockReturnValue(false),
+      sanitizeVisitorId: jest.fn().mockReturnValue('visitor-price'),
+      getTopTerms: jest.fn().mockResolvedValue([
+        {
+          termKey: 'price',
+          termValue: '10000:12000',
+          score: 300,
+          openCount: 4,
+          contactCount: 0,
+          searchCount: 1,
+          impressionCount: 0,
+        },
+      ]),
+      recordSearchSignal: jest.fn().mockResolvedValue(undefined),
+    } as any;
+    const service = new LegacySearchService(
+      prisma,
+      new LegacySearchQueryBuilder(),
+      personalizationService,
+    );
+
+    const response = await service.search(
+      JSON.stringify({
+        type: 'car',
+        searchTerms: [{ key: 'type', value: 'car' }],
+        sortTerms: [{ key: 'renewedTime', order: 'DESC' }],
+        visitorId: 'visitor-price',
+        page: 0,
+        maxResults: 4,
+      }),
+    );
+
+    expect(response.success).toBe(true);
+    expect(response.result).toHaveLength(4);
+    expect(response.result[0]).toEqual(
+      expect.objectContaining({
+        id: 2,
+        price: 11050,
+      }),
+    );
+  });
+
   it('search should ignore low-confidence terms below open threshold', async () => {
     const prisma = {
       $queryRawUnsafe: jest

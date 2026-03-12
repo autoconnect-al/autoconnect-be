@@ -51,7 +51,9 @@ const PERSONALIZATION_KEY_WEIGHTS: Record<string, number> = {
   fuelType: 0.1,
   transmission: 0.1,
   type: 0.05,
+  price: 0.1,
 };
+const PRICE_AFFINITY_MIN_TOLERANCE = 2500;
 
 @Injectable()
 export class LegacySearchService {
@@ -1513,25 +1515,62 @@ export class LegacySearchService {
     let score = 0;
 
     for (const [termKey, weight] of Object.entries(PERSONALIZATION_KEY_WEIGHTS)) {
-      const rowValue = this.normalizeComparableValue(this.valueForTermKey(row, termKey));
-      if (!rowValue) {
-        continue;
-      }
-
       let bestAffinity = 0;
-      for (const term of activeTerms) {
-        if (term.termKey !== termKey) continue;
-        if (term.normalizedValue !== rowValue) continue;
-        if (term.affinity > bestAffinity) {
-          bestAffinity = term.affinity;
+
+      if (termKey === 'price') {
+        bestAffinity = this.computeBestPriceAffinity(row, activeTerms);
+      } else {
+        const rowValue = this.normalizeComparableValue(this.valueForTermKey(row, termKey));
+        if (!rowValue) {
+          continue;
+        }
+
+        for (const term of activeTerms) {
+          if (term.termKey !== termKey) continue;
+          if (term.normalizedValue !== rowValue) continue;
+          if (term.affinity > bestAffinity) {
+            bestAffinity = term.affinity;
+          }
         }
       }
+
       if (bestAffinity > 0) {
         score += weight * bestAffinity;
       }
     }
 
     return score;
+  }
+
+  private computeBestPriceAffinity(
+    row: Record<string, unknown>,
+    activeTerms: ActiveRankTerm[],
+  ): number {
+    const rowPrice = this.toNullableNumber(this.valueForTermKey(row, 'price'));
+    if (!Number.isFinite(rowPrice) || rowPrice <= 0) {
+      return 0;
+    }
+
+    let bestAffinity = 0;
+    for (const term of activeTerms) {
+      if (term.termKey !== 'price') continue;
+      const range = this.parsePriceRangeTerm(term.termValue);
+      if (!range) continue;
+
+      const rangeAffinity = this.computePriceRangeAffinity(
+        rowPrice,
+        range.from,
+        range.to,
+      );
+      if (rangeAffinity <= 0) continue;
+
+      const weightedAffinity = term.affinity * rangeAffinity;
+      if (weightedAffinity > bestAffinity) {
+        bestAffinity = weightedAffinity;
+      }
+    }
+
+    return bestAffinity;
   }
 
   private valueForTermKey(row: Record<string, unknown>, termKey: string): unknown {
@@ -1548,9 +1587,85 @@ export class LegacySearchService {
         return row.transmission;
       case 'type':
         return row.type;
+      case 'price':
+        return row.price;
       default:
         return '';
     }
+  }
+
+  private parsePriceRangeTerm(
+    termValue: string,
+  ): { from: number | null; to: number | null } | null {
+    const [fromRaw, toRaw, ...rest] = this.toStr(termValue).split(':');
+    if (rest.length > 0) {
+      return null;
+    }
+
+    const from = this.parsePriceRangeBoundary(fromRaw);
+    const to = this.parsePriceRangeBoundary(toRaw);
+
+    if (from == null && to == null) {
+      return null;
+    }
+
+    if (from != null && to != null && from > to) {
+      return { from: to, to: from };
+    }
+
+    return { from, to };
+  }
+
+  private parsePriceRangeBoundary(value: string | undefined): number | null {
+    const normalized = this.toStr(value ?? '');
+    if (!normalized) {
+      return null;
+    }
+
+    const parsed = Number(normalized);
+    if (!Number.isFinite(parsed)) {
+      return null;
+    }
+
+    return Math.max(0, Math.trunc(parsed));
+  }
+
+  private computePriceRangeAffinity(
+    rowPrice: number,
+    from: number | null,
+    to: number | null,
+  ): number {
+    if (from != null && to != null && rowPrice >= from && rowPrice <= to) {
+      return 1;
+    }
+    if (from != null && to == null && rowPrice >= from) {
+      return 1;
+    }
+    if (from == null && to != null && rowPrice <= to) {
+      return 1;
+    }
+
+    let nearestBound: number | null = null;
+    if (from != null && rowPrice < from) {
+      nearestBound = from;
+    } else if (to != null && rowPrice > to) {
+      nearestBound = to;
+    } else if (from != null && to != null) {
+      nearestBound =
+        Math.abs(rowPrice - from) <= Math.abs(rowPrice - to) ? from : to;
+    }
+
+    if (nearestBound == null) {
+      return 0;
+    }
+
+    const distance = Math.abs(rowPrice - nearestBound);
+    const tolerance = Math.max(
+      PRICE_AFFINITY_MIN_TOLERANCE,
+      Math.round(nearestBound * 0.1),
+    );
+
+    return Math.max(0, 1 - distance / tolerance);
   }
 
   private buildActiveRankTerms(terms: PersonalizationTermScore[]): ActiveRankTerm[] {
@@ -1611,6 +1726,7 @@ export class LegacySearchService {
       'fuelType',
       'transmission',
       'type',
+      'price',
     ]);
 
     return terms
@@ -1684,7 +1800,7 @@ export class LegacySearchService {
   }
 
   private getPersonalizationMaxPersonalizedShare(): number {
-    return this.readRatioEnv('PERSONALIZATION_MAX_PERSONALIZED_SHARE', 0.6);
+    return this.readRatioEnv('PERSONALIZATION_MAX_PERSONALIZED_SHARE', 0.4);
   }
 
   private getPersonalizationModelMaxShare(): number {

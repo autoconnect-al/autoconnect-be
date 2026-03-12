@@ -3,10 +3,14 @@ import { PersonalizationService } from './personalization.service';
 describe('PersonalizationService', () => {
   const originalEnabled = process.env.PERSONALIZATION_ENABLED;
   const originalRetention = process.env.PERSONALIZATION_RETENTION_DAYS;
+  const originalStaleDays = process.env.PERSONALIZATION_STALE_TERM_DAYS;
+  const originalStaleDecay = process.env.PERSONALIZATION_STALE_TERM_DECAY;
 
   afterEach(() => {
     process.env.PERSONALIZATION_ENABLED = originalEnabled;
     process.env.PERSONALIZATION_RETENTION_DAYS = originalRetention;
+    process.env.PERSONALIZATION_STALE_TERM_DAYS = originalStaleDays;
+    process.env.PERSONALIZATION_STALE_TERM_DECAY = originalStaleDecay;
   });
 
   function makeService() {
@@ -90,6 +94,29 @@ describe('PersonalizationService', () => {
     expect(upsertCall.slice(5, 9)).toEqual([1, 0, 0, 0]);
   });
 
+  it('records canonical price range term from search filters', async () => {
+    process.env.PERSONALIZATION_ENABLED = 'true';
+    const { service, prisma } = makeService();
+    prisma.$executeRawUnsafe.mockResolvedValue(1);
+
+    await service.recordSearchSignal({
+      visitorId: 'visitor-price',
+      type: 'car',
+      searchTerms: [
+        { key: 'price', value: { from: '10000', to: '18000' } },
+      ],
+      sortTerms: [{ key: 'renewedTime', order: 'DESC' }],
+    });
+
+    const priceUpsertCall = prisma.$executeRawUnsafe.mock.calls.find(
+      (call: unknown[]) =>
+        String(call[0]).includes('INSERT INTO visitor_interest_term')
+        && call[2] === 'price',
+    ) as unknown[] | undefined;
+    expect(priceUpsertCall).toBeDefined();
+    expect(priceUpsertCall?.[3]).toBe('10000:18000');
+  });
+
   it('records open post signal with open counter increment', async () => {
     process.env.PERSONALIZATION_ENABLED = 'true';
     const { service, prisma } = makeService();
@@ -112,6 +139,33 @@ describe('PersonalizationService', () => {
     ) as unknown[];
     expect(upsertCall?.[0]).toContain('open_count = open_count + VALUES(open_count)');
     expect(upsertCall.slice(5, 9)).toEqual([0, 1, 0, 0]);
+  });
+
+  it('records exact price range from post signals', async () => {
+    process.env.PERSONALIZATION_ENABLED = 'true';
+    const { service, prisma } = makeService();
+    prisma.$executeRawUnsafe.mockResolvedValue(1);
+    prisma.$queryRawUnsafe.mockResolvedValue([
+      {
+        make: 'Mercedes-benz',
+        model: 'GLC',
+        bodyType: 'SUV/Off-Road/Pick-up',
+        fuelType: 'diesel',
+        transmission: 'automatic',
+        type: 'car',
+        price: 20500,
+      },
+    ]);
+
+    await service.recordPostSignalByPostId(10n, 'visitor-2', 'open');
+
+    const priceUpsertCall = prisma.$executeRawUnsafe.mock.calls.find(
+      (call: unknown[]) =>
+        String(call[0]).includes('INSERT INTO visitor_interest_term')
+        && call[2] === 'price',
+    ) as unknown[] | undefined;
+    expect(priceUpsertCall).toBeDefined();
+    expect(priceUpsertCall?.[3]).toBe('20500:20500');
   });
 
   it('returns false on reset for invalid visitor id', async () => {
@@ -142,5 +196,27 @@ describe('PersonalizationService', () => {
     await expect(service.cleanupInactiveProfiles()).resolves.toBe(3);
     const sql = prisma.$executeRawUnsafe.mock.calls[0][0] as string;
     expect(sql).toContain('INTERVAL 90 DAY');
+  });
+
+  it('decays stale term scores and deletes non-positive rows', async () => {
+    process.env.PERSONALIZATION_ENABLED = 'true';
+    delete process.env.PERSONALIZATION_STALE_TERM_DAYS;
+    delete process.env.PERSONALIZATION_STALE_TERM_DECAY;
+    const { service, prisma } = makeService();
+    prisma.$executeRawUnsafe
+      .mockResolvedValueOnce(4)
+      .mockResolvedValueOnce(2);
+
+    await expect(service.decayStaleTerms()).resolves.toEqual({
+      decayed: 4,
+      deleted: 2,
+    });
+
+    const updateSql = prisma.$executeRawUnsafe.mock.calls[0][0] as string;
+    const deleteSql = prisma.$executeRawUnsafe.mock.calls[1][0] as string;
+    expect(updateSql).toContain('UPDATE visitor_interest_term');
+    expect(updateSql).toContain('INTERVAL 2 DAY');
+    expect(prisma.$executeRawUnsafe.mock.calls[0][1]).toBe(10);
+    expect(deleteSql).toContain('DELETE FROM visitor_interest_term');
   });
 });

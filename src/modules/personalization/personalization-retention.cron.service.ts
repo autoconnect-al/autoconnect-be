@@ -12,8 +12,14 @@ export class PersonalizationRetentionCronService {
   @Cron('0 0 * * *')
   async cleanupInactiveProfilesAtMidnight(): Promise<void> {
     try {
-      const deleted = await this.personalizationService.cleanupInactiveProfiles();
-      this.logger.info('cron.personalization-retention.completed', { deleted });
+      const staleTermResult = await this.personalizationService.decayStaleTerms();
+      const deletedProfiles =
+        await this.personalizationService.cleanupInactiveProfiles();
+      this.logger.info('cron.personalization-retention.completed', {
+        staleTermRowsDecayed: staleTermResult.decayed,
+        staleTermRowsDeleted: staleTermResult.deleted,
+        deletedProfiles,
+      });
     } catch (error) {
       this.logger.error('cron.personalization-retention.failed', {
         error: error instanceof Error ? error.message : String(error),
