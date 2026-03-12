@@ -308,6 +308,15 @@ model vendor {
   useDetailsForPosts         Boolean   @default(false)
   name                       String?   @db.VarChar(255)
   username                   String?   @db.VarChar(255)
+  subdomain                  String?   @unique(map: "vendor_subdomain_uq") @db.VarChar(255)
+  customDomain               String?   @unique(map: "vendor_custom_domain_uq") @db.VarChar(255)
+  siteEnabled                Boolean   @default(false)
+  theme                      String?   @db.VarChar(50)
+  primaryColor               String?   @db.VarChar(7)
+  secondaryColor             String?   @db.VarChar(7)
+  logo                       String?   @db.VarChar(255)
+  banner                     String?   @db.VarChar(255)
+  siteConfig                 String?   @db.LongText
   blocked                    Boolean?  @default(false)
   attemptedLogin             Int?      @default(0)
   password                   String?   @db.Text

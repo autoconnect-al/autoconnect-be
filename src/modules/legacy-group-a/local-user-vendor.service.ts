@@ -10,6 +10,7 @@ import { Resend } from 'resend';
 import { requireEnv } from '../../common/require-env.util';
 import { getUserRoleNames } from '../../common/user-roles.util';
 import { createLogger } from '../../common/logger.util';
+import { normalizeVendorSiteConfigInput } from './vendor-site-config.util';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -499,6 +500,54 @@ export class LocalUserVendorService {
     vendor: unknown,
   ): Promise<LegacyResponse> {
     return this.updateVendorDetails(userId, vendor);
+  }
+
+  async updateVendorSiteConfig(
+    userId: string,
+    vendor: unknown,
+  ): Promise<LegacyResponse> {
+    try {
+      const normalizedVendor = this.normalizePayload(vendor);
+      const siteConfigInput =
+        Object.prototype.hasOwnProperty.call(normalizedVendor, 'siteConfig')
+          ? normalizedVendor.siteConfig
+          : vendor;
+
+      const normalizedSiteConfig = normalizeVendorSiteConfigInput(
+        siteConfigInput,
+      );
+
+      if (!normalizedSiteConfig.ok) {
+        return legacyError(
+          `Invalid site config payload: ${normalizedSiteConfig.error}`,
+          400,
+        );
+      }
+
+      const vendorEntry = await this.prisma.vendor.findUnique({
+        where: { id: BigInt(userId) },
+        select: { id: true },
+      });
+      if (!vendorEntry) {
+        return legacyError('Could not update vendor', 500);
+      }
+
+      await this.prisma.vendor.update({
+        where: { id: BigInt(userId) },
+        data: {
+          dateUpdated: new Date(),
+          initialised: true,
+          siteConfig:
+            normalizedSiteConfig.value === null
+              ? null
+              : JSON.stringify(normalizedSiteConfig.value),
+        },
+      });
+
+      return legacySuccess(null, 'Vendor updated successfully');
+    } catch {
+      return legacyError('Could not update vendor', 500);
+    }
   }
 
   private async updateVendorDetails(

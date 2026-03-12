@@ -111,6 +111,7 @@ export class LegacyAdminService {
         contact: true,
         profilePicture: true,
         biography: true,
+        siteConfig: true,
         useDetailsForPosts: true,
       },
     });
@@ -138,6 +139,7 @@ export class LegacyAdminService {
         profilePicture: vendor.profilePicture ?? '',
         biography: vendor.biography ?? '',
         contact: vendor.contact ?? '',
+        siteConfig: this.parseVendorSiteConfig(vendor.siteConfig),
         useDetailsForPosts: Boolean(vendor.useDetailsForPosts),
       };
     }
@@ -163,6 +165,10 @@ export class LegacyAdminService {
 
   updateVendorProfilePicture(id: string, vendor: unknown) {
     return this.localUserVendorService.updateVendorProfilePicture(id, vendor);
+  }
+
+  updateVendorSiteConfig(id: string, vendor: unknown) {
+    return this.localUserVendorService.updateVendorSiteConfig(id, vendor);
   }
 
   deletePost(id: string, userId: string) {
@@ -255,5 +261,17 @@ export class LegacyAdminService {
         return value;
       }),
     ) as T;
+  }
+
+  private parseVendorSiteConfig(siteConfig: string | null | undefined) {
+    if (!siteConfig || typeof siteConfig !== 'string') {
+      return null;
+    }
+    try {
+      const parsed = JSON.parse(siteConfig) as unknown;
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch {
+      return null;
+    }
   }
 }
