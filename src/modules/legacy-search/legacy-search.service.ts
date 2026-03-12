@@ -563,6 +563,7 @@ export class LegacySearchService {
     filter: SearchFilter,
   ): Promise<Record<string, unknown> | null> {
     const terms = this.termMap(filter.searchTerms ?? []);
+    const vendorAccountName = this.toStr(terms.get('vendorAccountName') ?? '');
     const make = this.toStr(terms.get('make1') ?? '');
     const model = this.toStr(terms.get('model1') ?? '').replace(' (all)', '');
     const registrationRaw = terms.get('registration');
@@ -583,6 +584,10 @@ export class LegacySearchService {
       'promotionTo >= ?',
     ];
     const baseParams: unknown[] = [type, now];
+    if (vendorAccountName) {
+      baseWhereParts.push('accountName = ?');
+      baseParams.push(vendorAccountName);
+    }
     const rankContext = {
       make: make || null,
       model: model || null,
