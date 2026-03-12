@@ -306,6 +306,54 @@ describe('LegacySearchService', () => {
     );
   });
 
+  it('search should scope promoted selection to vendor when vendorAccountName is provided', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const prisma = {
+      $queryRawUnsafe: jest
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            id: 21,
+            accountName: 'vendor-a',
+            make: 'BMW',
+            model: 'X5',
+            promotionTo: now + 5000,
+            highlightedTo: null,
+          },
+        ])
+        .mockResolvedValueOnce([
+          { id: 21, accountName: 'vendor-a', make: 'BMW', model: 'X5' },
+          { id: 22, accountName: 'vendor-a', make: 'BMW', model: 'X3' },
+        ]),
+    } as any;
+    const service = new LegacySearchService(
+      prisma,
+      new LegacySearchQueryBuilder(),
+    );
+
+    const response = await service.search(
+      JSON.stringify({
+        type: 'car',
+        searchTerms: [{ key: 'vendorAccountName', value: 'vendor-a' }],
+        page: 0,
+        maxResults: 10,
+      }),
+    );
+
+    const promotedCall = prisma.$queryRawUnsafe.mock.calls[0];
+    expect(String(promotedCall[0])).toContain('accountName = ?');
+    expect(promotedCall).toContain('vendor-a');
+
+    expect(response.success).toBe(true);
+    expect(response.result[0]).toEqual(
+      expect.objectContaining({
+        id: 21,
+        accountName: 'vendor-a',
+        promoted: true,
+      }),
+    );
+  });
+
   it('search should map variant-only models to variant LIKE filters', async () => {
     const prisma = {
       $queryRawUnsafe: jest
