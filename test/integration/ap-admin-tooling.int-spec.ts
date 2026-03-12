@@ -241,6 +241,22 @@ describe('Integration: legacy-ap admin/tooling surfaces', () => {
       .send({ account: JSON.stringify({ username: 'vendor-9501', profilePicUrl: 'https://img.example/9501.webp' }) })
       .expect(200);
 
+    const vendorAfterDetails = await prisma.vendor.findUnique({
+      where: { id: 9501n },
+      select: {
+        accountExists: true,
+        isVendor: true,
+        isNormalUser: true,
+        isReposter: true,
+      },
+    });
+    expect(vendorAfterDetails).toMatchObject({
+      accountExists: true,
+      isVendor: true,
+      isNormalUser: false,
+      isReposter: false,
+    });
+
     await request(app.getHttpServer())
       .post('/vendor-management/edit/9501')
       .set('authorization', `Bearer ${adminToken}`)
@@ -250,6 +266,8 @@ describe('Integration: legacy-ap admin/tooling surfaces', () => {
           biography: 'Vendor 9501 biography',
           contact: { phone_number: '0670000000' },
           profilePicture: 'https://img.example/9501-updated.webp',
+          isNormalUser: true,
+          isReposter: true,
         },
       })
       .expect(200);
@@ -262,6 +280,9 @@ describe('Integration: legacy-ap admin/tooling surfaces', () => {
         biography: true,
         contact: true,
         profilePicture: true,
+        isVendor: true,
+        isNormalUser: true,
+        isReposter: true,
       },
     });
 
@@ -270,6 +291,9 @@ describe('Integration: legacy-ap admin/tooling surfaces', () => {
       accountName: 'vendor-9501-edited',
       biography: 'Vendor 9501 biography',
       profilePicture: 'https://img.example/9501-updated.webp',
+      isVendor: false,
+      isNormalUser: true,
+      isReposter: false,
     });
     expect(managedVendor?.contact).toContain('0670000000');
 

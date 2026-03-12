@@ -80,6 +80,9 @@ export class ApVendorManagementService implements OnModuleDestroy {
           deleted: false,
           accountExists: false,
           initialised: false,
+          isVendor: false,
+          isNormalUser: true,
+          isReposter: false,
           profilePicture: '',
           accountName: `new vendor ${id}`,
           biography: '',
@@ -96,6 +99,9 @@ export class ApVendorManagementService implements OnModuleDestroy {
 
     const updates: Record<string, unknown> = {
       accountExists: true,
+      isVendor: true,
+      isNormalUser: false,
+      isReposter: false,
       dateUpdated: new Date(),
     };
 
@@ -119,11 +125,19 @@ export class ApVendorManagementService implements OnModuleDestroy {
     const values: Record<string, unknown> = {
       dateUpdated: new Date(),
     };
+    const identityFlags = this.normalizeIdentityFlags(vendor);
 
     if (vendor.accountName) values.accountName = vendor.accountName;
     if (vendor.biography) values.biography = vendor.biography;
     if (vendor.contact) values.contact = JSON.stringify(vendor.contact);
     if (vendor.profilePicture) values.profilePicture = vendor.profilePicture;
+    if (identityFlags.isVendor !== undefined) values.isVendor = identityFlags.isVendor;
+    if (identityFlags.isNormalUser !== undefined) {
+      values.isNormalUser = identityFlags.isNormalUser;
+    }
+    if (identityFlags.isReposter !== undefined) {
+      values.isReposter = identityFlags.isReposter;
+    }
 
     await this.prisma.vendor.update({
       where: { id: BigInt(id) },
@@ -484,6 +498,9 @@ export class ApVendorManagementService implements OnModuleDestroy {
     biography: string;
     profilePicture: string;
     contact: AnyRecord | null;
+    isVendor: boolean | undefined;
+    isNormalUser: boolean | undefined;
+    isReposter: boolean | undefined;
   } {
     const root = this.toObject(rawVendor);
     const source = root.vendor ?? root;
@@ -500,6 +517,39 @@ export class ApVendorManagementService implements OnModuleDestroy {
         vendor.contact && typeof vendor.contact === 'object'
           ? (vendor.contact as AnyRecord)
           : this.parseJsonObject(vendor.contact),
+      isVendor: this.toOptionalBoolean(vendor.isVendor),
+      isNormalUser: this.toOptionalBoolean(vendor.isNormalUser),
+      isReposter: this.toOptionalBoolean(vendor.isReposter),
+    };
+  }
+
+  private normalizeIdentityFlags(vendor: {
+    isVendor: boolean | undefined;
+    isNormalUser: boolean | undefined;
+    isReposter: boolean | undefined;
+  }): {
+    isVendor: boolean | undefined;
+    isNormalUser: boolean | undefined;
+    isReposter: boolean | undefined;
+  } {
+    let isVendor = vendor.isVendor;
+    let isNormalUser = vendor.isNormalUser;
+    let isReposter = vendor.isReposter;
+
+    if (isVendor === true) {
+      isNormalUser = false;
+    }
+    if (isNormalUser === true) {
+      isVendor = false;
+    }
+    if (isVendor === false) {
+      isReposter = false;
+    }
+
+    return {
+      isVendor,
+      isNormalUser,
+      isReposter,
     };
   }
 
@@ -545,6 +595,30 @@ export class ApVendorManagementService implements OnModuleDestroy {
       return String(value);
     }
     return '';
+  }
+
+  private toOptionalBoolean(value: unknown): boolean | undefined {
+    if (typeof value === 'boolean') {
+      return value;
+    }
+    if (typeof value === 'number') {
+      if (value === 1) return true;
+      if (value === 0) return false;
+      return undefined;
+    }
+    if (typeof value !== 'string') {
+      return undefined;
+    }
+
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'true' || normalized === '1') {
+      return true;
+    }
+    if (normalized === 'false' || normalized === '0') {
+      return false;
+    }
+
+    return undefined;
   }
 
   private normalizeStringField(

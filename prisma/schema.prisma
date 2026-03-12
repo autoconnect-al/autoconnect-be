@@ -297,6 +297,9 @@ model vendor {
   profilePicture             String?   @db.LongText
   accountExists              Boolean   @default(true)
   initialised                Boolean?
+  isVendor                   Boolean   @default(false)
+  isNormalUser               Boolean   @default(false)
+  isReposter                 Boolean   @default(false)
   biography                  String?   @db.VarChar(255)
   merrjep_username           String?   @db.VarChar(255)
   country                    String?   @db.VarChar(100)
