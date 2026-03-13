@@ -132,11 +132,30 @@ model post {
   car_detail_car_detail_post_idTopost       car_detail[] @relation("car_detail_post_idTopost")
   car_detail_post_car_detail_idTocar_detail car_detail?  @relation("post_car_detail_idTocar_detail", fields: [car_detail_id], references: [id], onDelete: Cascade, map: "car_detail___fk")
   post_reach_unique                         post_reach_unique[]
+  post_review                               post_review[]
   vendor                                    vendor       @relation(fields: [vendor_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "post_FK")
 
   @@index([car_detail_id], map: "car_detail___fk")
   @@index([dateUpdated, deleted, live], map: "dateUpdated")
   @@index([vendor_id], map: "post_FK")
+}
+
+model post_review {
+  id          BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  post_id     BigInt   @db.UnsignedBigInt
+  vendor_id   BigInt   @db.UnsignedBigInt
+  review_type String   @db.VarChar(20)
+  reason_key  String?  @db.VarChar(120)
+  message     String?  @db.Text
+  visitor_hash String  @db.VarChar(64)
+  dateCreated DateTime @default(now()) @db.DateTime(0)
+  dateUpdated DateTime @updatedAt @db.DateTime(0)
+  post        post     @relation(fields: [post_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "post_review_post_fk")
+  vendor      vendor   @relation(fields: [vendor_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "post_review_vendor_fk")
+
+  @@unique([post_id, visitor_hash], map: "post_review_post_visitor_uq")
+  @@index([post_id, dateCreated], map: "post_review_post_created_idx")
+  @@index([vendor_id, dateCreated], map: "post_review_vendor_created_idx")
 }
 
 model post_reach_unique {
@@ -328,6 +347,7 @@ model vendor {
   verified                   Boolean?  @default(true)
   verificationCode           String?   @db.VarChar(255)
   post                       post[]
+  post_review                post_review[]
   oauthAccounts              vendor_oauth_account[]
 
   @@index([dateUpdated], map: "dateUpdated")

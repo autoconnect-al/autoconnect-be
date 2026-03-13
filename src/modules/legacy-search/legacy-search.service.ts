@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { PrismaService } from '../../database/prisma.service';
 import { legacyError, legacySuccess } from '../../common/legacy-response';
 import { decodeCaption } from '../imports/utils/caption-processor';
@@ -14,6 +15,10 @@ import {
   type PersonalizationTermScore,
 } from '../personalization/personalization.service';
 import { enrichRowsWithPostStats } from '../../common/post-stats-enrichment.util';
+import {
+  type PostReviewType,
+  verifyPostReviewRequestSignature,
+} from './post-review-signature.util';
 
 type RankablePersonalizationTerm = {
   termKey: string;
@@ -54,6 +59,27 @@ const PERSONALIZATION_KEY_WEIGHTS: Record<string, number> = {
   price: 0.1,
 };
 const PRICE_AFFINITY_MIN_TOLERANCE = 2500;
+const POST_REVIEW_ALLOWED_TYPES: PostReviewType[] = ['like', 'dislike'];
+const POST_REVIEW_ALLOWED_REASONS: Record<PostReviewType, Set<string>> = {
+  like: new Set([
+    'clear_photos',
+    'good_price',
+    'detailed_description',
+    'seller_responsive',
+    'other',
+  ]),
+  dislike: new Set([
+    'not_enough_photos',
+    'unclear_photos',
+    'price_too_high',
+    'price_missing',
+    'missing_details',
+    'seller_unresponsive',
+    'other',
+  ]),
+};
+const POST_REVIEW_MAX_MESSAGE_LENGTH = 1000;
+const POST_REVIEW_MIN_MESSAGE_LENGTH = 10;
 
 @Injectable()
 export class LegacySearchService {
@@ -326,6 +352,109 @@ export class LegacySearchService {
       'public',
     );
     return legacySuccess(this.normalizeBigInts(enrichedRows));
+  }
+
+  async submitPostReview(
+    id: string,
+    body: unknown,
+    signatureTimestamp?: string,
+    requestSignature?: string,
+  ) {
+    if (!/^\d+$/.test(id)) {
+      return legacyError('Invalid post ID format', 400);
+    }
+
+    const payload = (body ?? {}) as Record<string, unknown>;
+    const reviewType = this.toStr(payload.reviewType).toLowerCase() as PostReviewType;
+    if (!POST_REVIEW_ALLOWED_TYPES.includes(reviewType)) {
+      return legacyError("reviewType must be either 'like' or 'dislike'", 400);
+    }
+
+    const reasonKeyInput = this.toStr(payload.reasonKey).toLowerCase();
+    const reasonKey = reasonKeyInput || undefined;
+    if (
+      reasonKey &&
+      !POST_REVIEW_ALLOWED_REASONS[reviewType].has(reasonKey)
+    ) {
+      return legacyError('reasonKey is invalid for the selected review type', 400);
+    }
+
+    const messageInput = this.toStr(payload.message);
+    if (messageInput.length > POST_REVIEW_MAX_MESSAGE_LENGTH) {
+      return legacyError(
+        `message cannot exceed ${POST_REVIEW_MAX_MESSAGE_LENGTH} characters`,
+        400,
+      );
+    }
+
+    const message = messageInput || undefined;
+    const hasLongEnoughMessage =
+      (message?.length ?? 0) >= POST_REVIEW_MIN_MESSAGE_LENGTH;
+    const hasReason = Boolean(reasonKey);
+
+    if (reasonKey === 'other' && !hasLongEnoughMessage) {
+      return legacyError(
+        `Please add at least ${POST_REVIEW_MIN_MESSAGE_LENGTH} characters when choosing other`,
+        400,
+      );
+    }
+
+    if (!hasReason && !hasLongEnoughMessage) {
+      return legacyError(
+        `Please select a reason or provide at least ${POST_REVIEW_MIN_MESSAGE_LENGTH} characters`,
+        400,
+      );
+    }
+
+    const visitorId = this.sanitizeVisitorId(payload.visitorId);
+    if (!visitorId) {
+      return legacyError('visitorId is required', 400);
+    }
+
+    const signatureCheck = verifyPostReviewRequestSignature({
+      timestamp: signatureTimestamp,
+      signature: requestSignature,
+      postId: id,
+      reviewType,
+      reasonKey,
+      message,
+      visitorId,
+    });
+    if (!signatureCheck.valid) {
+      return legacyError('Invalid post review signature', 403);
+    }
+
+    const postRow = await this.timeQuery('post_detail', () =>
+      this.prisma.$queryRawUnsafe<
+        Array<{ id: bigint; vendor_id: bigint; deleted: boolean }>
+      >('SELECT id, vendor_id, deleted FROM post WHERE id = ? LIMIT 1', id),
+    );
+    const post = postRow[0];
+    if (!post || post.deleted) {
+      return legacyError('Car details not found', 404);
+    }
+
+    const visitorHash = createHash('sha256').update(visitorId).digest('hex');
+    await this.timeQuery('post_detail', () =>
+      this.prisma.$executeRawUnsafe(
+        `INSERT INTO post_review (post_id, vendor_id, review_type, reason_key, message, visitor_hash, dateCreated, dateUpdated)
+         VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
+         ON DUPLICATE KEY UPDATE
+           vendor_id = VALUES(vendor_id),
+           review_type = VALUES(review_type),
+           reason_key = VALUES(reason_key),
+           message = VALUES(message),
+           dateUpdated = NOW()`,
+        id,
+        post.vendor_id.toString(),
+        reviewType,
+        reasonKey ?? null,
+        message ?? null,
+        visitorHash,
+      ),
+    );
+
+    return legacySuccess({ saved: true });
   }
 
   async getCaption(id: string) {
@@ -1134,6 +1263,14 @@ export class LegacySearchService {
     if (typeof value === 'number') return String(value);
     if (typeof value === 'bigint') return value.toString();
     return '';
+  }
+
+  private sanitizeVisitorId(value: unknown): string | null {
+    const visitorId = this.toStr(value);
+    if (!visitorId) {
+      return null;
+    }
+    return visitorId.slice(0, 255);
   }
 
   private parseCsvValues(raw: string | undefined): string[] {

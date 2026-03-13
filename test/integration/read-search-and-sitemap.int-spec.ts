@@ -15,6 +15,7 @@ import {
   seedPostGraph,
   seedVendor,
 } from './fixtures/domain-fixtures';
+import { signPostReviewRequest } from '../../src/modules/legacy-search/post-review-signature.util';
 
 jest.setTimeout(120_000);
 
@@ -295,6 +296,96 @@ describe('Integration: read/search/sitemap', () => {
       statusCode: '404',
       message: 'Car details not found',
     });
+  });
+
+  it('POST /car-details/post/:id/review validates signature and upserts by visitor hash', async () => {
+    await seedVendor(prisma, FIXTURE_VENDOR_ID, { accountName: 'vendor-review' });
+    await seedPostGraph(prisma, { postId: FIXTURE_POST_ID, vendorId: FIXTURE_VENDOR_ID });
+
+    const timestamp = Date.now().toString();
+    const signedPayload = {
+      reviewType: 'like',
+      reasonKey: 'good_price',
+      message: 'Great value overall',
+      visitorId: 'test-visitor-1',
+    };
+    const signature = signPostReviewRequest({
+      timestamp,
+      postId: FIXTURE_POST_ID.toString(),
+      reviewType: 'like',
+      reasonKey: signedPayload.reasonKey,
+      message: signedPayload.message,
+      visitorId: signedPayload.visitorId,
+    });
+
+    const first = await request(app.getHttpServer())
+      .post(`/car-details/post/${FIXTURE_POST_ID.toString()}/review`)
+      .set('x-post-review-ts', timestamp)
+      .set('x-post-review-signature', signature)
+      .send(signedPayload)
+      .expect(200);
+
+    expect(first.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+      result: { saved: true },
+    });
+
+    const secondTimestamp = Date.now().toString();
+    const secondPayload = {
+      reviewType: 'dislike',
+      reasonKey: 'other',
+      message: 'Needs at least ten chars',
+      visitorId: 'test-visitor-1',
+    };
+    const secondSignature = signPostReviewRequest({
+      timestamp: secondTimestamp,
+      postId: FIXTURE_POST_ID.toString(),
+      reviewType: 'dislike',
+      reasonKey: secondPayload.reasonKey,
+      message: secondPayload.message,
+      visitorId: secondPayload.visitorId,
+    });
+
+    await request(app.getHttpServer())
+      .post(`/car-details/post/${FIXTURE_POST_ID.toString()}/review`)
+      .set('x-post-review-ts', secondTimestamp)
+      .set('x-post-review-signature', secondSignature)
+      .send(secondPayload)
+      .expect(200);
+
+    const rows = await prisma.$queryRawUnsafe<
+      Array<{ total: bigint | number; reviewType: string }>
+    >(
+      `SELECT COUNT(*) as total, MAX(review_type) as reviewType
+       FROM post_review
+       WHERE post_id = ?`,
+      FIXTURE_POST_ID.toString(),
+    );
+    expect(Number(rows[0]?.total ?? 0)).toBe(1);
+    expect(rows[0]?.reviewType).toBe('dislike');
+
+    await request(app.getHttpServer())
+      .post(`/car-details/post/${FIXTURE_POST_ID.toString()}/review`)
+      .send({
+        reviewType: 'like',
+        reasonKey: 'good_price',
+        message: 'Missing signature should fail',
+        visitorId: 'test-visitor-2',
+      })
+      .expect(403);
+
+    await request(app.getHttpServer())
+      .post(`/car-details/post/${FIXTURE_POST_ID.toString()}/review`)
+      .set('x-post-review-ts', Date.now().toString())
+      .set('x-post-review-signature', 'invalid')
+      .send({
+        reviewType: 'like',
+        reasonKey: 'other',
+        message: 'short',
+        visitorId: 'test-visitor-2',
+      })
+      .expect(400);
   });
 
   it('GET /car-details/post/caption/:id normalizes caption and returns mediaUrl', async () => {

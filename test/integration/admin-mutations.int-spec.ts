@@ -122,6 +122,13 @@ describe('Integration: admin mutations', () => {
         contactInstagram: 1,
       },
     });
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO post_review
+      (post_id, vendor_id, review_type, reason_key, message, visitor_hash, dateCreated, dateUpdated)
+      VALUES (?, ?, 'like', 'good_price', 'Great option', SHA2('admin-review-1', 256), NOW(), NOW())`,
+      ADMIN_POST_ID.toString(),
+      ADMIN_VENDOR_ID.toString(),
+    );
 
     const adminToken = await issueAdminToken();
 
@@ -145,6 +152,7 @@ describe('Integration: admin mutations', () => {
         contactWhatsapp: 2,
         contactEmail: 1,
         contactInstagram: 1,
+        reviewsCount: 1,
       }),
     });
 
@@ -157,6 +165,76 @@ describe('Integration: admin mutations', () => {
       success: true,
       statusCode: '200',
       result: null,
+    });
+  });
+
+  it('GET /admin/posts returns reviewsCount and GET /admin/posts/:id/reviews is owner-scoped', async () => {
+    await seedAdminIdentity();
+    await seedVendor(prisma, NON_ADMIN_VENDOR_ID, {
+      username: 'non_admin_review',
+      email: 'non-admin-review@example.com',
+    });
+    await seedPostGraph(prisma, { postId: ADMIN_POST_ID, vendorId: ADMIN_VENDOR_ID });
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO post_review
+      (post_id, vendor_id, review_type, reason_key, message, visitor_hash, dateCreated, dateUpdated)
+      VALUES
+      (?, ?, 'like', 'good_price', 'Fair price and clear info', SHA2('review-visitor-1', 256), NOW(), NOW()),
+      (?, ?, 'dislike', 'missing_details', 'Not enough details yet', SHA2('review-visitor-2', 256), NOW(), NOW())`,
+      ADMIN_POST_ID.toString(),
+      ADMIN_VENDOR_ID.toString(),
+      ADMIN_POST_ID.toString(),
+      ADMIN_VENDOR_ID.toString(),
+    );
+
+    const adminToken = await issueAdminToken();
+    const nonAdminToken = await issueNonAdminToken();
+
+    const postsResponse = await request(app.getHttpServer())
+      .get('/admin/posts')
+      .set('authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(postsResponse.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+      result: expect.arrayContaining([
+        expect.objectContaining({
+          id: ADMIN_POST_ID.toString(),
+          reviewsCount: 2,
+        }),
+      ]),
+    });
+
+    const reviewsResponse = await request(app.getHttpServer())
+      .get(`/admin/posts/${ADMIN_POST_ID.toString()}/reviews`)
+      .set('authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(reviewsResponse.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+      result: expect.arrayContaining([
+        expect.objectContaining({
+          reviewType: 'like',
+          reasonKey: 'good_price',
+        }),
+        expect.objectContaining({
+          reviewType: 'dislike',
+          reasonKey: 'missing_details',
+        }),
+      ]),
+    });
+
+    const notOwner = await request(app.getHttpServer())
+      .get(`/admin/posts/${ADMIN_POST_ID.toString()}/reviews`)
+      .set('authorization', `Bearer ${nonAdminToken}`)
+      .expect(200);
+
+    expect(notOwner.body).toMatchObject({
+      success: true,
+      statusCode: '200',
+      result: [],
     });
   });
 

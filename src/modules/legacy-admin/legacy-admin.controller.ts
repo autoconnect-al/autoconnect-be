@@ -29,6 +29,11 @@ export class LegacyAdminController {
     return this.service.getPostById(id, userId);
   }
 
+  @Get('posts/:id/reviews')
+  getPostReviews(@LegacyUserId() userId: string, @Param('id') id: string) {
+    return this.service.getPostReviews(id, userId);
+  }
+
   @Delete('posts/:id')
   @HttpCode(200)
   deletePost(@LegacyUserId() userId: string, @Param('id') id: string) {

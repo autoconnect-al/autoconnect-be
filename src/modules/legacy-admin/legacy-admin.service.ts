@@ -39,9 +39,16 @@ export class LegacyAdminService {
         return this.toAdminPostReadModel(row, details);
       })
       .filter((row): row is NonNullable<typeof row> => row !== null);
+    const reviewCounts = await this.getReviewCountByPostIds(
+      visibleRows.map((row) => String(row.id)),
+    );
+    const rowsWithReviewCount = visibleRows.map((row) => ({
+      ...row,
+      reviewsCount: reviewCounts.get(String(row.id)) ?? 0,
+    }));
 
     return legacySuccess(
-      this.normalizeBigInts(visibleRows),
+      this.normalizeBigInts(rowsWithReviewCount),
     );
   }
 
@@ -69,7 +76,52 @@ export class LegacyAdminService {
       return legacySuccess(this.normalizeBigInts(null));
     }
 
-    return legacySuccess(this.normalizeBigInts(this.toAdminPostReadModel(row, details)));
+    const reviewsCount = await this.getReviewCountByPostId(String(row.id));
+    return legacySuccess(
+      this.normalizeBigInts(
+        this.toAdminPostReadModel(row, details, reviewsCount),
+      ),
+    );
+  }
+
+  async getPostReviews(id: string, userId: string) {
+    if (!/^\d+$/.test(id)) {
+      return legacyError('Invalid post ID format', 400);
+    }
+
+    const ownerRows = await this.prisma.$queryRawUnsafe<Array<{ id: bigint }>>(
+      'SELECT id FROM post WHERE id = ? AND vendor_id = ? AND deleted = 0 LIMIT 1',
+      id,
+      userId,
+    );
+    if (ownerRows.length === 0) {
+      return legacySuccess([]);
+    }
+
+    const reviews = await this.prisma.$queryRawUnsafe<
+      Array<{
+        id: bigint;
+        reviewType: string;
+        reasonKey: string | null;
+        message: string | null;
+        createdAt: Date;
+      }>
+    >(
+      `SELECT
+          id,
+          review_type AS reviewType,
+          reason_key AS reasonKey,
+          message,
+          dateCreated AS createdAt
+       FROM post_review
+       WHERE post_id = ? AND vendor_id = ?
+       ORDER BY dateCreated DESC
+       LIMIT 200`,
+      id,
+      userId,
+    );
+
+    return legacySuccess(this.normalizeBigInts(reviews));
   }
 
   async getUser(userId: string) {
@@ -179,7 +231,11 @@ export class LegacyAdminService {
     return this.localPostOrderService.markAsSold(id, userId);
   }
 
-  private toAdminPostReadModel(row: any, details = this.resolveCarDetails(row)) {
+  private toAdminPostReadModel(
+    row: any,
+    details = this.resolveCarDetails(row),
+    reviewsCount = 0,
+  ) {
 
     return {
       id: row.id,
@@ -230,6 +286,7 @@ export class LegacyAdminService {
       contactWhatsapp: row.contactWhatsapp ?? 0,
       contactEmail: row.contactEmail ?? 0,
       contactInstagram: row.contactInstagram ?? 0,
+      reviewsCount: reviewsCount,
     };
   }
 
@@ -261,6 +318,37 @@ export class LegacyAdminService {
         return value;
       }),
     ) as T;
+  }
+
+  private async getReviewCountByPostIds(postIds: string[]): Promise<Map<string, number>> {
+    if (!Array.isArray(postIds) || postIds.length === 0) {
+      return new Map<string, number>();
+    }
+
+    const placeholders = postIds.map(() => '?').join(',');
+    const rows = await this.prisma.$queryRawUnsafe<
+      Array<{ postId: bigint; total: bigint | number }>
+    >(
+      `SELECT post_id as postId, COUNT(*) as total
+       FROM post_review
+       WHERE post_id IN (${placeholders})
+       GROUP BY post_id`,
+      ...postIds,
+    );
+
+    return new Map(
+      rows.map((row) => [String(row.postId), Number(row.total ?? 0)]),
+    );
+  }
+
+  private async getReviewCountByPostId(postId: string): Promise<number> {
+    const rows = await this.prisma.$queryRawUnsafe<
+      Array<{ total: bigint | number }>
+    >(
+      'SELECT COUNT(*) as total FROM post_review WHERE post_id = ?',
+      postId,
+    );
+    return Number(rows[0]?.total ?? 0);
   }
 
   private parseVendorSiteConfig(siteConfig: string | null | undefined) {
