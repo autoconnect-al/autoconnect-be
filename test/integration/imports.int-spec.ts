@@ -19,6 +19,7 @@ import {
 } from './fixtures/domain-fixtures';
 import { PostImportService } from '../../src/modules/imports/services/post-import.service';
 import { OpenAIService } from '../../src/modules/imports/services/openai.service';
+import { signPostMetricRequest } from '../../src/modules/imports/post-metrics-signature.util';
 
 jest.setTimeout(120_000);
 
@@ -111,18 +112,52 @@ describe('Integration: imports module', () => {
     }
   }
 
+  function buildSignedMetricHeaders(input: {
+    postId: bigint;
+    metric: 'postOpen' | 'impressions' | 'reach' | 'clicks' | 'contact';
+    visitorId?: string;
+    contactMethod?: 'call' | 'whatsapp' | 'email' | 'instagram';
+  }) {
+    const timestamp = Date.now().toString();
+    return {
+      'x-post-metrics-ts': timestamp,
+      'x-post-metrics-signature': signPostMetricRequest({
+        timestamp,
+        postId: input.postId.toString(),
+        metric: input.metric,
+        visitorId: input.visitorId,
+        contactMethod: input.contactMethod,
+      }),
+    };
+  }
+
   it('POST /posts/:postId/increment rejects invalid metric', async () => {
     await request(app.getHttpServer())
       .post(`/posts/${FIXTURE_POST_ID.toString()}/increment?metric=invalid`)
       .expect(400);
   });
 
+  it('POST /posts/:postId/increment rejects unsigned requests', async () => {
+    await seedVendor(prisma, FIXTURE_VENDOR_ID);
+    await seedPostGraph(prisma, { postId: FIXTURE_POST_ID, vendorId: FIXTURE_VENDOR_ID });
+
+    await request(app.getHttpServer())
+      .post(`/posts/${FIXTURE_POST_ID.toString()}/increment?metric=clicks`)
+      .expect(403);
+  });
+
   it('POST /posts/:postId/increment queues inline postOpen increment and updates postOpen+clicks', async () => {
     await seedVendor(prisma, FIXTURE_VENDOR_ID);
     await seedPostGraph(prisma, { postId: FIXTURE_POST_ID, vendorId: FIXTURE_VENDOR_ID });
 
+    const headers = buildSignedMetricHeaders({
+      postId: FIXTURE_POST_ID,
+      metric: 'postOpen',
+    });
+
     const response = await request(app.getHttpServer())
       .post(`/posts/${FIXTURE_POST_ID.toString()}/increment?metric=postOpen`)
+      .set(headers)
       .expect(202);
 
     expect(response.body).toMatchObject({ ok: true, status: 'queued-inline' });
@@ -134,11 +169,25 @@ describe('Integration: imports module', () => {
     await seedVendor(prisma, FIXTURE_VENDOR_ID);
     await seedPostGraph(prisma, { postId: FIXTURE_POST_ID, vendorId: FIXTURE_VENDOR_ID });
 
+    const visitorId = 'visitor-1';
+    const firstHeaders = buildSignedMetricHeaders({
+      postId: FIXTURE_POST_ID,
+      metric: 'impressions',
+      visitorId,
+    });
+    const secondHeaders = buildSignedMetricHeaders({
+      postId: FIXTURE_POST_ID,
+      metric: 'impressions',
+      visitorId,
+    });
+
     await request(app.getHttpServer())
-      .post(`/posts/${FIXTURE_POST_ID.toString()}/increment?metric=impressions&visitorId=visitor-1`)
+      .post(`/posts/${FIXTURE_POST_ID.toString()}/increment?metric=impressions&visitorId=${visitorId}`)
+      .set(firstHeaders)
       .expect(202);
     await request(app.getHttpServer())
-      .post(`/posts/${FIXTURE_POST_ID.toString()}/increment?metric=impressions&visitorId=visitor-1`)
+      .post(`/posts/${FIXTURE_POST_ID.toString()}/increment?metric=impressions&visitorId=${visitorId}`)
+      .set(secondHeaders)
       .expect(202);
 
     await waitForPostMetric(
@@ -152,8 +201,15 @@ describe('Integration: imports module', () => {
     await seedVendor(prisma, FIXTURE_VENDOR_ID);
     await seedPostGraph(prisma, { postId: FIXTURE_POST_ID, vendorId: FIXTURE_VENDOR_ID });
 
+    const headers = buildSignedMetricHeaders({
+      postId: FIXTURE_POST_ID,
+      metric: 'contact',
+      contactMethod: 'whatsapp',
+    });
+
     await request(app.getHttpServer())
       .post(`/posts/${FIXTURE_POST_ID.toString()}/increment?metric=contact&contactMethod=whatsapp`)
+      .set(headers)
       .expect(202);
 
     await waitForPostMetric(

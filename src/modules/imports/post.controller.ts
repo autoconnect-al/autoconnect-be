@@ -7,8 +7,11 @@ import {
   HttpStatus,
   Res,
   BadRequestException,
+  ForbiddenException,
+  InternalServerErrorException,
   Optional,
   Inject,
+  Headers,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { ApiOperation, ApiParam, ApiQuery, ApiResponse } from '@nestjs/swagger';
@@ -17,6 +20,7 @@ import { ImportJobsService } from './queue/import-jobs.service';
 import { PostImportService } from './services/post-import.service';
 import { PrismaService } from '../../database/prisma.service';
 import { createLogger } from '../../common/logger.util';
+import { verifyPostMetricRequestSignature } from './post-metrics-signature.util';
 
 @Controller({
   path: ['posts', 'api/v1/posts'],
@@ -91,6 +95,8 @@ export class PostController {
     @Res() res: Response,
     @Query('visitorId') visitorId?: string,
     @Query('contactMethod') contactMethod?: string,
+    @Headers('x-post-metrics-ts') signatureTimestamp?: string,
+    @Headers('x-post-metrics-signature') requestSignature?: string,
   ) {
     const allowedMetrics = [
       'postOpen',
@@ -130,11 +136,44 @@ export class PostController {
       typeof contactMethod === 'string' && contactMethod.trim().length > 0
         ? contactMethod.trim().toLowerCase()
         : undefined;
+    const normalizedMetric = metric as
+      | 'postOpen'
+      | 'impressions'
+      | 'reach'
+      | 'clicks'
+      | 'contact';
+
+    try {
+      const signatureCheck = verifyPostMetricRequestSignature({
+        timestamp: signatureTimestamp,
+        signature: requestSignature,
+        postId,
+        metric: normalizedMetric,
+        visitorId: sanitizedVisitorId,
+        contactMethod: normalizedContactMethod as
+          | 'call'
+          | 'whatsapp'
+          | 'email'
+          | 'instagram'
+          | undefined,
+      });
+
+      if (!signatureCheck.valid) {
+        throw new ForbiddenException('Invalid post metric signature');
+      }
+    } catch (error) {
+      if (error instanceof ForbiddenException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        'Metric signature verification is unavailable',
+      );
+    }
 
     if (this.importJobsService) {
       const job = await this.importJobsService.enqueuePostMetricIncrement({
         postId,
-        metric: metric as 'postOpen' | 'impressions' | 'reach' | 'clicks' | 'contact',
+        metric: normalizedMetric,
         visitorId: sanitizedVisitorId,
         contactMethod: normalizedContactMethod as
           | 'call'
@@ -171,7 +210,7 @@ export class PostController {
 
         await this.postImportService.incrementPostMetric(
           parsedPostId,
-          metric as 'postOpen' | 'impressions' | 'reach' | 'clicks' | 'contact',
+          normalizedMetric,
           {
             visitorId: sanitizedVisitorId,
             contactMethod: normalizedContactMethod as
