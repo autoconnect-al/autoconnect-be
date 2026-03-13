@@ -17,6 +17,7 @@ Primary code:
   - `/encar/scrape`
 - Metric increment endpoint:
   - `/imports/posts/:postId/increment` (GET/POST alias)
+  - Requires FE-issued signed headers for accepted web metric writes.
 
 ## Internal Structure
 - `ApifyDatasetImportService`: streaming dataset parse + batching
@@ -57,6 +58,7 @@ Primary code:
 
 ## Security Controls
 - Import trigger endpoints protected with admin guard.
+- Metric increment endpoint accepts only signed FE-ingested requests.
 - No query secret auth usage in import routing.
 - Upload/media paths sanitized and bounded by size/type checks.
 
