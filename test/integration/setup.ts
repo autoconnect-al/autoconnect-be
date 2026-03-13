@@ -26,6 +26,9 @@ process.env.AUTOCONNECT_BASE_URL =
   process.env.AUTOCONNECT_BASE_URL?.trim() || 'http://127.0.0.1:3000';
 process.env.AUTOCONNECT_CODE =
   process.env.AUTOCONNECT_CODE?.trim() || 'integration-autoconnect-code';
+process.env.POST_METRICS_SIGNING_SECRET =
+  process.env.POST_METRICS_SIGNING_SECRET?.trim() ||
+  'integration-post-metrics-signing-secret';
 process.env.IMPORT_QUEUE_ENABLED = 'false';
 process.env.SHOW_LOGS = 'false';
 
