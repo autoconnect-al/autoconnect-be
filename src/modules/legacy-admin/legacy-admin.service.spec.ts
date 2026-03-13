@@ -7,6 +7,7 @@ describe('LegacyAdminService', () => {
         findMany: jest.fn(),
         findFirst: jest.fn(),
       },
+      $queryRawUnsafe: jest.fn().mockResolvedValue([]),
     } as any;
 
     const service = new LegacyAdminService(prisma, {} as any, {} as any);
@@ -41,6 +42,7 @@ describe('LegacyAdminService', () => {
         vendorId: '10',
         caption: 'Hello world',
         status: 'DRAFT',
+        reviewsCount: 0,
       }),
     ]);
   });
@@ -74,6 +76,7 @@ describe('LegacyAdminService', () => {
         caption: 'Test caption',
         status: 'PUBLISHED',
         registration: '2026',
+        reviewsCount: 0,
       }),
     );
   });

@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   HttpCode,
   HttpException,
   Param,
@@ -85,6 +86,27 @@ export class LegacySearchController {
   async getCarDetails(@Param('id') id: string) {
     const response = await this.service.getCarDetails(id);
     if (!response.success) this.throwLegacy(response, 404);
+    return response;
+  }
+
+  @Post('post/:id/review')
+  @HttpCode(200)
+  async submitReview(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Headers('x-post-review-ts') signatureTimestamp?: string,
+    @Headers('x-post-review-signature') requestSignature?: string,
+  ) {
+    const response = await this.service.submitPostReview(
+      id,
+      body,
+      signatureTimestamp,
+      requestSignature,
+    );
+    if (!response.success) {
+      const statusCode = Number(response.statusCode);
+      this.throwLegacy(response, Number.isFinite(statusCode) ? statusCode : 500);
+    }
     return response;
   }
 
